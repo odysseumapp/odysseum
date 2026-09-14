@@ -1,0 +1,21 @@
+namespace Odysseum.Server.Settings;
+
+public interface IServerSettings
+{
+    /// <summary>Root directory holding one folder per project.</summary>
+    string Workspace { get; set; }
+
+    /// <summary>Optional workspace password. Environment only; never persisted.</summary>
+    string? Password { get; set; }
+
+    /// <summary>Seed a completely empty workspace with the sample project.</summary>
+    bool Demo { get; set; }
+
+    /// <summary>Directory for persistent data-protection keys; null uses the ASP.NET Core default.</summary>
+    string? Keys { get; set; }
+
+    /// <summary>Full reconciliation interval for every open project.</summary>
+    int ScanSeconds { get; set; }
+
+    bool PasswordRequired { get; }
+}

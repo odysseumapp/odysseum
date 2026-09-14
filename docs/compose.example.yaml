@@ -1,0 +1,31 @@
+# Odysseum — deployment example.
+# Put this in a folder as compose.yaml, create ./projects and ./data beside it, then: docker compose up -d
+# The repository's own compose.yaml builds from source; this one runs a published image.
+
+services:
+  odysseum:
+    image: ghcr.io/odysseumapp/odysseum:latest   # or build: . when running from a checkout
+    container_name: odysseum
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5080:5080"   # local only; put a reverse proxy with HTTPS in front for remote access
+    environment:
+      ODYSSEUM_DEMO: "false"                        # "true" seeds an empty ./projects with the sample manuscript
+      ODYSSEUM_PASSWORD: "${ODYSSEUM_PASSWORD:-}"   # set in a .env file next to this compose file; never written to disk
+      ODYSSEUM_SCAN_SECONDS: "3"                    # full rescan interval, 1–300
+      TZ: "America/Los_Angeles"
+    volumes:
+      - ./projects:/projects   # one folder per project, plain Markdown — back this up
+      - ./data:/data           # settings and authentication keys — back this up too
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/5080 && echo -e 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q ok <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+# Reverse proxy notes (Caddy, nginx, Traefik):
+#   - forward /api/events without response buffering and allow long-lived connections (server-sent events)
+#   - allow request bodies up to 5 MB
+#   - the app expects to be served at the root of its hostname

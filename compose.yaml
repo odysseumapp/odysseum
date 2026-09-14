@@ -1,0 +1,13 @@
+services:
+  odysseum:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5080:5080"
+    environment:
+      ODYSSEUM_DEMO: "true"
+      ODYSSEUM_PASSWORD: "${ODYSSEUM_PASSWORD:-}"
+      ODYSSEUM_SCAN_SECONDS: "3"
+    volumes:
+      - ./projects:/projects
+      - ./data:/data

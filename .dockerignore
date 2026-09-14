@@ -1,0 +1,14 @@
+**/bin
+**/obj
+**/node_modules
+web/dist
+server/Odysseum.Server/wwwroot
+workspace
+projects
+data
+.test-data
+.cache
+.git
+.env
+test-results
+playwright-report

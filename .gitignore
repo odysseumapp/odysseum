@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+web/node_modules/
+web/dist/
+server/Odysseum.Server/wwwroot/
+workspace/
+/projects/
+data/
+.test-data/
+test-results/
+playwright-report/
+.cache/
+.env
+*.user
+*.log
+server-settings.json
+web/tsconfig.tsbuildinfo

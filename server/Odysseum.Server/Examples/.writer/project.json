@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "id": "fa1367f8-b351-47fc-82f2-0f8420d1ea31",
+  "settings": {
+    "title": "The Cartographer’s Daughter",
+    "wordGoal": 60000,
+    "defaultSceneWordGoal": 1000
+  },
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000001": {
+      "path": "Manuscript/Chapter 01/The letter arrives.md",
+      "title": "The letter arrives",
+      "synopsis": "A letter from Mara’s missing father sends her back to the island she promised herself she would never visit again.",
+      "notes": "Let the opening stay quiet. The letter should feel ordinary until the very last line.",
+      "status": "draft",
+      "wordGoal": 1000,
+      "order": 0,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000002": {
+      "path": "Manuscript/Chapter 01/A map of missing places.md",
+      "title": "A map of missing places",
+      "synopsis": "Mara finds a second map hidden inside her childhood atlas. Its coastline changes when she looks away.",
+      "notes": "The map is a record of memory, not geography. Don’t explain this yet.",
+      "status": "revised",
+      "wordGoal": 1200,
+      "order": 1,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000003": {
+      "path": "Manuscript/Chapter 02/The last ferry.md",
+      "title": "The last ferry",
+      "synopsis": "At the mainland harbor, a reluctant ferryman recognizes Mara’s name—and knows more than he is willing to say.",
+      "notes": "Introduce Tomas through what he does, not a description. He should never answer a question directly.",
+      "status": "draft",
+      "wordGoal": 1500,
+      "order": 2,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006",
+        "00d1e246-4f36-47e8-a308-000000000008"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000004": {
+      "path": "Manuscript/Chapter 02/What the tide kept.md",
+      "title": "What the tide kept",
+      "synopsis": "The crossing reveals how much the island has changed. A familiar landmark appears on the wrong side of the boat.",
+      "notes": "A quiet scene between discoveries. Give Mara space to remember.",
+      "status": "draft",
+      "wordGoal": 900,
+      "order": 3,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006",
+        "00d1e246-4f36-47e8-a308-000000000008"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000005": {
+      "path": "Manuscript/Chapter 03/The lighthouse keeper.md",
+      "title": "The lighthouse keeper",
+      "synopsis": "An old family friend offers Mara a room and an unsettling warning: some things on the island are better left unremembered.",
+      "notes": "Elin is warm, practical, and keeping one enormous secret.",
+      "status": "draft",
+      "wordGoal": 1300,
+      "order": 4,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006",
+        "00d1e246-4f36-47e8-a308-000000000009"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000006": {
+      "path": "Characters/Mara Vale.md",
+      "title": "Mara Vale",
+      "synopsis": "A cartographer who trusts measurements more than memories. She left Bellwether at sixteen.",
+      "notes": "Her arc is about accepting uncertainty without losing her sense of self.",
+      "status": "done",
+      "wordGoal": 0,
+      "order": 5,
+      "lastKnownHash": ""
+    },
+    "00d1e246-4f36-47e8-a308-000000000007": {
+      "path": "Notes/Bellwether Island.md",
+      "title": "Bellwether Island",
+      "synopsis": "An island whose geography follows memory. The places its residents forget begin to disappear.",
+      "notes": "Keep a consistent relationship between memory and the landscape.",
+      "status": "revised",
+      "wordGoal": 0,
+      "order": 6,
+      "lastKnownHash": ""
+    },
+    "00d1e246-4f36-47e8-a308-000000000008": {
+      "path": "Characters/Tomas Reyes.md",
+      "title": "Tomas Reyes",
+      "synopsis": "The ferryman who took Mara’s father to the island and has never said what was spoken on the crossing.",
+      "notes": "Never lets him answer a question directly. Weather first, then people.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 7,
+      "lastKnownHash": ""
+    },
+    "00d1e246-4f36-47e8-a308-000000000009": {
+      "path": "Characters/Elin Marsh.md",
+      "title": "Elin Marsh",
+      "synopsis": "The lighthouse keeper who drew the first map of the changing coastline and still visits the places that vanish.",
+      "notes": "Warm and unhurried. She chooses which truths arrive first.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 8,
+      "lastKnownHash": ""
+    }
+  }
+}

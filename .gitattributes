@@ -1,0 +1,5 @@
+# Normalize line endings in the repository; the sample manuscript stays exactly as written.
+* text=auto
+*.ps1 text eol=crlf
+*.png binary
+*.md -text
