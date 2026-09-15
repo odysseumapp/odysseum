@@ -51,5 +51,5 @@ see [the project format](project-format.md). Locations and arcs add document kin
 filesystem operations, and arbitrary external editors do not participate in the project's semaphore.
 
 The Arcs view renders one horizontal timeline per arc document. `arcPositions` belongs to the attached
-document, so each arc can arrange its points independently without changing manuscript order.
-The browser queues these as ordinary metadata operations and remaps arc IDs during offline replay.
+Beat document, so each arc can arrange its points independently without changing manuscript order.
+Only documents classified as Beats can be placed on an arc. The browser queues these as ordinary metadata operations and remaps arc IDs during offline replay.

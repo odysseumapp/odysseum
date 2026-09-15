@@ -47,6 +47,9 @@ My Novel/
   Arcs/
     .writer/folder.json
     Race.md
+  Beats/
+    .writer/folder.json
+    A promise is broken.md
   Notes/
     .writer/folder.json
 ```
@@ -92,9 +95,11 @@ Each folder manifest has its own stable UUID, immediate child folder references,
 
 The server discovers folders from disk and reconciles their parent indexes. Renaming or moving a folder with its manifest preserves its identity and document metadata. Moving an individual file transfers its metadata between owners. Copying a folder requires new folder and document UUIDs; duplicate manifest IDs block writes.
 
-`characters` and `locations` contain UUIDs of linked character and location documents. The server validates the target kind. Omitting either list in an API metadata update leaves that list unchanged; sending `[]` clears it. Kind follows the top-level folder (case-insensitive): `Characters/` is character, `Locations/` is location, `Arcs/` is arc, `Notes/`, `Research/`, and `Story notes/` are notes; everything else is a scene. Only scenes contribute to manuscript progress and export.
+`characters` and `locations` contain UUIDs of linked character and location documents. The server validates the target kind. Omitting either list in an API metadata update leaves that list unchanged; sending `[]` clears it. Kind follows the top-level folder (case-insensitive): `Characters/` is character, `Locations/` is location, `Arcs/` is arc, `Beats/` is beat, `Notes/`, `Research/`, and `Story notes/` are notes; everything else is a scene. Only scenes contribute to manuscript progress and export.
 
-An arc is an ordinary Markdown document under `Arcs/`; its title names the timeline and its prose can hold planning notes. Other documents attach using `arcPositions`, a map from arc UUID to a numeric position between 0 and 10000. For example, `{"arc-uuid": 3}` places a document at the fourth position on that arc. The interface numbers positions from 1. Position is independent for each arc and independent of manuscript order; gaps and coincident points are allowed. The timeline stacks coincident cards so neither is hidden. Removing a key detaches that document without deleting its file. Omitting `arcPositions` in a metadata update preserves existing attachments. Keys are validated against arc documents, and offline replay rewrites temporary arc IDs when the server assigns permanent ones.
+A Beat is an ordinary Markdown document under `Beats/`, with its own prose, title, synopsis, and notes. Beats appear as points on arc timelines and are excluded from manuscript word counts and export. Create a Beat directly from an arc or attach an existing Beat; scenes, characters, locations, notes, and arc documents cannot be used as points. Legacy non-Beat arc links are hidden in API responses and the interface; their source documents and stored metadata are retained.
+
+An arc is an ordinary Markdown document under `Arcs/`; its title names the timeline and its prose can hold planning notes. Only Beat documents attach using `arcPositions`, a map from arc UUID to a numeric position between 0 and 10000. For example, `{"arc-uuid": 3}` places a Beat at the fourth position on that arc. The interface numbers positions from 1. Position is independent for each arc and independent of manuscript order; gaps and coincident points are allowed. The timeline stacks coincident cards so neither is hidden. Removing a key detaches that Beat without deleting its file. Omitting `arcPositions` in a metadata update preserves existing attachments. Keys are validated against arc documents, and offline replay rewrites temporary arc IDs when the server assigns permanent ones.
 
 `status` is `draft`, `revised`, or `done`. Document `order` retains the existing project-wide sequence used by the API, outline, and export, while each folder stores the positions of its own documents. Child folder entries have their own order values; the current API does not expose a separate folder-reordering operation. Reordering documents changes metadata without renaming files. `lastKnownHash` helps change detection and conservative legacy rename matching.
 

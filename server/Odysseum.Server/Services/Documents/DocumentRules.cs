@@ -26,6 +26,7 @@ internal static partial class DocumentRules
         "characters" => DocumentKind.Character,
         "locations" => DocumentKind.Location,
         "arcs" => DocumentKind.Arc,
+        "beats" => DocumentKind.Beat,
         "notes" or "research" or "story notes" => DocumentKind.Note,
         _ => DocumentKind.Scene,
     };

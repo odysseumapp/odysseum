@@ -34,6 +34,7 @@ export function kindFor(path: string): DocumentKind {
   if (top === 'characters') return 'character'
   if (top === 'locations') return 'location'
   if (top === 'arcs') return 'arc'
+  if (top === 'beats') return 'beat'
   if (top === 'notes' || top === 'research' || top === 'story notes') return 'note'
   return 'scene'
 }

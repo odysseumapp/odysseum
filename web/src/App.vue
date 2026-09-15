@@ -57,13 +57,13 @@ watch([reading, () => active.value?.content], async ([show, content]) => {
   if (generation === renderGeneration) rendered.value = markdown.render(content ?? '')
 })
 // Each document kind has its own binder section; a new kind means a new entry here and a folder rule on the server.
-const sectionOf = (doc: DocumentSummary): typeof section.value => doc.kind === 'arc' ? 'arcs' : doc.kind === 'location' ? 'locations' : doc.kind === 'character' ? 'characters' : doc.kind === 'note' ? 'notes' : 'manuscript'
+const sectionOf = (doc: DocumentSummary): typeof section.value => doc.kind === 'arc' || doc.kind === 'beat' ? 'arcs' : doc.kind === 'location' ? 'locations' : doc.kind === 'character' ? 'characters' : doc.kind === 'note' ? 'notes' : 'manuscript'
 const sectionNoun = computed(() => section.value === 'arcs' ? 'arc' : section.value === 'locations' ? 'location' : section.value === 'characters' ? 'character' : section.value === 'notes' ? 'note' : 'scene')
 const documents = computed(() => project.value?.documents.filter(doc => sectionOf(doc) === section.value) ?? [])
 const characters = computed(() => project.value?.documents.filter(doc => doc.kind === 'character') ?? [])
 const locations = computed(() => project.value?.documents.filter(doc => doc.kind === 'location') ?? [])
 const arcs = computed(() => project.value?.documents.filter(doc => doc.kind === 'arc') ?? [])
-const arcDocuments = computed(() => project.value?.documents.filter(doc => doc.kind !== 'arc') ?? [])
+const arcDocuments = computed(() => project.value?.documents.filter(doc => doc.kind === 'beat') ?? [])
 const arcSaving = ref(false)
 const characterName = (id: string) => characters.value.find(doc => doc.id === id)?.title
 const castOf = (doc: DocumentSummary) => doc.characters.map(characterName).filter(Boolean).join(', ')
@@ -172,10 +172,23 @@ function setDetailArcs(ids: string[]) {
     Math.floor(Math.max(-1, ...arcDocuments.value.map(doc => doc.arcPositions?.[id] ?? -1))) + 1)]))
   editDetails()
 }
+async function createBeat(arc: string, title: string, position: number) {
+  if (arcSaving.value) return
+  arcSaving.value = true
+  try {
+    const beat = await workspace.create(title, 'Beats')
+    const base = fields(beat)
+    await workspace.saveDetails(beat.id, { ...base, arcPositions: { [arc]: position } }, base)
+    section.value = 'arcs'
+    view.value = 'arcs'
+  } catch (ex) { workspace.showError(ex) }
+  finally { arcSaving.value = false }
+}
+
 async function placeOnArc(document: DocumentSummary, arc: string, position: number | null) {
   if (arcSaving.value) return
   const current = project.value?.documents.find(doc => doc.id === document.id)
-  if (!current) return
+  if (!current || current.kind !== 'beat') return
   const patch = (positions: Record<string, number>) => {
     const next = { ...positions }
     if (position === null) delete next[arc]
@@ -213,7 +226,7 @@ async function createScene() {
   await action(async () => {
     const doc = await workspace.create(newTitle.value, newFolder.value)
     section.value = sectionOf(doc)
-    view.value = doc.kind === 'arc' ? 'arcs' : 'write'
+    view.value = doc.kind === 'arc' || doc.kind === 'beat' ? 'arcs' : 'write'
     dialog.value = ''
   })
 }
@@ -380,7 +393,7 @@ onBeforeUnmount(() => { workspace.stop(); clearTimeout(searchTimer); window.remo
         <div class="breadcrumbs"><button v-if="!binder || focus" class="icon-button" aria-label="Show binder" @click="binder = true; focus = false"><PanelLeft :size="18" /></button><BookOpen :size="16" /><span>{{ section === 'arcs' ? 'Arcs' : section === 'locations' ? 'Locations' : section === 'characters' ? 'Characters' : section === 'notes' ? 'Story notes' : 'Manuscript' }}</span><ChevronRight :size="13" /><strong>{{ view === 'write' ? active?.document.folder.split('/').at(-1) || 'Writing desk' : view === 'arcs' ? 'Story arcs' : view === 'board' ? 'Corkboard' : 'Outline' }}</strong></div>
         <div class="header-actions"><button class="text-button export-button" title="Download the manuscript in scene order, including edits not yet synced" @click="workspace.exportManuscript()"><ArrowDownToLine :size="15" /><span>Export</span></button><span class="header-divider" /><button class="icon-button" :class="{ on: focus }" :title="focus ? 'Leave focus mode' : 'Focus mode'" :aria-label="focus ? 'Leave focus mode' : 'Focus mode'" @click="focus = !focus"><Minimize2 v-if="focus" :size="17" /><Maximize2 v-else :size="17" /></button><button class="icon-button" :class="{ on: inspector }" title="Toggle inspector" aria-label="Toggle inspector" @click="inspector = !inspector"><PanelRight :size="17" /></button></div>
       </header>
-      <div class="view-bar"><div class="view-tabs" role="tablist" aria-label="Workspace view"><button :class="{ active: view === 'write' }" role="tab" :aria-selected="view === 'write'" @click="view = 'write'"><Feather :size="15" />Write</button><button :class="{ active: view === 'board' }" role="tab" :aria-selected="view === 'board'" @click="view = 'board'"><LayoutGrid :size="15" />Corkboard</button><button :class="{ active: view === 'outline' }" role="tab" :aria-selected="view === 'outline'" @click="view = 'outline'"><ListTree :size="16" />Outline</button><button :class="{ active: view === 'arcs' }" role="tab" :aria-selected="view === 'arcs'" @click="section = 'arcs'; view = 'arcs'"><GitBranch :size="16" />Arcs</button></div><span class="view-caption">{{ documents.length }} {{ sectionNoun }}{{ documents.length === 1 ? '' : 's' }}<span>·</span>{{ number(documents.reduce((n, doc) => n + doc.wordCount, 0)) }} words</span></div>
+      <div class="view-bar"><div class="view-tabs" role="tablist" aria-label="Workspace view"><button :class="{ active: view === 'write' }" role="tab" :aria-selected="view === 'write'" @click="view = 'write'"><Feather :size="15" />Write</button><button :class="{ active: view === 'board' }" role="tab" :aria-selected="view === 'board'" @click="view = 'board'"><LayoutGrid :size="15" />Corkboard</button><button :class="{ active: view === 'outline' }" role="tab" :aria-selected="view === 'outline'" @click="view = 'outline'"><ListTree :size="16" />Outline</button><button :class="{ active: view === 'arcs' }" role="tab" :aria-selected="view === 'arcs'" @click="section = 'arcs'; view = 'arcs'"><GitBranch :size="16" />Arcs</button></div><span class="view-caption">{{ documents.length }} {{ section === 'arcs' ? 'document' : sectionNoun }}{{ documents.length === 1 ? '' : 's' }}<span>·</span>{{ number(documents.reduce((n, doc) => n + doc.wordCount, 0)) }} words</span></div>
       <div v-if="error || project.warning" class="notice-bar warning" role="alert"><span>{{ error || project.warning }}</span><button class="icon-button" aria-label="Retry workspace refresh" @click="workspace.refresh"><RefreshCw :size="15" /></button></div>
       <template v-if="view === 'write' && active">
         <div class="formatting-toolbar" aria-label="Formatting"><div class="format-buttons"><button v-for="(item, index) in formatActions" :key="item.type" class="icon-button" :class="{ 'format-gap': index === 2 }" :title="item.title" :aria-label="item.title" :disabled="reading" @mousedown.prevent @click="editor?.format(item.type)"><component :is="item.icon" :size="16" /></button></div><div class="editor-modes"><select v-model.number="fontSize" aria-label="Writing text size"><option :value="17">Aa · 17</option><option :value="19">Aa · 19</option><option :value="22">Aa · 22</option><option :value="25">Aa · 25</option></select><button class="icon-button" :class="{ on: source }" aria-label="Toggle Markdown source" title="Markdown source" @click="source = !source; reading = false"><Code2 :size="17" /></button><button class="text-button" :class="{ on: reading }" @click="reading = !reading">{{ reading ? 'Edit' : 'Read' }}</button></div></div>
@@ -388,7 +401,7 @@ onBeforeUnmount(() => { workspace.stop(); clearTimeout(searchTimer); window.remo
         <div v-if="active.error || sync.error" class="notice-bar warning"><span>{{ active.error || sync.error }}</span><button class="small-button" @click="workspace.save()">Retry save</button></div>
         <div class="writing-scroll">
           <article class="writing-paper" :style="{ '--writing-size': `${fontSize}px` }">
-            <div class="scene-kicker"><span class="scene-number">{{ section === 'arcs' ? 'ARC' : section === 'locations' ? 'LOCATION' : section === 'characters' ? 'CHARACTER' : section === 'notes' ? 'STORY NOTE' : `SCENE ${String(Math.max(1, documents.findIndex(doc => doc.id === selectedId) + 1)).padStart(2, '0')}` }}</span><span class="scene-rule" /><span class="scene-status"><i class="status-dot" :class="active.document.status" />{{ statusLabel(active.document.status) }}</span></div>
+            <div class="scene-kicker"><span class="scene-number">{{ active.document.kind === 'beat' ? 'BEAT' : section === 'arcs' ? 'ARC' : section === 'locations' ? 'LOCATION' : section === 'characters' ? 'CHARACTER' : section === 'notes' ? 'STORY NOTE' : `SCENE ${String(Math.max(1, documents.findIndex(doc => doc.id === selectedId) + 1)).padStart(2, '0')}` }}</span><span class="scene-rule" /><span class="scene-status"><i class="status-dot" :class="active.document.status" />{{ statusLabel(active.document.status) }}</span></div>
             <h1 class="scene-title">{{ active.document.title }}</h1>
             <div v-if="reading" class="rendered-markdown" v-html="rendered" />
             <ManuscriptEditor v-else ref="editor" :document-id="selectedId" :model-value="active.content" :source="source" :font-size="fontSize" @update:model-value="workspace.edit" @save="workspace.save()" />
@@ -398,7 +411,7 @@ onBeforeUnmount(() => { workspace.stop(); clearTimeout(searchTimer); window.remo
         <footer class="writing-footer"><button class="save-indicator" @click="active.conflict ? dialog = 'conflict' : workspace.save()"><Loader2 v-if="active.saving" :size="13" class="spin" /><span v-else-if="active.conflict || active.error || workspace.dirty(active)" class="unsaved-dot" /><Check v-else :size="14" />{{ savedState }}</button><span v-if="notice" class="external-notice">{{ notice }}</span><div class="document-statistics"><strong>{{ number(words) }} <span>words</span></strong><span class="stat-divider">·</span><span>{{ Math.max(1, Math.ceil(words / 225)) }} min read</span></div></footer>
       </template>
       <div v-else-if="view === 'write'" class="empty-desk"><div class="empty-illustration"><Feather :size="40" /></div><span class="eyebrow">MAKE ROOM FOR YOUR STORY</span><h1>A blank page. Endless possibility.</h1><p>Add a scene to begin, or put Markdown files in your workspace.<br />They’ll find their way here automatically.</p><button class="primary-button" @click="openNew"><Plus :size="17" />Write your first scene</button></div>
-      <ArcsView v-else-if="view === 'arcs'" :arcs="arcs" :documents="arcDocuments" :busy="arcSaving" @create="section = 'arcs'; openNew()" @open="selectDocument" @place="placeOnArc" />
+      <ArcsView v-else-if="view === 'arcs'" :arcs="arcs" :beats="arcDocuments" :busy="arcSaving" @create="section = 'arcs'; openNew()" @open="selectDocument" @place="placeOnArc" @create-beat="createBeat" />
       <div v-else class="overview-scroll">
         <header class="overview-heading"><div><span class="eyebrow">THE BIG PICTURE</span><h1>{{ section === 'arcs' ? 'Threads through the story' : section === 'locations' ? 'The places in it' : section === 'characters' ? 'The people in it' : section === 'notes' ? 'Your story world' : 'A story taking shape' }}</h1><p>{{ view === 'board' ? 'Give every scene a purpose. Make room for what comes next.' : 'See your manuscript at a glance, one scene at a time.' }}</p></div><button class="primary-button" @click="openNew"><Plus :size="16" />New {{ sectionNoun }}</button></header>
         <div v-if="view === 'board'" class="corkboard">
@@ -415,7 +428,7 @@ onBeforeUnmount(() => { workspace.stop(); clearTimeout(searchTimer); window.remo
       </div>
     </section>
 
-    <aside v-if="active && details" class="inspector" aria-label="Document inspector"><header><span>{{ active.document.kind === 'arc' ? 'ARC' : active.document.kind === 'location' ? 'LOCATION' : active.document.kind === 'character' ? 'CHARACTER' : active.document.kind === 'note' ? 'NOTE' : 'SCENE' }} DETAILS</span><button class="icon-button" aria-label="Close inspector" @click="inspector = false"><PanelRight :size="16" /></button></header><div class="inspector-scroll"><div class="inspector-title"><FileText :size="19" /><span>A little context<br /><strong>for the words ahead.</strong></span></div>
+    <aside v-if="active && details" class="inspector" aria-label="Document inspector"><header><span>{{ active.document.kind === 'beat' ? 'BEAT' : active.document.kind === 'arc' ? 'ARC' : active.document.kind === 'location' ? 'LOCATION' : active.document.kind === 'character' ? 'CHARACTER' : active.document.kind === 'note' ? 'NOTE' : 'SCENE' }} DETAILS</span><button class="icon-button" aria-label="Close inspector" @click="inspector = false"><PanelRight :size="16" /></button></header><div class="inspector-scroll"><div class="inspector-title"><FileText :size="19" /><span>A little context<br /><strong>for the words ahead.</strong></span></div>
       <label class="field-label" for="scene-title">Title</label><input id="scene-title" v-model="details.fields.title" @input="editDetails" />
       <label class="field-label" for="scene-status">Draft status</label><select id="scene-status" v-model="details.fields.status" @change="editDetails"><option value="draft">First draft</option><option value="revised">In revision</option><option value="done">Finished</option></select>
       <label class="field-label" for="synopsis">Synopsis <span>The scene in a sentence or two</span></label><textarea id="synopsis" v-model="details.fields.synopsis" rows="5" placeholder="What happens here? What changes?" @input="editDetails" />
@@ -423,8 +436,8 @@ onBeforeUnmount(() => { workspace.stop(); clearTimeout(searchTimer); window.remo
       <template v-if="active.document.kind === 'scene'"><label class="field-label">Characters in this scene <span>Tap to attach, then save details</span></label><DocumentLinkPicker kind="character" :model-value="details.fields.characters" :documents="characters" @update:model-value="value => { details!.fields.characters = value; editDetails() }" @create="section = 'characters'; openNew()" />
         <label class="field-label">Locations in this scene <span>Tap to attach, then save details</span></label><DocumentLinkPicker kind="location" :model-value="details.fields.locations" :documents="locations" @update:model-value="value => { details!.fields.locations = value; editDetails() }" @create="section = 'locations'; openNew()" /></template>
       <div v-else-if="active.document.kind === 'character' || active.document.kind === 'location'" class="inspector-section"><span class="section-label">APPEARS IN</span><div class="appearances"><button v-for="scene in appearances" :key="scene.id" class="text-button" @click="selectDocument(scene)">{{ scene.title }}<ArrowUpRight :size="12" /></button><p v-if="!appearances.length" class="field-help">Not in any scene yet. Open a scene and attach this {{ active.document.kind }} under its details.</p></div></div>
-      <template v-if="active.document.kind !== 'arc'"><label class="field-label">Story arcs <span>Arrange positions in the Arcs view</span></label><DocumentLinkPicker kind="arc" :model-value="Object.keys(details.fields.arcPositions)" :documents="arcs" @update:model-value="setDetailArcs" @create="section = 'arcs'; openNew()" /></template>
-      <button v-else class="text-button" @click="view = 'arcs'; section = 'arcs'"><GitBranch :size="14" />Show arc timelines</button>
+      <template v-if="active.document.kind === 'beat'"><label class="field-label">Story arcs <span>Arrange positions in the Arcs view</span></label><DocumentLinkPicker kind="arc" :model-value="Object.keys(details.fields.arcPositions)" :documents="arcs" @update:model-value="setDetailArcs" @create="section = 'arcs'; openNew()" /></template>
+      <button v-else-if="active.document.kind === 'arc'" class="text-button" @click="view = 'arcs'; section = 'arcs'"><GitBranch :size="14" />Show arc timelines</button>
       <div v-if="details.dirty" class="details-actions"><button class="small-button" @click="resetDetails">Reset</button><button class="primary-button" :disabled="detailSaving" @click="saveDetails">{{ detailSaving ? 'Saving…' : 'Save details' }}</button></div>
       <div v-if="active.document.kind === 'scene'" class="inspector-section scene-goal"><div class="section-label"><span>SCENE GOAL</span><span>{{ Math.round(Math.min(100, words / (details.fields.wordGoal || 1) * 100)) }}%</span></div><div class="goal-numbers"><strong>{{ number(words) }}</strong><span> / </span><input v-model.number="details.fields.wordGoal" type="number" min="0" max="10000000" aria-label="Scene word goal" @input="editDetails" /><span> words</span></div><div class="progress-track"><span :style="{ width: `${Math.min(100, words / (details.fields.wordGoal || 1) * 100)}%` }" /></div></div>
       <div class="inspector-section"><button class="history-button" @click="history"><span class="history-icon"><Clock3 :size="18" /></span><span><strong>Version history</strong><small>Find an earlier turn of phrase</small></span><ChevronRight :size="15" /></button></div>

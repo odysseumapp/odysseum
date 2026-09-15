@@ -12,7 +12,7 @@ internal sealed class ProjectOrganizationService(ProjectState state)
     public async Task UpdateMetadataAsync(string id, MetadataRequest request)
     {
         Check(state.Revision, request.Revision);
-        state.Find(id);
+        var document = state.Find(id);
         var candidate = state.Manifest.Clone();
         var metadata = candidate.Documents[id];
         var title = ValidateTitle(request.Title);
@@ -28,6 +28,8 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         if (request.Locations is not null) metadata.Locations = ValidateLinks(request.Locations, DocumentKind.Location, "locations");
         if (request.ArcPositions is not null)
         {
+            if (request.ArcPositions.Count > 0 && KindOf(document.Path) != DocumentKind.Beat)
+                throw new WorkspaceException(400, "Only beats can be placed on arcs.");
             ValidateLinks(request.ArcPositions.Keys.ToArray(), DocumentKind.Arc, "arcs");
             if (request.ArcPositions.Values.Any(position => !double.IsFinite(position) || position is < 0 or > 10000))
                 throw new WorkspaceException(400, "Arc positions must be between 0 and 10000.");

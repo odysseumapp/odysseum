@@ -284,10 +284,30 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
 checks.AddRange([
     ("Arc positions are independent, validated, and preserved through ordinary metadata edits", async (root, store) =>
     {
-        var scene = await store.CreateAsync(new("Arrival", "Manuscript", "Scene prose"));
+        var scene = await store.CreateAsync(new("Arrival", "Beats", "Beat prose"));
         var first = await store.CreateAsync(new("Race", "Arcs", "Arc notes only"));
         var second = await store.CreateAsync(new("Class", "Arcs", "Another thread"));
         Require(first.Document.Kind == DocumentKind.Arc, "Arc file was classified as a scene.");
+        Require(scene.Document.Kind == DocumentKind.Beat, "Beat file was classified as a scene.");
+        foreach (var folderName in new[] { "Manuscript", "Characters", "Locations", "Notes", "Arcs" })
+        {
+            var other = await store.CreateAsync(new("Not a beat", folderName, "Keep this document"));
+            var revision = (await store.GetProjectAsync()).Revision;
+            await Expect(400, () => store.UpdateMetadataAsync(other.Document.Id, new("Not a beat", "", "", DocumentStatus.Draft, 1000,
+                revision, ArcPositions: new() { [first.Document.Id] = 0 })));
+            Require((await store.GetDocumentAsync(other.Document.Id)).Content == "Keep this document", "Rejected link modified the original document.");
+            if (folderName == "Manuscript")
+            {
+                var manifestPath = Path.Combine(root, folderName, ".writer", "folder.json");
+                var legacy = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!;
+                legacy["documents"]![other.Document.Id]!["arcPositions"] = new JsonObject { [first.Document.Id] = 3 };
+                await File.WriteAllTextAsync(manifestPath, legacy.ToJsonString());
+                var original = await store.GetDocumentAsync(other.Document.Id);
+                Require(original.Document.ArcPositions.Count == 0 && original.Content == "Keep this document", "Legacy non-Beat arc point remained visible or altered its source.");
+                Require(JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!["documents"]![other.Document.Id]!["arcPositions"]![first.Document.Id]!.GetValue<int>() == 3,
+                    "Hiding a legacy arc point discarded stored metadata.");
+            }
+        }
         var project = await store.GetProjectAsync();
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000,
             project.Revision, ArcPositions: new() { [first.Document.Id] = 4, [second.Document.Id] = 1 }));
@@ -303,9 +323,9 @@ checks.AddRange([
             project.Revision, ArcPositions: new() { [scene.Document.Id] = 1 })));
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated", "", DocumentStatus.Draft, 1000, project.Revision));
         Require(project.Documents.Single(d => d.Id == scene.Document.Id).ArcPositions.Count == 2, "Omitting arc positions removed attachments.");
-        var folder = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Manuscript", ".writer", "folder.json")))!;
+        var folder = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Beats", ".writer", "folder.json")))!;
         Require(folder["documents"]![scene.Document.Id]!["arcPositions"]![second.Document.Id]!.GetValue<double>() == 1, "Arc position was not persisted in the owning folder.");
-        Require(!(await store.ExportAsync()).Contains("Arc notes only"), "Arc notes were included in manuscript export.");
+        Require(!(await store.ExportAsync()).Contains("Arc notes only") && !(await store.ExportAsync()).Contains("Beat prose"), "Arc notes were included in manuscript export.");
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated", "", DocumentStatus.Draft, 1000,
             project.Revision, ArcPositions: new() { [second.Document.Id] = 1 }));
         Require(project.Documents.Single(d => d.Id == scene.Document.Id).ArcPositions.Count == 1, "Removing from one arc did not persist.");

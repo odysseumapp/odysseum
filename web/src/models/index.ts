@@ -1,6 +1,6 @@
 export type DocumentStatus = 'draft' | 'revised' | 'done'
 /** Derived from the document's top-level folder on the server; every kind shares the same file and metadata handling. */
-export type DocumentKind = 'scene' | 'note' | 'character' | 'location' | 'arc'
+export type DocumentKind = 'scene' | 'note' | 'character' | 'location' | 'arc' | 'beat'
 
 export interface DocumentSummary {
   id: string; path: string; title: string; folder: string;

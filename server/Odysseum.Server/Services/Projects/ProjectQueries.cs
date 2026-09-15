@@ -46,7 +46,7 @@ internal sealed class ProjectQueries(ProjectState state)
     {
         var m = state.Manifest.Documents[d.Id];
         return new(d.Id, d.Path, m.Title, Path.GetDirectoryName(d.Path)?.Replace('\\', '/') ?? "",
-            m.Synopsis, m.Notes, m.Status, m.WordGoal, m.Order, CountWords(d.Body), d.Revision, d.Modified, KindOf(d.Path), m.Characters.ToArray(), m.Locations.ToArray(), new Dictionary<string, double>(m.ArcPositions));
+            m.Synopsis, m.Notes, m.Status, m.WordGoal, m.Order, CountWords(d.Body), d.Revision, d.Modified, KindOf(d.Path), m.Characters.ToArray(), m.Locations.ToArray(), KindOf(d.Path) == DocumentKind.Beat ? new Dictionary<string, double>(m.ArcPositions) : new Dictionary<string, double>());
     }
     private IEnumerable<DiskDocument> Ordered() => state.Documents.Values.OrderBy(x => state.Manifest.Documents[x.Id].Order).ThenBy(x => x.Path, StringComparer.Ordinal);
 }

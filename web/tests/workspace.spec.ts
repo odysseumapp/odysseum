@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { readFile, writeFile, mkdir, unlink, access } from 'node:fs/promises'
 import path from 'node:path'
-import type { DocumentContent } from '../src/models'
+import type { DocumentContent, Project } from '../src/models'
 
 // The test workspace is seeded with the demo project on first start; every project is one folder inside it.
 const workspaceRoot = path.resolve('../.test-data/browser')
@@ -17,7 +17,7 @@ async function create(request: APIRequestContext, name: string, content: string)
 }
 // API responses are enveloped as { apiVersion, data }.
 async function getProject(request: APIRequestContext) {
-  return (await (await request.get(apiBase)).json()).data as { documents: { id: string; title: string; path: string; characters: string[]; locations: string[] }[] }
+  return (await (await request.get(apiBase)).json()).data as Project
 }
 
 test('writing workspace renders without browser errors and switches views', async ({ page }) => {
@@ -319,8 +319,9 @@ test('locations created offline keep their scene links when synced', async ({ pa
   await expect(page.getByRole('heading', { name: 'The letter arrives', exact: true })).toBeVisible()
 })
 
-test('arcs keep independent document positions through offline creation, dragging, and reload', async ({ page, context, request }) => {
+test('beats keep independent arc positions through offline creation, dragging, and reload', async ({ page, context, request }) => {
   const race = title('Race')
+  const beat = title('Broken promise')
   const wealth = title('Wealth')
   await page.goto(projectUrl)
   await expect(page.getByText('Connected to your files')).toBeVisible()
@@ -336,17 +337,24 @@ test('arcs keep independent document positions through offline creation, draggin
     await expect(page.getByRole('region', { name: `${name} arc`, exact: true })).toBeVisible()
   }
   for (const [name, position] of [[race, 3], [wealth, 2]] as const) {
-    await page.getByRole('button', { name: `Add document to ${name}`, exact: true }).click()
-    const option = page.getByLabel('Document', { exact: true }).locator('option').filter({ hasText: /^The letter arrives ?/ })
-    await page.getByLabel('Document', { exact: true }).selectOption((await option.getAttribute('value'))!)
+    await page.getByRole('button', { name: `Add beat to ${name}`, exact: true }).click()
+    if (name === race) {
+      await page.getByLabel('Beat title', { exact: true }).fill(beat)
+    } else {
+      await page.getByRole('button', { name: 'Existing beat', exact: true }).click()
+      const options = page.getByLabel('Beat', { exact: true }).locator('option')
+      await expect(options).not.toContainText(['The letter arrives'])
+      const option = options.filter({ hasText: beat })
+      await page.getByLabel('Beat', { exact: true }).selectOption((await option.getAttribute('value'))!)
+    }
     await page.getByLabel('Position', { exact: true }).fill(String(position))
-    await page.getByRole('button', { name: 'Add to arc', exact: true }).click()
+    await page.getByRole('button', { name: name === race ? 'Create beat' : 'Add to arc', exact: true }).click()
   }
   const raceLane = page.getByRole('region', { name: `${race} arc`, exact: true })
   const wealthLane = page.getByRole('region', { name: `${wealth} arc`, exact: true })
   await expect(raceLane.locator('.arc-point')).toHaveAttribute('data-position', '2')
   await expect(wealthLane.locator('.arc-point')).toHaveAttribute('data-position', '1')
-  await raceLane.getByRole('button', { name: `Move The letter arrives right on ${race}`, exact: true }).click()
+  await raceLane.getByRole('button', { name: `Move ${beat} right on ${race}`, exact: true }).click()
   await expect(raceLane.locator('.arc-point')).toHaveAttribute('data-position', '3')
   await expect(wealthLane.locator('.arc-point')).toHaveAttribute('data-position', '1')
   await raceLane.locator('.arc-point').dragTo(raceLane.locator('.arc-track'), { targetPosition: { x: 210, y: 45 } })
@@ -360,22 +368,30 @@ test('arcs keep independent document positions through offline creation, draggin
     const project = (await (await request.get(apiBase)).json()).data
     const a = project.documents.find((doc: { title: string }) => doc.title === race)
     const b = project.documents.find((doc: { title: string }) => doc.title === wealth)
-    const scene = project.documents.find((doc: { title: string }) => doc.title === 'The letter arrives')
-    return !!a && !!b && scene.arcPositions[a.id] === 1 && scene.arcPositions[b.id] === 1
+    const scene = project.documents.find((doc: { title: string }) => doc.title === beat)
+    return !!a && !!b && !!scene && scene.arcPositions[a.id] === 1 && scene.arcPositions[b.id] === 1
   }, { timeout: 20000 }).toBe(true)
   expect((await getProject(request)).documents.filter(doc => before.includes(doc.id)).map(doc => doc.id)).toEqual(before)
   await page.screenshot({ path: '../.test-data/odysseum-arcs.png', fullPage: true })
-  await raceLane.getByRole('button', { name: 'Open The letter arrives', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'The letter arrives', exact: true })).toBeVisible()
+  await raceLane.getByRole('button', { name: `Open ${beat}`, exact: true }).click()
+  await expect(page.getByRole('heading', { name: beat, exact: true })).toBeVisible()
+  await expect(page.getByText('BEAT DETAILS', { exact: true })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Arcs for this beat', exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Manuscript editor' }).fill('The promise is broken, and trust begins to unravel.')
+  await expect(page.getByRole('button', { name: 'All changes saved', exact: true })).toBeVisible()
+  const savedBeat = (await getProject(request)).documents.find(doc => doc.title === beat)!
+  expect(savedBeat.kind).toBe('beat')
+  expect(savedBeat.path).toMatch(/^Beats\//)
+  expect(await readFile(path.join(fixtureRoot, savedBeat.path), 'utf8')).toContain('trust begins to unravel')
   await page.getByRole('tab', { name: 'Arcs', exact: true }).click()
-  await raceLane.getByRole('button', { name: `Remove The letter arrives from ${race}`, exact: true }).click()
+  await raceLane.getByRole('button', { name: `Remove ${beat} from ${race}`, exact: true }).click()
   await expect(raceLane.locator('.arc-point')).toHaveCount(0)
   await expect(wealthLane.locator('.arc-point')).toHaveCount(1)
   await expect.poll(async () => {
     const project = (await (await request.get(apiBase)).json()).data
     const a = project.documents.find((doc: { title: string }) => doc.title === race)
     const b = project.documents.find((doc: { title: string }) => doc.title === wealth)
-    const scene = project.documents.find((doc: { title: string }) => doc.title === 'The letter arrives')
+    const scene = project.documents.find((doc: { title: string }) => doc.title === beat)
     return scene.arcPositions[a.id] === undefined && scene.arcPositions[b.id] === 1
   }).toBe(true)
   await page.setViewportSize({ width: 390, height: 844 })
