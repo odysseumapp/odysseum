@@ -19,7 +19,7 @@ Odysseum is in early development and breaking changes will be shipped regularly.
 There is a demo manuscript included when `ODYSSEUM_DEMO=true`.
 
 ## AI Usage
-AI coding tools are used in the development of Odysseum. The developer is a programmer by trade and all code and contributions are reviewed before merging. Odysseum is a hobby project and will be worked on as spare time allows.
+AI coding tools are used in the development of Odysseum. The developer is a programmer by trade and all code is reviewed before merging. Odysseum is a hobby project and will be worked on as spare time allows.
 
 ## Workspace and project format
 
