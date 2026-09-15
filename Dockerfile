@@ -1,17 +1,9 @@
-FROM node:22-alpine AS web
-WORKDIR /source/web
-COPY web/package*.json ./
-RUN npm ci
-COPY web/ ./
-RUN npm run build
-
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS server
 WORKDIR /source
 COPY global.json ./
 COPY server/Odysseum.Server/Odysseum.Server.csproj server/Odysseum.Server/
 RUN dotnet restore server/Odysseum.Server/Odysseum.Server.csproj
 COPY server/ server/
-COPY --from=web /source/web/dist server/Odysseum.Server/wwwroot
 RUN dotnet publish server/Odysseum.Server/Odysseum.Server.csproj -c Release --no-restore -o /output
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

@@ -1,9 +1,9 @@
 services:
-  odysseum:
+  api:
     build: .
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5080:5080"
+      - "127.0.0.1:5081:5080"
     environment:
       ODYSSEUM_DEMO: "true"
       ODYSSEUM_PASSWORD: "${ODYSSEUM_PASSWORD:-}"
@@ -11,3 +11,13 @@ services:
     volumes:
       - ./projects:/projects
       - ./data:/data
+  web:
+    build:
+      context: "${ODYSSEUM_WEB_PATH:-./odysseum-web}"
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:5080:3000"
+    environment:
+      NUXT_API_ORIGIN: "http://api:5080"

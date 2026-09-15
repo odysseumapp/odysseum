@@ -1,7 +1,6 @@
 **/bin/
 **/obj/
-web/node_modules/
-web/dist/
+/odysseum-web/
 server/Odysseum.Server/wwwroot/
 workspace/
 /projects/
@@ -14,4 +13,3 @@ playwright-report/
 *.user
 *.log
 server-settings.json
-web/tsconfig.tsbuildinfo

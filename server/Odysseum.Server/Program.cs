@@ -87,8 +87,4 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" })).ExcludeFromDescri
 
 app.MapControllers();
 
-app.UseDefaultFiles();
-app.UseStaticFiles();
-app.MapFallbackToFile("index.html");
-
 app.Run();
