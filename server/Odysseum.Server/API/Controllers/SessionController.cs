@@ -27,7 +27,7 @@ public class SessionController : ControllerBase
     {
         var settings = _settingsProvider.GetSettings();
         var authenticated = !settings.PasswordRequired || User.Identity?.IsAuthenticated == true;
-        return ApiResults.Success(new SessionResponse(authenticated, settings.PasswordRequired));
+        return ApiResults.Success(new SessionResponse(authenticated, settings.PasswordRequired, settings.AllowDeletingDefaultFolders));
     }
 
     /// <summary>Unlock the workspace with the configured password.</summary>
@@ -44,7 +44,7 @@ public class SessionController : ControllerBase
 
         var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "Writer")], CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-        return ApiResults.Success(new SessionResponse(true, settings.PasswordRequired));
+        return ApiResults.Success(new SessionResponse(true, settings.PasswordRequired, settings.AllowDeletingDefaultFolders));
     }
 
     /// <summary>Lock the workspace for this browser.</summary>
@@ -53,6 +53,6 @@ public class SessionController : ControllerBase
     {
         var settings = _settingsProvider.GetSettings();
         await HttpContext.SignOutAsync();
-        return ApiResults.Success(new SessionResponse(!settings.PasswordRequired, settings.PasswordRequired));
+        return ApiResults.Success(new SessionResponse(!settings.PasswordRequired, settings.PasswordRequired, settings.AllowDeletingDefaultFolders));
     }
 }

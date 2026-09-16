@@ -7,21 +7,38 @@ namespace Odysseum.Server.Services.Storage;
 internal sealed class ProjectFileStore(string root)
 {
     public const int MaxFileBytes = 4 * 1024 * 1024;
+    public const string MetadataDirectory = ".odysseum";
+    private const string LegacyMetadataDirectory = ".writer";
     public string Root { get; } = Path.GetFullPath(root);
 
     public FileStream AcquireInstanceLock()
     {
         Directory.CreateDirectory(Root);
         AssertNoLinks(Root);
-        Directory.CreateDirectory(ResolvePath(".writer", true));
         try
         {
-            return new FileStream(ResolvePath(".writer/instance.lock", true), FileMode.OpenOrCreate,
+            MigrateLegacyMetadata();
+            Directory.CreateDirectory(ResolvePath(MetadataDirectory, true));
+            return new FileStream(ResolvePath(".odysseum/instance.lock", true), FileMode.OpenOrCreate,
                 FileAccess.ReadWrite, FileShare.None);
         }
         catch (IOException)
         {
             throw new WorkspaceException(503, "Another Odysseum instance is already using this project.");
+        }
+    }
+
+    /// <summary>Earlier releases kept metadata in .writer directories. They are renamed before the instance lock is taken,
+    /// so a project still open elsewhere fails here the same way a held lock does.</summary>
+    private void MigrateLegacyMetadata()
+    {
+        foreach (var folder in EnumerateFolders().Prepend("").ToArray())
+        {
+            var directory = folder == "" ? Root : ResolvePath(folder);
+            var legacy = Path.Combine(directory, LegacyMetadataDirectory);
+            if (!Directory.Exists(legacy) || Directory.Exists(Path.Combine(directory, MetadataDirectory))) continue;
+            AssertNoLinks(legacy);
+            Directory.Move(legacy, Path.Combine(directory, MetadataDirectory));
         }
     }
 
@@ -61,10 +78,10 @@ internal sealed class ProjectFileStore(string root)
     {
         var path = ResolvePath(relative);
         if (!Directory.Exists(path)) return;
-        if (Directory.EnumerateFileSystemEntries(path).Any(entry => Path.GetFileName(entry) != ".writer"))
+        if (Directory.EnumerateFileSystemEntries(path).Any(entry => Path.GetFileName(entry) != ".odysseum"))
             throw new WorkspaceException(409, "Only empty folders can be removed. Move their files and subfolders first.");
         // Keep the folder manifest recoverable, including metadata for externally removed files.
-        var destination = ResolvePath(".writer/removed-folders/" + Guid.NewGuid().ToString("N"), true);
+        var destination = ResolvePath(".odysseum/removed-folders/" + Guid.NewGuid().ToString("N"), true);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         Directory.Move(path, destination);
     }

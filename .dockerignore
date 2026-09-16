@@ -1,7 +1,6 @@
 **/bin
 **/obj
 **/node_modules
-odysseum-web
 server/Odysseum.Server/wwwroot
 workspace
 projects

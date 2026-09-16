@@ -4,7 +4,7 @@ using Odysseum.Server.Services.Storage;
 namespace Odysseum.Server.Services.Projects;
 
 /// <summary>Folder operations and view layouts, independent of document kinds.</summary>
-internal sealed class ProjectFolderService(ProjectState state, ProjectFileStore files)
+internal sealed class ProjectFolderService(ProjectState state, ProjectFileStore files, Func<bool> allowDeletingDefaultFolders)
 {
     private void CheckRevision(string revision)
     {
@@ -20,6 +20,8 @@ internal sealed class ProjectFolderService(ProjectState state, ProjectFileStore 
     public void Remove(RemoveFolderRequest request)
     {
         CheckRevision(request.Revision);
+        if (ProjectLibrary.IsDefaultFolder(request.Path) && !allowDeletingDefaultFolders())
+            throw new WorkspaceException(403, "Default project folders stay unless the server setting 'Allow deleting default project folders' is on.");
         files.RemoveEmptyFolder(request.Path);
     }
 

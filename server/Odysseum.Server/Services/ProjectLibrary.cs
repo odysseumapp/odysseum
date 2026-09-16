@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Collections.Concurrent;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Documents;
@@ -11,6 +13,11 @@ namespace Odysseum.Server.Services;
 /// </summary>
 public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsyncDisposable
 {
+    /// <summary>Created with every project, in sidebar order. Only a server setting allows removing them.</summary>
+    public static readonly string[] DefaultFolders = ["Manuscript", "Characters", "Locations", "Threads", "Notes"];
+    public const string DefaultSubfolder = "Manuscript/Chapter 01";
+    public static bool IsDefaultFolder(string path) => DefaultFolders.Contains(path, StringComparer.OrdinalIgnoreCase);
+
     // Windows directory names are case-insensitive; two spellings must not open two stores on one folder.
     private readonly ConcurrentDictionary<string, Lazy<Task<ProjectHandle>>> _open =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -62,7 +69,7 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsync
             var suffix = 2;
             while (Directory.Exists(Path.Combine(Root, slug)) || File.Exists(Path.Combine(Root, slug))) slug = $"{stem}-{suffix++}";
             Directory.CreateDirectory(Path.Combine(Root, slug));
-            foreach (var folder in new[] { "Manuscript", "Characters", "Locations", "Notes", "Threads" })
+            foreach (var folder in DefaultFolders.Append(DefaultSubfolder))
                 Directory.CreateDirectory(Path.Combine(Root, slug, folder));
         }
         finally { _createGate.Release(); }
@@ -71,7 +78,9 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsync
         var settings = view.Settings.Clone();
         settings.Title = title;
         settings.WordGoal = request.WordGoal ?? settings.WordGoal;
-        await handle.Settings.SaveSettingsAsync(settings, view.Revision);
+        var saved = await handle.Settings.SaveSettingsAsync(settings, view.Revision);
+        // Default folders keep their conventional order until the writer rearranges the root.
+        await handle.Services.SaveFolderLayoutAsync(new FolderLayoutRequest("", null, [.. DefaultFolders.Select(name => "folder:" + name)], [], saved.Revision));
         return await DescribeAsync(slug, Path.Combine(Root, slug));
     }
 
@@ -99,11 +108,20 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsync
                 title = manifest.Settings.Title;
                 id = manifest.Id;
             }
+            else if (File.Exists(Path.Combine(directory, ".writer", "project.json")))
+            {
+                // Listing never migrates files; a project from an earlier release is renamed when it is opened.
+                var legacy = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(directory, ".writer", "project.json")));
+                title = Text(legacy?["settings"]?["title"]) ?? Text(legacy?["title"]) ?? title;
+                id = Text(legacy?["id"]) ?? id;
+            }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WorkspaceException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WorkspaceException or JsonException)
         { /* The listing stays available; opening the project reports the real problem. */ }
         return new(slug, title, id, Directory.GetLastWriteTimeUtc(directory));
     }
+
+    private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     public async ValueTask DisposeAsync()
     {

@@ -1,6 +1,6 @@
 function Get-OdysseumWebRoot([string]$repoRoot, [string]$WebRoot) {
     if (!$WebRoot) { $WebRoot = $env:ODYSSEUM_WEB_PATH }
-    if (!$WebRoot) { $WebRoot = Join-Path $repoRoot 'odysseum-web' }
+    if (!$WebRoot) { $WebRoot = Join-Path (Split-Path -Parent $repoRoot) 'odysseum-web' }
     if (![IO.Path]::IsPathRooted($WebRoot)) { $WebRoot = Join-Path $repoRoot $WebRoot }
     $WebRoot = [IO.Path]::GetFullPath($WebRoot)
     if (!(Test-Path -LiteralPath (Join-Path $WebRoot 'package.json'))) {

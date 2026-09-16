@@ -17,6 +17,9 @@ public interface IServerSettings
     /// <summary>Installed, independently versioned static UI files. Null selects webui beside the settings file.</summary>
     string? WebUi { get; set; }
 
+    /// <summary>Whether the folders every project starts with may be removed once empty.</summary>
+    bool AllowDeletingDefaultFolders { get; set; }
+
     /// <summary>Full reconciliation interval for every open project.</summary>
     int ScanSeconds { get; set; }
 

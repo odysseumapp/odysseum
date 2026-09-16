@@ -21,7 +21,7 @@ public sealed class ProjectServices : IDisposable
     private FileStream? _instanceLock;
     public string Root => _files.Root;
 
-    public ProjectServices(string root, ProjectEvents events)
+    public ProjectServices(string root, ProjectEvents events, ISettingsProvider? settings = null)
     {
         _files = new ProjectFileStore(root);
         var manifests = new ProjectManifestStore(_files);
@@ -30,7 +30,7 @@ public sealed class ProjectServices : IDisposable
         _scanner = new ProjectScanner(_state, _files, manifests);
         _documents = new ProjectDocumentService(_state, _files, _history);
         _organization = new ProjectOrganizationService(_state);
-        _folders = new ProjectFolderService(_state, _files);
+        _folders = new ProjectFolderService(_state, _files, () => settings?.GetSettings().AllowDeletingDefaultFolders ?? false);
         _queries = new ProjectQueries(_state);
     }
 

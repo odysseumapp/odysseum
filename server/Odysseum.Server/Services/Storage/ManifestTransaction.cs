@@ -5,7 +5,7 @@ namespace Odysseum.Server.Services.Storage;
 /// <summary>A rollback journal for manifest batches. Only the project lock owner may recover it.</summary>
 internal sealed class ManifestTransaction(ProjectFileStore files)
 {
-    private const string Journal = ".writer/pending-manifests.json";
+    private const string Journal = ".odysseum/pending-manifests.json";
     internal sealed record Entry(string Path, string? Backup, string After);
     public bool Pending => files.Exists(Journal, metadata: true);
 
@@ -62,7 +62,7 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
                 string? backup = null;
                 if (before.TryGetValue(path, out var old))
                 {
-                    backup = $".writer/manifest-transaction/{Guid.NewGuid():N}.bak";
+                    backup = $".odysseum/manifest-transaction/{Guid.NewGuid():N}.bak";
                     await files.WriteAsync(backup, old, overwrite: false, metadata: true);
                 }
                 entries.Add(new(path, backup, ContentRevision.Hash(bytes)));
@@ -103,10 +103,10 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
     private static void Validate(Entry entry)
     {
         if (entry is null || entry.Path is null || entry.After is null || entry.After.Length != 64 || !entry.After.All(Uri.IsHexDigit)
-            || entry.Path != ".writer/project.json" && (!entry.Path.EndsWith("/.writer/folder.json", StringComparison.Ordinal)
+            || entry.Path != ".odysseum/project.json" && (!entry.Path.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)
                 || entry.Path.Split('/')[..^2].Any(part => part.StartsWith('.')))
             || entry.Backup is not null && (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(entry.Backup), "N", out var id)
-                || entry.Backup != $".writer/manifest-transaction/{id:N}.bak"))
+                || entry.Backup != $".odysseum/manifest-transaction/{id:N}.bak"))
             throw new WorkspaceException(422, "The manifest recovery journal is invalid.");
     }
 }

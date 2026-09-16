@@ -52,7 +52,7 @@ builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 
 
 builder.Services.AddSingleton<ISettingsProvider>(settingsProvider);
 
-builder.Services.AddSingleton(provider => new ProjectFactory(provider.GetRequiredService<ILoggerFactory>(), settings.ScanSeconds));
+builder.Services.AddSingleton(provider => new ProjectFactory(provider.GetRequiredService<ILoggerFactory>(), settings.ScanSeconds, settingsProvider));
 builder.Services.AddSingleton(provider => new ProjectLibrary(settings.Workspace, provider.GetRequiredService<ProjectFactory>()));
 // ApiResults writes through TypedResults.Json, which uses these options; MVC's AddJsonOptions below only covers model binding.
 

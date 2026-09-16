@@ -9,10 +9,10 @@ namespace Odysseum.Server.Services.Storage;
 /// <summary>Translates folder-owned manifests into the flat project view used by services and the API.</summary>
 internal sealed class ProjectManifestStore(ProjectFileStore files)
 {
-    private const string ManifestPath = ".writer/project.json";
+    private const string ManifestPath = ".odysseum/project.json";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { WriteIndented = true, Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
-    private static string FolderPath(string folder) => folder + "/.writer/folder.json";
+    private static string FolderPath(string folder) => folder + "/.odysseum/folder.json";
     private static string Parent(string path) => Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
 
     private async Task<Dictionary<string, byte[]>> ReadFilesAsync()
@@ -46,7 +46,7 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
         var folderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { manifest.Id };
         foreach (var (path, content) in contents.Where(p => p.Key != ManifestPath))
         {
-            var folder = path[..^"/.writer/folder.json".Length];
+            var folder = path[..^"/.odysseum/folder.json".Length];
             var local = Parse<FolderManifest>(content, path);
             if (!folderIds.Add(local.Id)) throw new WorkspaceException(409, $"Two folders have the same manifest ID: {folder}");
             manifest.FolderManifests[folder] = local;
@@ -100,8 +100,8 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
         var changes = after.Where(p => !before.TryGetValue(p.Key, out var old) || !old.AsSpan().SequenceEqual(p.Value))
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         if (before.TryGetValue(ManifestPath, out var legacy) && Parse<ProjectManifest>(legacy, ManifestPath, root: true).Version == 1
-            && !files.Exists(".writer/project.v1.json", metadata: true))
-            await files.WriteAsync(".writer/project.v1.json", legacy, overwrite: false, metadata: true);
+            && !files.Exists(".odysseum/project.v1.json", metadata: true))
+            await files.WriteAsync(".odysseum/project.v1.json", legacy, overwrite: false, metadata: true);
         // Recheck the entire set after preparing the batch, including newly discovered folder manifests.
         if (Revision(await ReadFilesAsync()) != expectedRevision) throw Changed();
         await new ManifestTransaction(files).CommitAsync(changes, before);

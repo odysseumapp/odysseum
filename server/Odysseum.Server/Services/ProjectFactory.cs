@@ -4,12 +4,12 @@ using Odysseum.Server.Settings;
 namespace Odysseum.Server.Services;
 
 /// <summary>Constructs and starts one project. The library owns the returned handle until shutdown.</summary>
-public sealed class ProjectFactory(ILoggerFactory loggers, int scanSeconds)
+public sealed class ProjectFactory(ILoggerFactory loggers, int scanSeconds, ISettingsProvider? settings = null)
 {
     public async Task<ProjectHandle> OpenAsync(string slug, string path)
     {
         var events = new ProjectEvents();
-        var services = new ProjectServices(path, events);
+        var services = new ProjectServices(path, events, settings);
         ProjectMonitor? monitor = null;
         try
         {

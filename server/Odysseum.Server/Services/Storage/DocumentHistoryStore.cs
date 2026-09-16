@@ -9,7 +9,7 @@ internal sealed partial class DocumentHistoryStore(ProjectFileStore files)
 {
     public async Task SaveAsync(string id, byte[] bytes)
     {
-        var folder = $".writer/history/{id}";
+        var folder = $".odysseum/history/{id}";
         var hash = ContentRevision.Hash(bytes);
         if (files.EnumerateMetadataFiles(folder, $"*-{hash}.md").Any()) return;
         var name = $"{DateTime.UtcNow:yyyyMMddTHHmmssfffffff}-{hash}.md";
@@ -19,7 +19,7 @@ internal sealed partial class DocumentHistoryStore(ProjectFileStore files)
     public async Task<IReadOnlyList<SnapshotInfo>> ListAsync(string id)
     {
         var result = new List<SnapshotInfo>();
-        foreach (var path in files.EnumerateMetadataFiles($".writer/history/{id}", "*.md").OrderDescending().Take(100))
+        foreach (var path in files.EnumerateMetadataFiles($".odysseum/history/{id}", "*.md").OrderDescending().Take(100))
         {
             var content = MarkdownDocumentCodec.Decode(await files.ReadAsync(path, metadata: true));
             result.Add(new(Path.GetFileNameWithoutExtension(path), files.LastModified(path, metadata: true),
@@ -31,7 +31,7 @@ internal sealed partial class DocumentHistoryStore(ProjectFileStore files)
     public async Task<string> ReadAsync(string id, string snapshot)
     {
         if (!SnapshotName().IsMatch(snapshot)) throw new WorkspaceException(400, "Invalid snapshot.");
-        var text = MarkdownDocumentCodec.Decode(await files.ReadAsync($".writer/history/{id}/{snapshot}.md", metadata: true));
+        var text = MarkdownDocumentCodec.Decode(await files.ReadAsync($".odysseum/history/{id}/{snapshot}.md", metadata: true));
         return MarkdownDocumentCodec.Split(text).Body;
     }
 

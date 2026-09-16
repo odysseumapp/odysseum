@@ -1,6 +1,5 @@
 **/bin/
 **/obj/
-/odysseum-web/
 server/Odysseum.Server/wwwroot/
 workspace/
 /projects/

@@ -22,7 +22,7 @@ public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int
         {
             var relative = Path.GetRelativePath(services.Root, args.FullPath).Replace('\\', '/');
             if (relative.Split('/').Any(part => part.StartsWith('.'))
-                && relative != ".writer/project.json" && !relative.EndsWith("/.writer/folder.json", StringComparison.Ordinal)) return;
+                && relative != ".odysseum/project.json" && !relative.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)) return;
             changes.Writer.TryWrite(true);
         }
         watcher.Changed += Changed;
