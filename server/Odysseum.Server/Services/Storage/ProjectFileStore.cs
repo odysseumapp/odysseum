@@ -48,6 +48,27 @@ internal sealed class ProjectFileStore(string root)
 
     public IEnumerable<string> EnumerateFolders() => EnumerateFolders(Root);
 
+    public void CreateFolder(string relative)
+    {
+        var path = ResolvePath(relative);
+        if (File.Exists(path)) throw new WorkspaceException(409, "A file already has that name.");
+        var parent = Path.GetDirectoryName(path)!;
+        if (!Directory.Exists(parent)) throw new WorkspaceException(404, "The parent folder no longer exists.");
+        Directory.CreateDirectory(path); // Idempotent when a client retries after losing its connection.
+    }
+
+    public void RemoveEmptyFolder(string relative)
+    {
+        var path = ResolvePath(relative);
+        if (!Directory.Exists(path)) return;
+        if (Directory.EnumerateFileSystemEntries(path).Any(entry => Path.GetFileName(entry) != ".writer"))
+            throw new WorkspaceException(409, "Only empty folders can be removed. Move their files and subfolders first.");
+        // Keep the folder manifest recoverable, including metadata for externally removed files.
+        var destination = ResolvePath(".writer/removed-folders/" + Guid.NewGuid().ToString("N"), true);
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        Directory.Move(path, destination);
+    }
+
     private IEnumerable<string> EnumerateFolders(string directory)
     {
         AssertNoLinks(directory);

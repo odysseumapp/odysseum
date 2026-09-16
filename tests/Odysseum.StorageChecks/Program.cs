@@ -12,6 +12,50 @@ Directory.CreateDirectory(testRoot);
 var passed = 0;
 var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
 {
+    ("Folders retain layouts and identity through scans and external moves", async (root, store) =>
+    {
+        var project = await store.GetProjectAsync();
+        project = await store.CreateFolderAsync(new("Topics", project.Revision));
+        project = await store.CreateFolderAsync(new("Topics/Race", project.Revision));
+        var doc = await store.CreateAsync(new("Revelation", "Topics/Race", "Text"));
+        project = await store.GetProjectAsync();
+        project = await store.SaveFolderLayoutAsync(new("Topics/Race", "threads", [doc.Document.Id], new() { [doc.Document.Id] = 3 }, project.Revision));
+        var folder = project.Folders.Single(f => f.Path == "Topics/Race");
+        var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Topics/Race/.writer/folder.json")))!;
+        Require(manifest["pinnedView"]!.GetValue<string>() == "threads", "Pin was not stored in the owning folder.");
+        Directory.Move(Path.Combine(root, "Topics/Race"), Path.Combine(root, "Topics/Class"));
+        var moved = (await store.GetProjectAsync()).Folders.Single(f => f.Path == "Topics/Class");
+        Require(moved.Id == folder.Id && moved.PinnedView == "threads" && moved.Positions[doc.Document.Id] == 3, "Folder layout or identity was lost on move.");
+    }),
+    ("Folder removal refuses content and archives empty folder metadata", async (root, store) =>
+    {
+        var project = await store.GetProjectAsync();
+        project = await store.CreateFolderAsync(new("Empty", project.Revision));
+        var id = project.Folders.Single(f => f.Path == "Empty").Id;
+        await File.WriteAllTextAsync(Path.Combine(root, "Empty/.keep"), "Keep this hidden file");
+        await Expect(409, () => store.RemoveFolderAsync(new("Empty", project.Revision)));
+        File.Delete(Path.Combine(root, "Empty/.keep"));
+        project = await store.RemoveFolderAsync(new("Empty", project.Revision));
+        Require(project.Folders.All(f => f.Path != "Empty") && !Directory.Exists(Path.Combine(root, "Empty")), "Empty folder remains visible.");
+        var archived = Directory.GetFiles(Path.Combine(root, ".writer/removed-folders"), "folder.json", SearchOption.AllDirectories);
+        Require(archived.Length == 1 && (await File.ReadAllTextAsync(archived[0])).Contains(id), "Removed metadata was lost.");
+        await Expect(400, () => store.RemoveFolderAsync(new("", project.Revision)));
+        await Expect(400, () => store.CreateFolderAsync(new("../Outside", project.Revision)));
+    }),
+    ("Folder layouts validate immediate children and reject stale writes", async (_, store) =>
+    {
+        var first = await store.CreateAsync(new("First", "One", ""));
+        var other = await store.CreateAsync(new("Other", "Two", ""));
+        var project = await store.GetProjectAsync();
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [other.Document.Id], [], project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], new() { [first.Document.Id] = double.NaN }, project.Revision)));
+        project = await store.SaveFolderLayoutAsync(new("", "outline", ["folder:Two", "folder:One"], [], project.Revision));
+        var stale = project.Revision;
+        project = await store.CreateFolderAsync(new("Three", project.Revision));
+        await Expect(409, () => store.SaveFolderLayoutAsync(new("", "board", [], [], stale)));
+        Require((await store.GetProjectAsync()).Folders.Single(f => f.Path == "").ItemOrder.SequenceEqual(new[] { "folder:Two", "folder:One" }), "Root folder order was lost.");
+        await Expect(409, () => store.RemoveFolderAsync(new("One", project.Revision)));
+    }),
     ("Reads an existing folder without rewriting its Markdown", async (root, store) =>
     {
         var path = Path.Combine(root, "existing.md");

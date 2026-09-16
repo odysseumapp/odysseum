@@ -32,7 +32,7 @@ public class ProjectsController : ControllerBase
         return ApiResults.Created(created, $"/api/projects/{Uri.EscapeDataString(created.Slug)}");
     }
 
-    /// <summary>The project's settings and document list.</summary>
+    /// <summary>The project's settings, documents, and folder layouts.</summary>
     [HttpGet("{project}")]
     public async Task<IResult> Get(string project)
     {

@@ -16,6 +16,7 @@ public sealed class ProjectServices : IDisposable
     private readonly ProjectScanner _scanner;
     private readonly ProjectDocumentService _documents;
     private readonly ProjectOrganizationService _organization;
+    private readonly ProjectFolderService _folders;
     private readonly ProjectQueries _queries;
     private FileStream? _instanceLock;
     public string Root => _files.Root;
@@ -29,6 +30,7 @@ public sealed class ProjectServices : IDisposable
         _scanner = new ProjectScanner(_state, _files, manifests);
         _documents = new ProjectDocumentService(_state, _files, _history);
         _organization = new ProjectOrganizationService(_state);
+        _folders = new ProjectFolderService(_state, _files);
         _queries = new ProjectQueries(_state);
     }
 
@@ -71,6 +73,17 @@ public sealed class ProjectServices : IDisposable
     }
 
     public Task<ProjectResponse> ReorderAsync(ReorderRequest request) => ChangeProjectAsync(() => _organization.ReorderAsync(request));
+
+    public Task<ProjectResponse> CreateFolderAsync(CreateFolderRequest request) => ChangeFolderAsync(() => _folders.Create(request));
+    public Task<ProjectResponse> RemoveFolderAsync(RemoveFolderRequest request) => ChangeFolderAsync(() => _folders.Remove(request));
+    public Task<ProjectResponse> SaveFolderLayoutAsync(FolderLayoutRequest request) => ChangeProjectAsync(() => _folders.SaveLayoutAsync(request));
+
+    private Task<ProjectResponse> ChangeFolderAsync(Action change) => ExecuteAsync(async () =>
+    {
+        change();
+        await _scanner.ScanAsync();
+        return _queries.GetProject();
+    });
 
     public Task<IReadOnlyList<SnapshotInfo>> GetSnapshotsAsync(string id) => ExecuteAsync(() =>
     {

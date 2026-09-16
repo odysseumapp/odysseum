@@ -62,6 +62,8 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsync
             var suffix = 2;
             while (Directory.Exists(Path.Combine(Root, slug)) || File.Exists(Path.Combine(Root, slug))) slug = $"{stem}-{suffix++}";
             Directory.CreateDirectory(Path.Combine(Root, slug));
+            foreach (var folder in new[] { "Manuscript", "Characters", "Locations", "Notes", "Threads" })
+                Directory.CreateDirectory(Path.Combine(Root, slug, folder));
         }
         finally { _createGate.Release(); }
         var handle = await OpenAsync(slug);

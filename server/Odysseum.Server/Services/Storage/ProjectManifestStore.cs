@@ -138,6 +138,12 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
                 document.ArcPositions ??= [];
                 if (document.ArcPositions.Any(p => !Guid.TryParseExact(p.Key, "D", out _) || !double.IsFinite(p.Value) || p.Value is < 0 or > 10000)) throw new JsonException();
             }
+            if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "threads")
+                || manifest.ItemOrder is null || manifest.Positions is null
+                || manifest.ItemOrder.Any(string.IsNullOrWhiteSpace)
+                || manifest.ItemOrder.Distinct().Count() != manifest.ItemOrder.Length
+                || manifest.Positions.Any(p => string.IsNullOrWhiteSpace(p.Key) || !double.IsFinite(p.Value) || p.Value is < 0 or > 10000))
+                throw new JsonException();
             // Removed-document metadata is retained by ID. A replacement may reuse its old filename.
             var localPaths = new HashSet<string>(StringComparer.Ordinal);
             foreach (var (id, folder) in manifest.Folders)

@@ -8,6 +8,9 @@ public class FolderManifest
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public int Version { get; set; } = 1;
+    public string? PinnedView { get; set; }
+    public string[] ItemOrder { get; set; } = [];
+    public Dictionary<string, double> Positions { get; set; } = [];
     public Dictionary<string, DocumentMetadata> Documents { get; set; } = [];
     public Dictionary<string, FolderEntry> Folders { get; set; } = [];
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -15,6 +18,7 @@ public class FolderManifest
     internal FolderManifest CloneFolder() => new()
     {
         Id = Id, Version = Version,
+        PinnedView = PinnedView, ItemOrder = [.. ItemOrder], Positions = new(Positions),
         Documents = Documents.ToDictionary(p => p.Key, p => p.Value.Clone()),
         Folders = Folders.ToDictionary(p => p.Key, p => p.Value.Clone()),
         Extra = Extra is null ? null : new(Extra),

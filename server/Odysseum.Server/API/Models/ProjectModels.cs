@@ -7,9 +7,17 @@ public record ProjectInfo(string Slug, string Title, string Id, DateTime LastMod
 
 public record CreateProjectRequest(string Title, int? WordGoal);
 
-/// <summary>The open project: its settings plus every document currently on disk, in manuscript order.</summary>
+/// <summary>The open project: settings, documents, and all physical folders with their view layouts.</summary>
 public record ProjectResponse(string Id, ProjectSettings Settings, string Revision,
-    IReadOnlyList<DocumentSummary> Documents, string? Warning);
+    IReadOnlyList<DocumentSummary> Documents, string? Warning, IReadOnlyList<FolderSummary> Folders);
+
+/// <summary>A physical folder, including the project root (empty path). Layout keys are document IDs or folder:name.</summary>
+public record FolderSummary(string Id, string Path, string Name, string? Parent, string? PinnedView,
+    string[] ItemOrder, IReadOnlyDictionary<string, double> Positions);
+public record CreateFolderRequest(string Path, string Revision);
+public record RemoveFolderRequest(string Path, string Revision);
+public record FolderLayoutRequest(string Path, string? PinnedView, string[] ItemOrder,
+    Dictionary<string, double> Positions, string Revision);
 
 /// <summary><c>Revision</c> is the project metadata revision the client last saw; stale values are rejected with 409.</summary>
 public record ProjectSettingsRequest(string Title, int WordGoal, int DefaultSceneWordGoal, string Revision);

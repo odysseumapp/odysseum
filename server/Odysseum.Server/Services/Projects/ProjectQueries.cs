@@ -12,7 +12,15 @@ namespace Odysseum.Server.Services.Projects;
 internal sealed class ProjectQueries(ProjectState state)
 {
     public ProjectResponse GetProject() => new(state.Manifest.Id, state.Manifest.Settings.Clone(), state.Revision,
-        Ordered().Select(Summary).ToArray(), state.Warning);
+        Ordered().Select(Summary).ToArray(), state.Warning, GetFolders());
+
+    private FolderSummary[] GetFolders() => state.Manifest.FolderManifests
+        .Prepend(new KeyValuePair<string, FolderManifest>("", state.Manifest))
+        .Select(pair => new FolderSummary(pair.Value.Id, pair.Key,
+            pair.Key == "" ? state.FolderName : Path.GetFileName(pair.Key),
+            pair.Key == "" ? null : Path.GetDirectoryName(pair.Key)?.Replace('\\', '/') ?? "",
+            pair.Value.PinnedView, [.. pair.Value.ItemOrder], new Dictionary<string, double>(pair.Value.Positions)))
+        .ToArray();
     public DocumentContent GetDocument(string id) => Content(state.Find(id));
     public IReadOnlyList<DocumentContent> GetAllDocuments() => Ordered().Select(Content).ToArray();
     public IProjectSettings GetSettings() => state.Manifest.Settings.Clone();

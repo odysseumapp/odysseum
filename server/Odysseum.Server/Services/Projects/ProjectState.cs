@@ -12,6 +12,7 @@ internal sealed class ProjectState
     private readonly ProjectManifestStore _manifests;
     private readonly ProjectEvents _events;
     public ProjectManifest Manifest { get; private set; }
+    public string FolderName => Path.GetFileName(_root);
     public IReadOnlyDictionary<string, DiskDocument> Documents { get; private set; } = new Dictionary<string, DiskDocument>();
     public string Revision { get; private set; } = "";
     public string? Warning { get; private set; }
