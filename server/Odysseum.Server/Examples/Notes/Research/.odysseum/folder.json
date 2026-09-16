@@ -1,0 +1,41 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200019",
+  "version": 1,
+  "pinnedView": null,
+  "itemOrder": [],
+  "threads": [],
+  "threadAxis": null,
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000032": {
+      "path": "Lighthouse mechanics.md",
+      "title": "Lighthouse mechanics",
+      "synopsis": "How a clockwork lamp turns, how often it is wound, and what the machinery sounds like from the kitchen below.",
+      "notes": "Enough to be right about the sound. No more.",
+      "status": "done",
+      "wordGoal": 0,
+      "order": 32,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000017"
+      ],
+      "threads": []
+    },
+    "00d1e246-4f36-47e8-a308-000000000033": {
+      "path": "Tides and timetables.md",
+      "title": "Tides and timetables",
+      "synopsis": "When a ferry can and cannot cross a shallow bay; why a timetable can be accurate and useless at once.",
+      "notes": "Tomas’s crossings should be plausible even when the island is not.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 33,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000022"
+      ],
+      "threads": []
+    }
+  },
+  "folders": {}
+}

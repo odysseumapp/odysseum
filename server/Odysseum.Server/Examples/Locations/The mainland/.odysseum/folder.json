@@ -1,0 +1,43 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200013",
+  "version": 1,
+  "pinnedView": null,
+  "itemOrder": [],
+  "threads": [],
+  "threadAxis": null,
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000021": {
+      "path": "Mara’s flat.md",
+      "title": "Mara’s flat",
+      "synopsis": "A small flat above a bakery in the city. No maps on the walls except the ones she draws for work, and one atlas on the shelf.",
+      "notes": "The safe, measured life she built. It should feel thin once the letter arrives.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 21,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006"
+      ],
+      "locations": [],
+      "threads": []
+    },
+    "00d1e246-4f36-47e8-a308-000000000022": {
+      "path": "The ferry office.md",
+      "title": "The ferry office",
+      "synopsis": "A paint-flaked ticket office at the mainland harbor with a timetable that says there has never been a ferry to Bellwether.",
+      "notes": "Liminal. Tomas mends nets here for boats that do not exist.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 22,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000008"
+      ],
+      "locations": [],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000027"
+      ]
+    }
+  },
+  "folders": {}
+}

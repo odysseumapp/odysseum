@@ -135,14 +135,16 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
                     throw new JsonException();
                 document.Characters ??= [];
                 document.Locations ??= [];
-                document.ArcPositions ??= [];
-                if (document.ArcPositions.Any(p => !Guid.TryParseExact(p.Key, "D", out _) || !double.IsFinite(p.Value) || p.Value is < 0 or > 10000)) throw new JsonException();
+                document.Threads ??= [];
+                if (document.Threads.Any(id => !Guid.TryParseExact(id, "D", out _)) || document.Threads.Distinct().Count() != document.Threads.Count) throw new JsonException();
             }
             if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "threads")
-                || manifest.ItemOrder is null || manifest.Positions is null
+                || manifest.ThreadAxis is not (null or "rows" or "columns")
+                || manifest.ItemOrder is null || manifest.Threads is null
                 || manifest.ItemOrder.Any(string.IsNullOrWhiteSpace)
                 || manifest.ItemOrder.Distinct().Count() != manifest.ItemOrder.Length
-                || manifest.Positions.Any(p => string.IsNullOrWhiteSpace(p.Key) || !double.IsFinite(p.Value) || p.Value is < 0 or > 10000))
+                || manifest.Threads.Any(id => !Guid.TryParseExact(id, "D", out _))
+                || manifest.Threads.Distinct().Count() != manifest.Threads.Length)
                 throw new JsonException();
             // Removed-document metadata is retained by ID. A replacement may reuse its old filename.
             var localPaths = new HashSet<string>(StringComparer.Ordinal);

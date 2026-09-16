@@ -1,0 +1,66 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200005",
+  "version": 1,
+  "pinnedView": "threads",
+  "itemOrder": [
+    "folder:Chapter 03",
+    "00d1e246-4f36-47e8-a308-000000000034",
+    "00d1e246-4f36-47e8-a308-000000000035"
+  ],
+  "threads": [
+    "00d1e246-4f36-47e8-a308-000000000024",
+    "00d1e246-4f36-47e8-a308-000000000028"
+  ],
+  "threadAxis": "columns",
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000034": {
+      "path": "Chapter 04 – The ledger.md",
+      "title": "Chapter 04 – The ledger",
+      "synopsis": "Nan Hollis shows Mara the ledger of places and the names beside them. Mara’s own name is beside the eastern spit, and it has not been crossed out.",
+      "notes": "Chapter-as-file: three scenes separated by breaks. Nan says in one page what Elin would take three chapters to say.",
+      "status": "draft",
+      "wordGoal": 1400,
+      "order": 8,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006",
+        "00d1e246-4f36-47e8-a308-000000000016",
+        "00d1e246-4f36-47e8-a308-000000000015"
+      ],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000018"
+      ],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000024",
+        "00d1e246-4f36-47e8-a308-000000000028"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000035": {
+      "path": "Chapter 05 – The eastern spit.md",
+      "title": "Chapter 05 – The eastern spit",
+      "synopsis": "Mara walks to where the tower used to be and finds the sixty-one steps, going down into the sea. Elin meets her there.",
+      "notes": "Chapter-as-file, two scenes. The first time Mara measures something and the island lets her.",
+      "status": "draft",
+      "wordGoal": 1300,
+      "order": 9,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006",
+        "00d1e246-4f36-47e8-a308-000000000009"
+      ],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000020"
+      ],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000028",
+        "00d1e246-4f36-47e8-a308-000000000025"
+      ]
+    }
+  },
+  "folders": {
+    "0ad487f0-00b8-42b3-9c58-c27cfa200006": {
+      "path": "Chapter 03",
+      "order": 0
+    }
+  }
+}

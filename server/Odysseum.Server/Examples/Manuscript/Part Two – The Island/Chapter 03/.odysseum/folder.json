@@ -1,0 +1,75 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200006",
+  "version": 1,
+  "pinnedView": "outline",
+  "itemOrder": [
+    "00d1e246-4f36-47e8-a308-000000000039",
+    "00d1e246-4f36-47e8-a308-000000000005",
+    "00d1e246-4f36-47e8-a308-000000000012"
+  ],
+  "threads": [
+    "00d1e246-4f36-47e8-a308-000000000026",
+    "00d1e246-4f36-47e8-a308-000000000024"
+  ],
+  "threadAxis": null,
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000039": {
+      "path": "Chapter 03.md",
+      "title": "Chapter 03",
+      "synopsis": "Chapter heading and epigraph. Opens when you click the Chapter 03 folder; the scenes sit beside it.",
+      "notes": "Chapter-as-folder with an introduction document. Keep the epigraph; cut the rest if it reads as throat-clearing.",
+      "status": "draft",
+      "wordGoal": 100,
+      "order": 5,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000017"
+      ],
+      "threads": []
+    },
+    "00d1e246-4f36-47e8-a308-000000000005": {
+      "path": "The lighthouse keeper.md",
+      "title": "The lighthouse keeper",
+      "synopsis": "An old family friend offers Mara a room and an unsettling warning: some things on the island are better left unremembered.",
+      "notes": "Elin is warm, practical, and keeping one enormous secret.",
+      "status": "draft",
+      "wordGoal": 1300,
+      "order": 6,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006",
+        "00d1e246-4f36-47e8-a308-000000000009"
+      ],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000017"
+      ],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000023",
+        "00d1e246-4f36-47e8-a308-000000000026"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000012": {
+      "path": "The photograph.md",
+      "title": "The photograph",
+      "synopsis": "Elin explains the photograph, or tries to. Mara learns she was on the island the day her father vanished, and that she has forgotten it on purpose.",
+      "notes": "Elin gives up one truth and keeps two. Mara should feel the floor move.",
+      "status": "draft",
+      "wordGoal": 1200,
+      "order": 7,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006",
+        "00d1e246-4f36-47e8-a308-000000000009"
+      ],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000017"
+      ],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000024",
+        "00d1e246-4f36-47e8-a308-000000000026"
+      ]
+    }
+  },
+  "folders": {}
+}

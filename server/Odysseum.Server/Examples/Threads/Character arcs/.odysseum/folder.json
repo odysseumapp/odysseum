@@ -1,0 +1,37 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200015",
+  "version": 1,
+  "pinnedView": null,
+  "itemOrder": [],
+  "threads": [],
+  "threadAxis": null,
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000025": {
+      "path": "Mara learns to doubt.md",
+      "title": "Mara learns to doubt",
+      "synopsis": "Mara begins trusting measurements over memories and ends able to leave a coastline blank because she is not sure of it.",
+      "notes": "Her arc is the prologue rule, kept and broken in the same gesture.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 25,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [],
+      "threads": []
+    },
+    "00d1e246-4f36-47e8-a308-000000000026": {
+      "path": "Elin lets go.md",
+      "title": "Elin lets go",
+      "synopsis": "Elin has kept the lighthouse and the vanishing places alive by remembering them on purpose for forty years. She has to stop.",
+      "notes": "Her steadiness is the thing she gives up. Watch her hands.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 26,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [],
+      "threads": []
+    }
+  },
+  "folders": {}
+}

@@ -1,0 +1,81 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200008",
+  "version": 1,
+  "pinnedView": "board",
+  "itemOrder": [
+    "00d1e246-4f36-47e8-a308-000000000006",
+    "00d1e246-4f36-47e8-a308-000000000008",
+    "00d1e246-4f36-47e8-a308-000000000009",
+    "folder:Family",
+    "folder:Islanders"
+  ],
+  "threads": [
+    "00d1e246-4f36-47e8-a308-000000000026",
+    "00d1e246-4f36-47e8-a308-000000000027"
+  ],
+  "threadAxis": "columns",
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000006": {
+      "path": "Mara Vale.md",
+      "title": "Mara Vale",
+      "synopsis": "A cartographer who trusts measurements more than memories. She left Bellwether at sixteen.",
+      "notes": "Her arc is about accepting uncertainty without losing her sense of self.",
+      "status": "done",
+      "wordGoal": 0,
+      "order": 40,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000021",
+        "00d1e246-4f36-47e8-a308-000000000019"
+      ],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000025"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000008": {
+      "path": "Tomas Reyes.md",
+      "title": "Tomas Reyes",
+      "synopsis": "The ferryman who took Mara’s father to the island and has never said what was spoken on the crossing.",
+      "notes": "Never lets him answer a question directly. Weather first, then people.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 42,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000022"
+      ],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000027"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000009": {
+      "path": "Elin Marsh.md",
+      "title": "Elin Marsh",
+      "synopsis": "The lighthouse keeper who drew the first map of the changing coastline and still visits the places that vanish.",
+      "notes": "Warm and unhurried. She chooses which truths arrive first.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 43,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000017"
+      ],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000026"
+      ]
+    }
+  },
+  "folders": {
+    "0ad487f0-00b8-42b3-9c58-c27cfa200009": {
+      "path": "Family",
+      "order": 0
+    },
+    "0ad487f0-00b8-42b3-9c58-c27cfa200010": {
+      "path": "Islanders",
+      "order": 1
+    }
+  }
+}

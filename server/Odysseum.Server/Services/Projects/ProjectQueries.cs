@@ -19,7 +19,7 @@ internal sealed class ProjectQueries(ProjectState state)
         .Select(pair => new FolderSummary(pair.Value.Id, pair.Key,
             pair.Key == "" ? state.FolderName : Path.GetFileName(pair.Key),
             pair.Key == "" ? null : Path.GetDirectoryName(pair.Key)?.Replace('\\', '/') ?? "",
-            pair.Value.PinnedView, [.. pair.Value.ItemOrder], new Dictionary<string, double>(pair.Value.Positions)))
+            pair.Value.PinnedView, [.. pair.Value.ItemOrder], [.. pair.Value.Threads], pair.Value.ThreadAxis))
         .ToArray();
     public DocumentContent GetDocument(string id) => Content(state.Find(id));
     public IReadOnlyList<DocumentContent> GetAllDocuments() => Ordered().Select(Content).ToArray();
@@ -54,7 +54,7 @@ internal sealed class ProjectQueries(ProjectState state)
     {
         var m = state.Manifest.Documents[d.Id];
         return new(d.Id, d.Path, m.Title, Path.GetDirectoryName(d.Path)?.Replace('\\', '/') ?? "",
-            m.Synopsis, m.Notes, m.Status, m.WordGoal, m.Order, CountWords(d.Body), d.Revision, d.Modified, KindOf(d.Path), m.Characters.ToArray(), m.Locations.ToArray(), KindOf(d.Path) == DocumentKind.Beat ? new Dictionary<string, double>(m.ArcPositions) : new Dictionary<string, double>());
+            m.Synopsis, m.Notes, m.Status, m.WordGoal, m.Order, CountWords(d.Body), d.Revision, d.Modified, KindOf(d.Path), m.Characters.ToArray(), m.Locations.ToArray(), KindOf(d.Path) == DocumentKind.Thread ? [] : m.Threads.ToArray());
     }
     private IEnumerable<DiskDocument> Ordered() => state.Documents.Values.OrderBy(x => state.Manifest.Documents[x.Id].Order).ThenBy(x => x.Path, StringComparer.Ordinal);
 }

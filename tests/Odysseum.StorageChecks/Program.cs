@@ -18,14 +18,15 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         project = await store.CreateFolderAsync(new("Topics", project.Revision));
         project = await store.CreateFolderAsync(new("Topics/Race", project.Revision));
         var doc = await store.CreateAsync(new("Revelation", "Topics/Race", "Text"));
+        var thread = await store.CreateAsync(new("Race", "Threads", "Thread notes"));
         project = await store.GetProjectAsync();
-        project = await store.SaveFolderLayoutAsync(new("Topics/Race", "threads", [doc.Document.Id], new() { [doc.Document.Id] = 3 }, project.Revision));
+        project = await store.SaveFolderLayoutAsync(new("Topics/Race", "threads", [doc.Document.Id], [thread.Document.Id], "columns", project.Revision));
         var folder = project.Folders.Single(f => f.Path == "Topics/Race");
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Topics/Race/.odysseum/folder.json")))!;
         Require(manifest["pinnedView"]!.GetValue<string>() == "threads", "Pin was not stored in the owning folder.");
         Directory.Move(Path.Combine(root, "Topics/Race"), Path.Combine(root, "Topics/Class"));
         var moved = (await store.GetProjectAsync()).Folders.Single(f => f.Path == "Topics/Class");
-        Require(moved.Id == folder.Id && moved.PinnedView == "threads" && moved.Positions[doc.Document.Id] == 3, "Folder layout or identity was lost on move.");
+        Require(moved.Id == folder.Id && moved.PinnedView == "threads" && moved.Threads.SequenceEqual(new[] { thread.Document.Id }) && moved.ThreadAxis == "columns", "Folder layout or identity was lost on move.");
     }),
     ("Folder removal refuses content and archives empty folder metadata", async (root, store) =>
     {
@@ -47,12 +48,13 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         var first = await store.CreateAsync(new("First", "One", ""));
         var other = await store.CreateAsync(new("Other", "Two", ""));
         var project = await store.GetProjectAsync();
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [other.Document.Id], [], project.Revision)));
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], new() { [first.Document.Id] = double.NaN }, project.Revision)));
-        project = await store.SaveFolderLayoutAsync(new("", "outline", ["folder:Two", "folder:One"], [], project.Revision));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [other.Document.Id], [], null, project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], [first.Document.Id], null, project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], [], "diagonal", project.Revision)));
+        project = await store.SaveFolderLayoutAsync(new("", "outline", ["folder:Two", "folder:One"], [], null, project.Revision));
         var stale = project.Revision;
         project = await store.CreateFolderAsync(new("Three", project.Revision));
-        await Expect(409, () => store.SaveFolderLayoutAsync(new("", "board", [], [], stale)));
+        await Expect(409, () => store.SaveFolderLayoutAsync(new("", "board", [], [], null, stale)));
         Require((await store.GetProjectAsync()).Folders.Single(f => f.Path == "").ItemOrder.SequenceEqual(new[] { "folder:Two", "folder:One" }), "Root folder order was lost.");
         await Expect(409, () => store.RemoveFolderAsync(new("One", project.Revision)));
     }),
@@ -326,53 +328,43 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
 };
 
 checks.AddRange([
-    ("Arc positions are independent, validated, and preserved through ordinary metadata edits", async (root, store) =>
+    ("Threads are documents in the Threads folder, validated and preserved through ordinary metadata edits", async (root, store) =>
     {
-        var scene = await store.CreateAsync(new("Arrival", "Beats", "Beat prose"));
-        var first = await store.CreateAsync(new("Race", "Arcs", "Arc notes only"));
-        var second = await store.CreateAsync(new("Class", "Arcs", "Another thread"));
-        Require(first.Document.Kind == DocumentKind.Arc, "Arc file was classified as a scene.");
-        Require(scene.Document.Kind == DocumentKind.Beat, "Beat file was classified as a scene.");
-        foreach (var folderName in new[] { "Manuscript", "Characters", "Locations", "Notes", "Arcs" })
-        {
-            var other = await store.CreateAsync(new("Not a beat", folderName, "Keep this document"));
-            var revision = (await store.GetProjectAsync()).Revision;
-            await Expect(400, () => store.UpdateMetadataAsync(other.Document.Id, new("Not a beat", "", "", DocumentStatus.Draft, 1000,
-                revision, ArcPositions: new() { [first.Document.Id] = 0 })));
-            Require((await store.GetDocumentAsync(other.Document.Id)).Content == "Keep this document", "Rejected link modified the original document.");
-            if (folderName == "Manuscript")
-            {
-                var manifestPath = Path.Combine(root, folderName, ".odysseum", "folder.json");
-                var legacy = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!;
-                legacy["documents"]![other.Document.Id]!["arcPositions"] = new JsonObject { [first.Document.Id] = 3 };
-                await File.WriteAllTextAsync(manifestPath, legacy.ToJsonString());
-                var original = await store.GetDocumentAsync(other.Document.Id);
-                Require(original.Document.ArcPositions.Count == 0 && original.Content == "Keep this document", "Legacy non-Beat arc point remained visible or altered its source.");
-                Require(JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!["documents"]![other.Document.Id]!["arcPositions"]![first.Document.Id]!.GetValue<int>() == 3,
-                    "Hiding a legacy arc point discarded stored metadata.");
-            }
-        }
+        var scene = await store.CreateAsync(new("Arrival", "Manuscript", "Scene prose"));
+        var first = await store.CreateAsync(new("Race", "Threads", "Thread notes only"));
+        var second = await store.CreateAsync(new("Meet Cute", "Threads/Story Beats", "A nested thread"));
+        Require(first.Document.Kind == DocumentKind.Thread && second.Document.Kind == DocumentKind.Thread, "Thread file was classified as a scene.");
+        var revision = (await store.GetProjectAsync()).Revision;
+        await Expect(400, () => store.UpdateMetadataAsync(second.Document.Id, new("Meet Cute", "", "", DocumentStatus.Draft, 1000,
+            revision, Threads: [first.Document.Id])));
+        Require((await store.GetDocumentAsync(second.Document.Id)).Content == "A nested thread", "Rejected link modified the original document.");
+        var threadManifest = Path.Combine(root, "Threads", ".odysseum", "folder.json");
+        var legacy = JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!;
+        legacy["documents"]![first.Document.Id]!["threads"] = new JsonArray(second.Document.Id);
+        await File.WriteAllTextAsync(threadManifest, legacy.ToJsonString());
+        var original = await store.GetDocumentAsync(first.Document.Id);
+        Require(original.Document.Threads.Count == 0 && original.Content == "Thread notes only", "A thread placed on a thread remained visible or altered its source.");
+        Require(JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!["documents"]![first.Document.Id]!["threads"]![0]!.GetValue<string>() == second.Document.Id,
+            "Hiding a stored thread link discarded metadata.");
         var project = await store.GetProjectAsync();
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000,
-            project.Revision, ArcPositions: new() { [first.Document.Id] = 4, [second.Document.Id] = 1 }));
-        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000,
-            project.Revision, ArcPositions: new() { [first.Document.Id] = 0, [second.Document.Id] = 1 }));
+            project.Revision, Threads: [first.Document.Id, second.Document.Id]));
         var current = project.Documents.Single(d => d.Id == scene.Document.Id);
-        Require(current.ArcPositions[first.Document.Id] == 0 && current.ArcPositions[second.Document.Id] == 1 && current.Order == scene.Document.Order,
-            "Moving on one arc changed another arc or manuscript order.");
-        foreach (var invalid in new[] { -1d, 10001d, double.NaN })
-            await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Rejected", "", "", DocumentStatus.Draft, 1000,
-                project.Revision, ArcPositions: new() { [first.Document.Id] = invalid })));
+        Require(current.Threads.SequenceEqual(new[] { first.Document.Id, second.Document.Id }) && current.Order == scene.Document.Order,
+            "Joining threads changed manuscript order or lost a thread.");
         await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Rejected", "", "", DocumentStatus.Draft, 1000,
-            project.Revision, ArcPositions: new() { [scene.Document.Id] = 1 })));
+            project.Revision, Threads: [scene.Document.Id])));
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated", "", DocumentStatus.Draft, 1000, project.Revision));
-        Require(project.Documents.Single(d => d.Id == scene.Document.Id).ArcPositions.Count == 2, "Omitting arc positions removed attachments.");
-        var folder = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Beats", ".odysseum", "folder.json")))!;
-        Require(folder["documents"]![scene.Document.Id]!["arcPositions"]![second.Document.Id]!.GetValue<double>() == 1, "Arc position was not persisted in the owning folder.");
-        Require(!(await store.ExportAsync()).Contains("Arc notes only") && !(await store.ExportAsync()).Contains("Beat prose"), "Arc notes were included in manuscript export.");
+        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Threads.Count == 2, "Omitting threads removed attachments.");
+        var folder = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Manuscript", ".odysseum", "folder.json")))!;
+        Require(folder["documents"]![scene.Document.Id]!["threads"]![1]!.GetValue<string>() == second.Document.Id, "Threads were not persisted in the owning folder.");
+        Require(!(await store.ExportAsync()).Contains("Thread notes only") && (await store.ExportAsync()).Contains("Scene prose"), "Thread notes were included in manuscript export.");
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated", "", DocumentStatus.Draft, 1000,
-            project.Revision, ArcPositions: new() { [second.Document.Id] = 1 }));
-        Require(project.Documents.Single(d => d.Id == scene.Document.Id).ArcPositions.Count == 1, "Removing from one arc did not persist.");
+            project.Revision, Threads: [second.Document.Id]));
+        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Threads.SequenceEqual(new[] { second.Document.Id }), "Leaving one thread did not persist.");
+        project = await store.SaveFolderLayoutAsync(new("Manuscript", null, [], [second.Document.Id, first.Document.Id], "rows", project.Revision));
+        Require(project.Folders.Single(f => f.Path == "Manuscript").Threads.SequenceEqual(new[] { second.Document.Id, first.Document.Id }), "Folder thread rows were not saved.");
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("Manuscript", null, [], [first.Document.Id, first.Document.Id], null, project.Revision)));
     }),
     ("Migrates nested metadata into immediate-child manifests without rewriting prose", async (root, store) =>
     {

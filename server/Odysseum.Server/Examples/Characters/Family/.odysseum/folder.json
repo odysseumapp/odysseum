@@ -1,0 +1,40 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200009",
+  "version": 1,
+  "pinnedView": null,
+  "itemOrder": [],
+  "threads": [],
+  "threadAxis": null,
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000013": {
+      "path": "Aldous Vale.md",
+      "title": "Aldous Vale",
+      "synopsis": "Mara’s father. A surveyor who drew Bellwether so often that the island started drawing him back. Missing for twelve years.",
+      "notes": "He is never on the page in the present. Every trace of him should be a map, a pencil or a rule.",
+      "status": "revised",
+      "wordGoal": 0,
+      "order": 13,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000027",
+        "00d1e246-4f36-47e8-a308-000000000024"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000014": {
+      "path": "Ines Vale.md",
+      "title": "Ines Vale",
+      "synopsis": "Mara’s mother. Left the island with Mara at sixteen and never spoke of it again. Started with the kettle.",
+      "notes": "Dead before the story starts. Present in Mara’s habits.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 14,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [],
+      "threads": []
+    }
+  },
+  "folders": {}
+}

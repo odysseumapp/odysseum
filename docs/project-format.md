@@ -44,12 +44,12 @@ My Novel/
   Locations/
     .odysseum/folder.json
     Harbour.md
-  Arcs/
+  Threads/
     .odysseum/folder.json
     Race.md
-  Beats/
-    .odysseum/folder.json
-    A promise is broken.md
+    Story Beats/
+      .odysseum/folder.json
+      Meet Cute.md
   Notes/
     .odysseum/folder.json
 ```
@@ -86,7 +86,7 @@ Each folder manifest has its own stable UUID, immediate child folder references,
       "order": 0,
       "characters": [],
       "locations": [],
-      "arcPositions": {},
+      "threads": [],
       "lastKnownHash": "sha256 of the complete file bytes"
     }
   }
@@ -95,13 +95,13 @@ Each folder manifest has its own stable UUID, immediate child folder references,
 
 The server discovers folders from disk and reconciles their parent indexes. Renaming or moving a folder with its manifest preserves its identity and document metadata. Moving an individual file transfers its metadata between owners. Copying a folder requires new folder and document UUIDs; duplicate manifest IDs block writes.
 
-`characters` and `locations` contain UUIDs of linked character and location documents. The server validates the target kind. Omitting either list in an API metadata update leaves that list unchanged; sending `[]` clears it. Kind follows the top-level folder (case-insensitive): `Characters/` is character, `Locations/` is location, `Arcs/` is arc, `Beats/` is beat, `Notes/`, `Research/`, and `Story notes/` are notes; everything else is a scene. Only scenes contribute to manuscript progress and export.
+`characters`, `locations`, and `threads` contain UUIDs of linked character, location, and thread documents. The server validates the target kind. Omitting a list in an API metadata update leaves that list unchanged; sending `[]` clears it. Kind follows the top-level folder (case-insensitive): `Characters/` is character, `Locations/` is location, `Threads/` is thread, `Notes/`, `Research/`, and `Story notes/` are notes; everything else is a scene. Only scenes contribute to manuscript progress and export.
 
-A Beat is an ordinary Markdown document under `Beats/`, with its own prose, title, synopsis, and notes. Beats appear as points on arc timelines and are excluded from manuscript word counts and export. Create a Beat directly from an arc or attach an existing Beat; scenes, characters, locations, notes, and arc documents cannot be used as points. Legacy non-Beat arc links are hidden in API responses and the interface; their source documents and stored metadata are retained.
+A thread is an ordinary Markdown document anywhere under `Threads/`; its title names the thread and its prose can hold planning notes. Subfolders of `Threads/` only group threads visually. Any other document joins a thread by listing the thread's UUID in `threads`; a thread cannot be placed on another thread, and such stored links are hidden in API responses while the metadata is retained. Removing a UUID leaves the thread without deleting its file, and offline replay rewrites temporary thread IDs when the server assigns permanent ones.
 
-An arc is an ordinary Markdown document under `Arcs/`; its title names the timeline and its prose can hold planning notes. Only Beat documents attach using `arcPositions`, a map from arc UUID to a numeric position between 0 and 10000. For example, `{"arc-uuid": 3}` places a Beat at the fourth position on that arc. The interface numbers positions from 1. Position is independent for each arc and independent of manuscript order; gaps and coincident points are allowed. The timeline stacks coincident cards so neither is hidden. Removing a key detaches that Beat without deleting its file. Omitting `arcPositions` in a metadata update preserves existing attachments. Keys are validated against arc documents, and offline replay rewrites temporary arc IDs when the server assigns permanent ones.
+Each folder manifest may also carry `threads`, the thread UUIDs the writer added to that folder's Threads view, and `threadAxis` (`rows` by default, or `columns`). The view is a grid of those threads against the folder's immediate items in `itemOrder` order; a document sits at the intersection of its thread and its own column, or its containing subfolder's column. Threads that no longer exist are rejected when the layout is saved.
 
-`status` is `draft`, `revised`, or `done`. Document `order` retains the existing project-wide sequence used by the API, outline, and export, while each folder stores the positions of its own documents. Child folder entries have their own order values; the current API does not expose a separate folder-reordering operation. Reordering documents changes metadata without renaming files. `lastKnownHash` helps change detection and conservative legacy rename matching.
+`status` is `draft`, `revised`, or `done`. Document `order` retains the existing project-wide sequence used by the API, outline, and export. Child folder entries have their own order values; the current API does not expose a separate folder-reordering operation. Reordering documents changes metadata without renaming files. `lastKnownHash` helps change detection and conservative legacy rename matching.
 
 Unknown root, folder, child folder, and document properties round-trip. Invalid JSON, unsafe local paths, and unsupported versions block saves instead of being replaced. Removed-file entries remain in surviving folders so restored documents can recover metadata. Removing a folder removes its metadata with it; back up the complete folder to preserve that information.
 

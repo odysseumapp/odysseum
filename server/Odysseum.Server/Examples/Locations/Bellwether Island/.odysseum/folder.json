@@ -1,0 +1,44 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200012",
+  "version": 1,
+  "pinnedView": null,
+  "itemOrder": [],
+  "threads": [],
+  "threadAxis": null,
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000019": {
+      "path": "The white house.md",
+      "title": "The white house",
+      "synopsis": "Mara’s childhood home, above the village. Empty for twelve years and exactly as she left it, which is the problem.",
+      "notes": "The house remembers her at sixteen. Rooms should be slightly wrong: too small, too tidy.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 19,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000006",
+        "00d1e246-4f36-47e8-a308-000000000013"
+      ],
+      "locations": [],
+      "threads": []
+    },
+    "00d1e246-4f36-47e8-a308-000000000020": {
+      "path": "The bell tower.md",
+      "title": "The bell tower",
+      "synopsis": "A stone tower on a spit of land so narrow the sea passes beneath it. It has been on the east side of the island. It is currently on the west.",
+      "notes": "The tower is the visible proof that the island moves. Let it be seen from the boat first.",
+      "status": "revised",
+      "wordGoal": 0,
+      "order": 20,
+      "lastKnownHash": "",
+      "characters": [
+        "00d1e246-4f36-47e8-a308-000000000015"
+      ],
+      "locations": [],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000028"
+      ]
+    }
+  },
+  "folders": {}
+}

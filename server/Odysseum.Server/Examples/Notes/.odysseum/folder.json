@@ -1,0 +1,68 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200017",
+  "version": 1,
+  "pinnedView": null,
+  "itemOrder": [
+    "00d1e246-4f36-47e8-a308-000000000007",
+    "00d1e246-4f36-47e8-a308-000000000029",
+    "folder:World building",
+    "folder:Research"
+  ],
+  "threads": [
+    "00d1e246-4f36-47e8-a308-000000000024"
+  ],
+  "threadAxis": null,
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000029": {
+      "path": "Style and voice.md",
+      "title": "Style and voice",
+      "synopsis": "Short paragraphs. Weather before people. Let objects carry the feeling. Never explain the island in dialogue.",
+      "notes": "Reread before every revision pass.",
+      "status": "done",
+      "wordGoal": 0,
+      "order": 29,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [],
+      "threads": []
+    },
+    "00d1e246-4f36-47e8-a308-000000000007": {
+      "path": "Bellwether Island.md",
+      "title": "Bellwether Island",
+      "synopsis": "An island whose geography follows memory. The places its residents forget begin to disappear.",
+      "notes": "Keep a consistent relationship between memory and the landscape.",
+      "status": "revised",
+      "wordGoal": 0,
+      "order": 41,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000024"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000044": {
+      "path": "How this manuscript is organised.md",
+      "title": "How this manuscript is organised",
+      "synopsis": "The Manuscript folder deliberately mixes organising styles so you can see how each one behaves in the views.",
+      "notes": "Delete this note once you have settled on a structure of your own.",
+      "status": "done",
+      "wordGoal": 0,
+      "order": 44,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [],
+      "threads": []
+    }
+  },
+  "folders": {
+    "0ad487f0-00b8-42b3-9c58-c27cfa200019": {
+      "path": "Research",
+      "order": 0
+    },
+    "0ad487f0-00b8-42b3-9c58-c27cfa200018": {
+      "path": "World building",
+      "order": 1
+    }
+  }
+}

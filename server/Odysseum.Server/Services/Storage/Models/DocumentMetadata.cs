@@ -17,13 +17,14 @@ public sealed class DocumentMetadata
     /// <summary>Ids of character documents attached to this document (meaningful for scenes).</summary>
     public List<string> Characters { get; set; } = [];
     public List<string> Locations { get; set; } = [];
-    public Dictionary<string, double> ArcPositions { get; set; } = [];
+    /// <summary>Ids of thread documents this document belongs to; shown at the intersection in each folder's Threads view.</summary>
+    public List<string> Threads { get; set; } = [];
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 
     internal DocumentMetadata Clone() => new()
     {
         Path = Path, Title = Title, Synopsis = Synopsis, Notes = Notes, Status = Status,
         WordGoal = WordGoal, Order = Order, LastKnownHash = LastKnownHash,
-        Characters = [.. Characters], Locations = [.. Locations], ArcPositions = new(ArcPositions), Extra = Extra is null ? null : new(Extra),
+        Characters = [.. Characters], Locations = [.. Locations], Threads = [.. Threads], Extra = Extra is null ? null : new(Extra),
     };
 }

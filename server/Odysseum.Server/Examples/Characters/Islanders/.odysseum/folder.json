@@ -1,0 +1,43 @@
+{
+  "id": "0ad487f0-00b8-42b3-9c58-c27cfa200010",
+  "version": 1,
+  "pinnedView": null,
+  "itemOrder": [],
+  "threads": [],
+  "threadAxis": null,
+  "documents": {
+    "00d1e246-4f36-47e8-a308-000000000015": {
+      "path": "Father Quill.md",
+      "title": "Father Quill",
+      "synopsis": "The bell ringer, though there has not been a priest on Bellwether in fifty years. Rings the tower bell whenever the island moves.",
+      "notes": "Comic on the surface. He is the only islander who has made peace with forgetting.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 15,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000020"
+      ],
+      "threads": [
+        "00d1e246-4f36-47e8-a308-000000000028"
+      ]
+    },
+    "00d1e246-4f36-47e8-a308-000000000016": {
+      "path": "Nan Hollis.md",
+      "title": "Nan Hollis",
+      "synopsis": "Keeps the only shop in the harbor village and the island’s unofficial record of who has forgotten what.",
+      "notes": "The gossip who is always accurate. Use her to deliver information Elin will not.",
+      "status": "draft",
+      "wordGoal": 0,
+      "order": 16,
+      "lastKnownHash": "",
+      "characters": [],
+      "locations": [
+        "00d1e246-4f36-47e8-a308-000000000018"
+      ],
+      "threads": []
+    }
+  },
+  "folders": {}
+}

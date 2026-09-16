@@ -26,14 +26,11 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         metadata.WordGoal = request.WordGoal;
         if (request.Characters is not null) metadata.Characters = ValidateLinks(request.Characters, DocumentKind.Character, "characters");
         if (request.Locations is not null) metadata.Locations = ValidateLinks(request.Locations, DocumentKind.Location, "locations");
-        if (request.ArcPositions is not null)
+        if (request.Threads is not null)
         {
-            if (request.ArcPositions.Count > 0 && KindOf(document.Path) != DocumentKind.Beat)
-                throw new WorkspaceException(400, "Only beats can be placed on arcs.");
-            ValidateLinks(request.ArcPositions.Keys.ToArray(), DocumentKind.Arc, "arcs");
-            if (request.ArcPositions.Values.Any(position => !double.IsFinite(position) || position is < 0 or > 10000))
-                throw new WorkspaceException(400, "Arc positions must be between 0 and 10000.");
-            metadata.ArcPositions = new(request.ArcPositions);
+            if (request.Threads.Length > 0 && KindOf(document.Path) == DocumentKind.Thread)
+                throw new WorkspaceException(400, "A thread cannot be placed on another thread.");
+            metadata.Threads = ValidateLinks(request.Threads, DocumentKind.Thread, "threads");
         }
         await state.CommitManifestAsync(candidate, state.Revision);
         state.PublishChanges();

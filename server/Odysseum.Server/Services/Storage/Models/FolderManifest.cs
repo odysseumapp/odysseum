@@ -10,7 +10,9 @@ public class FolderManifest
     public int Version { get; set; } = 1;
     public string? PinnedView { get; set; }
     public string[] ItemOrder { get; set; } = [];
-    public Dictionary<string, double> Positions { get; set; } = [];
+    /// <summary>Thread documents shown in this folder's Threads view, and whether they run as rows or columns.</summary>
+    public string[] Threads { get; set; } = [];
+    public string? ThreadAxis { get; set; }
     public Dictionary<string, DocumentMetadata> Documents { get; set; } = [];
     public Dictionary<string, FolderEntry> Folders { get; set; } = [];
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -18,7 +20,7 @@ public class FolderManifest
     internal FolderManifest CloneFolder() => new()
     {
         Id = Id, Version = Version,
-        PinnedView = PinnedView, ItemOrder = [.. ItemOrder], Positions = new(Positions),
+        PinnedView = PinnedView, ItemOrder = [.. ItemOrder], Threads = [.. Threads], ThreadAxis = ThreadAxis,
         Documents = Documents.ToDictionary(p => p.Key, p => p.Value.Clone()),
         Folders = Folders.ToDictionary(p => p.Key, p => p.Value.Clone()),
         Extra = Extra is null ? null : new(Extra),
