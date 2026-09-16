@@ -14,12 +14,7 @@
     "folder:Threads",
     "folder:Notes"
   ],
-  "rows": [
-    "00d1e246-4f36-47e8-a308-000000000023",
-    "00d1e246-4f36-47e8-a308-000000000024"
-  ],
-  "columns": [],
-  "axis": null,
+  "gridFolder": null,
   "documents": {},
   "folders": {
     "0ad487f0-00b8-42b3-9c58-c27cfa200008": {

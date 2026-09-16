@@ -139,13 +139,10 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
             }
             MergeLegacyLayout(manifest);
             if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "grid")
-                || manifest.Axis is not (null or "rows" or "columns")
                 || manifest.ItemOrder is null
                 || manifest.ItemOrder.Any(string.IsNullOrWhiteSpace)
                 || manifest.ItemOrder.Distinct().Count() != manifest.ItemOrder.Length
-                || manifest.Rows.Any(id => !Guid.TryParseExact(id, "D", out _)) || manifest.Rows.Distinct().Count() != manifest.Rows.Length
-                || manifest.Columns.Any(key => !Guid.TryParseExact(key.EndsWith("/*") ? key[..^2] : key, "D", out _))
-                || manifest.Columns.Distinct().Count() != manifest.Columns.Length)
+                || (manifest.GridFolder is not null && !Guid.TryParseExact(manifest.GridFolder, "D", out _)))
                 throw new JsonException();
             // Removed-document metadata is retained by ID. A replacement may reuse its old filename.
             var localPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -182,13 +179,10 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
             foreach (var id in LegacyIds(document.Extra, key)) if (!document.Links.Contains(id)) document.Links.Add(id);
         if (document.Extra is { Count: 0 }) document.Extra = null;
     }
-    /// <summary>The Threads view of earlier releases becomes the grid: threads are rows, the axis keeps its meaning.</summary>
+    /// <summary>The Threads view of earlier releases becomes the grid; its stored rows and positions carried no meaning the grid keeps.</summary>
     private static void MergeLegacyLayout(FolderManifest manifest)
     {
-        manifest.Rows ??= [];
-        manifest.Columns ??= [];
-        manifest.Rows = [.. manifest.Rows.Concat(LegacyIds(manifest.Extra, "threads")).Distinct()];
-        if (manifest.Extra is not null && manifest.Extra.Remove("threadAxis", out var axis) && axis.ValueKind == JsonValueKind.String) manifest.Axis ??= axis.GetString();
+        foreach (var key in new[] { "threads", "threadAxis", "positions" }) manifest.Extra?.Remove(key);
         if (manifest.PinnedView == "threads") manifest.PinnedView = "grid";
         if (manifest.Extra is { Count: 0 }) manifest.Extra = null;
     }

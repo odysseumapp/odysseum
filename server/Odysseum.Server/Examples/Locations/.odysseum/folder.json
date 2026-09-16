@@ -8,11 +8,7 @@
     "folder:Bellwether Island",
     "folder:The mainland"
   ],
-  "rows": [
-    "00d1e246-4f36-47e8-a308-000000000028"
-  ],
-  "columns": [],
-  "axis": null,
+  "gridFolder": "0ad487f0-00b8-42b3-9c58-c27cfa200008",
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000017": {
       "path": "The lighthouse.md",

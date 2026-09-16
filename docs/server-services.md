@@ -50,8 +50,7 @@ with existing clients. The root manifest migrates to version 2 with metadata own
 see [the project format](project-format.md). Links are one undirected relation between any two documents; `Projects/Links` reads them from either side. Markdown and manifest replacement are still separate
 filesystem operations, and arbitrary external editors do not participate in the project's semaphore.
 
-The Grid view is a folder layout (`rows`, `columns`, `axis`): chosen documents against chosen columns, with a card
-wherever the two are linked. Columns default to the folder's items and may reference any folder or document by ID,
-or every document under a folder (`id/*`), which turns the manuscript into a timeline. Linking from the grid is an
-ordinary metadata update; the server mirrors the link onto the other document, and the browser does the same in its
-offline overlay, remapping IDs during replay.
+The Grid view is derived: a folder's documents down the side, one other folder's documents across the top, a mark
+wherever two are linked. The folder layout only records `gridFolder`, which folder supplies the columns. Linking
+from the grid is an ordinary metadata update; the server mirrors the link onto the other document, and the browser
+does the same in its offline overlay, remapping IDs during replay.

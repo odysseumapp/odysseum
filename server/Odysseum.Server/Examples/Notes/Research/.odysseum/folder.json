@@ -3,9 +3,7 @@
   "version": 1,
   "pinnedView": null,
   "itemOrder": [],
-  "rows": [],
-  "columns": [],
-  "axis": null,
+  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000032": {
       "path": "Lighthouse mechanics.md",

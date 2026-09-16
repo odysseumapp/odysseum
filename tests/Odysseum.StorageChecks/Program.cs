@@ -20,13 +20,13 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         var doc = await store.CreateAsync(new("Revelation", "Topics/Race", "Text"));
         var thread = await store.CreateAsync(new("Race", "Threads", "Thread notes"));
         project = await store.GetProjectAsync();
-        project = await store.SaveFolderLayoutAsync(new("Topics/Race", "grid", [doc.Document.Id], [thread.Document.Id], [project.Folders.Single(f => f.Path == "Topics").Id + "/*"], "columns", project.Revision));
+        project = await store.SaveFolderLayoutAsync(new("Topics/Race", "grid", [doc.Document.Id], project.Folders.Single(f => f.Path == "Threads").Id, project.Revision));
         var folder = project.Folders.Single(f => f.Path == "Topics/Race");
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Topics/Race/.odysseum/folder.json")))!;
         Require(manifest["pinnedView"]!.GetValue<string>() == "grid", "Pin was not stored in the owning folder.");
         Directory.Move(Path.Combine(root, "Topics/Race"), Path.Combine(root, "Topics/Class"));
         var moved = (await store.GetProjectAsync()).Folders.Single(f => f.Path == "Topics/Class");
-        Require(moved.Id == folder.Id && moved.PinnedView == "grid" && moved.Rows.SequenceEqual(new[] { thread.Document.Id }) && moved.Columns.SequenceEqual(folder.Columns) && moved.Axis == "columns", "Folder layout or identity was lost on move.");
+        Require(moved.Id == folder.Id && moved.PinnedView == "grid" && moved.GridFolder == folder.GridFolder && folder.GridFolder is not null, "Folder layout or identity was lost on move.");
     }),
     ("Folder removal refuses content and archives empty folder metadata", async (root, store) =>
     {
@@ -48,17 +48,16 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         var first = await store.CreateAsync(new("First", "One", ""));
         var other = await store.CreateAsync(new("Other", "Two", ""));
         var project = await store.GetProjectAsync();
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [other.Document.Id], [], [], null, project.Revision)));
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], [Guid.NewGuid().ToString()], [], null, project.Revision)));
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], [], [first.Document.Id + "/*"], null, project.Revision)));
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], [], [], "diagonal", project.Revision)));
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "threads", [], [], [], null, project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [other.Document.Id], null, project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], Guid.NewGuid().ToString(), project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], first.Document.Id, project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "threads", [], null, project.Revision)));
         var two = project.Folders.Single(f => f.Path == "Two").Id;
-        project = await store.SaveFolderLayoutAsync(new("", "outline", ["folder:Two", "folder:One"], [first.Document.Id], [other.Document.Id, two, two + "/*"], null, project.Revision));
+        project = await store.SaveFolderLayoutAsync(new("", "outline", ["folder:Two", "folder:One"], two, project.Revision));
         var stale = project.Revision;
         project = await store.CreateFolderAsync(new("Three", project.Revision));
-        await Expect(409, () => store.SaveFolderLayoutAsync(new("", "board", [], [], [], null, stale)));
-        Require(project.Folders.Single(f => f.Path == "").Columns.SequenceEqual(new[] { other.Document.Id, two, two + "/*" }), "Grid columns were lost.");
+        await Expect(409, () => store.SaveFolderLayoutAsync(new("", "board", [], null, stale)));
+        Require(project.Folders.Single(f => f.Path == "").GridFolder == two, "Grid column folder was lost.");
         Require((await store.GetProjectAsync()).Folders.Single(f => f.Path == "").ItemOrder.SequenceEqual(new[] { "folder:Two", "folder:One" }), "Root folder order was lost.");
         await Expect(409, () => store.RemoveFolderAsync(new("One", project.Revision)));
     }),
@@ -370,15 +369,17 @@ checks.AddRange([
         Require(current.Links.OrderBy(x => x).SequenceEqual(new[] { second.Document.Id, mara.Document.Id, first.Document.Id }.OrderBy(x => x)), "Legacy character and thread lists were not read as links.");
         Require(project.Documents.Single(d => d.Id == mara.Document.Id).Links.SequenceEqual([scene.Document.Id]), "A one-sided legacy link should read back from the other side.");
         var folder = project.Folders.Single(f => f.Path == "Manuscript");
-        Require(folder.Rows.SequenceEqual([first.Document.Id]) && folder.Axis == "columns" && folder.PinnedView == "grid", "Legacy thread layout did not become the grid.");
+        Require(folder.PinnedView == "grid", "Legacy thread pin did not become the grid.");
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated again", "", DocumentStatus.Draft, 1000, project.Revision));
         var written = JsonNode.Parse(await File.ReadAllTextAsync(manuscript))!;
-        Require(written["documents"]![scene.Document.Id]!["characters"] is null && written["documents"]![scene.Document.Id]!["links"]!.AsArray().Count == 3 && written["threads"] is null && written["rows"]!.AsArray().Count == 1,
-            "Legacy keys were not folded into links and rows on write.");
+        Require(written["documents"]![scene.Document.Id]!["characters"] is null && written["documents"]![scene.Document.Id]!["links"]!.AsArray().Count == 3 && written["threads"] is null && written["threadAxis"] is null,
+            "Legacy keys were not folded into links or dropped on write.");
         Require(!(await store.ExportAsync()).Contains("Thread notes only") && (await store.ExportAsync()).Contains("Scene prose"), "Thread notes were included in manuscript export.");
-        project = await store.SaveFolderLayoutAsync(new("Manuscript", null, [], [second.Document.Id, mara.Document.Id], [], "rows", project.Revision));
-        Require(project.Folders.Single(f => f.Path == "Manuscript").Rows.SequenceEqual(new[] { second.Document.Id, mara.Document.Id }), "Grid rows of mixed kinds were not saved.");
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("Manuscript", null, [], [first.Document.Id, first.Document.Id], [], null, project.Revision)));
+        var characters = project.Folders.Single(f => f.Path == "Characters").Id;
+        project = await store.SaveFolderLayoutAsync(new("Manuscript", null, [], characters, project.Revision));
+        Require(project.Folders.Single(f => f.Path == "Manuscript").GridFolder == characters, "Grid column folder was not saved.");
+        project = await store.SaveFolderLayoutAsync(new("Manuscript", null, [], null, project.Revision));
+        Require(project.Folders.Single(f => f.Path == "Manuscript").GridFolder is null, "Grid column folder was not cleared.");
     }),
     ("Migrates nested metadata into immediate-child manifests without rewriting prose", async (root, store) =>
     {

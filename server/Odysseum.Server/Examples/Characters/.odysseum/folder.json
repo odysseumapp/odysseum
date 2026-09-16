@@ -9,12 +9,7 @@
     "folder:Family",
     "folder:Islanders"
   ],
-  "rows": [
-    "00d1e246-4f36-47e8-a308-000000000026",
-    "00d1e246-4f36-47e8-a308-000000000027"
-  ],
-  "columns": [],
-  "axis": "columns",
+  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000006": {
       "path": "Mara Vale.md",

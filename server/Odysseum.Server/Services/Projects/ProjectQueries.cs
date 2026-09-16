@@ -21,7 +21,7 @@ internal sealed class ProjectQueries(ProjectState state)
         .Select(pair => new FolderSummary(pair.Value.Id, pair.Key,
             pair.Key == "" ? state.FolderName : Path.GetFileName(pair.Key),
             pair.Key == "" ? null : Path.GetDirectoryName(pair.Key)?.Replace('\\', '/') ?? "",
-            pair.Value.PinnedView, [.. pair.Value.ItemOrder], [.. pair.Value.Rows], [.. pair.Value.Columns], pair.Value.Axis))
+            pair.Value.PinnedView, [.. pair.Value.ItemOrder], pair.Value.GridFolder))
         .ToArray();
     public DocumentContent GetDocument(string id) => Content(state.Find(id));
     public IReadOnlyList<DocumentContent> GetAllDocuments() { var reverse = Reverse(); return Ordered().Select(d => new DocumentContent(Summary(d, reverse), d.Body)).ToArray(); }

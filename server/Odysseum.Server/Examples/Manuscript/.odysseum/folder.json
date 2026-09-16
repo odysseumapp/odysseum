@@ -10,13 +10,7 @@
     "folder:Part Three – The Northern Shore",
     "00d1e246-4f36-47e8-a308-000000000011"
   ],
-  "rows": [
-    "00d1e246-4f36-47e8-a308-000000000023",
-    "00d1e246-4f36-47e8-a308-000000000024",
-    "00d1e246-4f36-47e8-a308-000000000006"
-  ],
-  "columns": [],
-  "axis": "rows",
+  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000010": {
       "path": "The first map.md",

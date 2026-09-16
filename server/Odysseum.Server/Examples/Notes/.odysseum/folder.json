@@ -8,11 +8,7 @@
     "folder:World building",
     "folder:Research"
   ],
-  "rows": [
-    "00d1e246-4f36-47e8-a308-000000000024"
-  ],
-  "columns": [],
-  "axis": null,
+  "gridFolder": "0ad487f0-00b8-42b3-9c58-c27cfa200001",
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000029": {
       "path": "Style and voice.md",
