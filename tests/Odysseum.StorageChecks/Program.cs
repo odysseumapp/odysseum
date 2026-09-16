@@ -20,13 +20,13 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         var doc = await store.CreateAsync(new("Revelation", "Topics/Race", "Text"));
         var thread = await store.CreateAsync(new("Race", "Threads", "Thread notes"));
         project = await store.GetProjectAsync();
-        project = await store.SaveFolderLayoutAsync(new("Topics/Race", "threads", [doc.Document.Id], [thread.Document.Id], "columns", project.Revision));
+        project = await store.SaveFolderLayoutAsync(new("Topics/Race", "grid", [doc.Document.Id], project.Folders.Single(f => f.Path == "Threads").Id, project.Revision));
         var folder = project.Folders.Single(f => f.Path == "Topics/Race");
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Topics/Race/.odysseum/folder.json")))!;
-        Require(manifest["pinnedView"]!.GetValue<string>() == "threads", "Pin was not stored in the owning folder.");
+        Require(manifest["pinnedView"]!.GetValue<string>() == "grid", "Pin was not stored in the owning folder.");
         Directory.Move(Path.Combine(root, "Topics/Race"), Path.Combine(root, "Topics/Class"));
         var moved = (await store.GetProjectAsync()).Folders.Single(f => f.Path == "Topics/Class");
-        Require(moved.Id == folder.Id && moved.PinnedView == "threads" && moved.Threads.SequenceEqual(new[] { thread.Document.Id }) && moved.ThreadAxis == "columns", "Folder layout or identity was lost on move.");
+        Require(moved.Id == folder.Id && moved.PinnedView == "grid" && moved.GridFolder == folder.GridFolder && folder.GridFolder is not null, "Folder layout or identity was lost on move.");
     }),
     ("Folder removal refuses content and archives empty folder metadata", async (root, store) =>
     {
@@ -48,13 +48,16 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         var first = await store.CreateAsync(new("First", "One", ""));
         var other = await store.CreateAsync(new("Other", "Two", ""));
         var project = await store.GetProjectAsync();
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [other.Document.Id], [], null, project.Revision)));
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], [first.Document.Id], null, project.Revision)));
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], [], "diagonal", project.Revision)));
-        project = await store.SaveFolderLayoutAsync(new("", "outline", ["folder:Two", "folder:One"], [], null, project.Revision));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [other.Document.Id], null, project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], Guid.NewGuid().ToString(), project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "board", [], first.Document.Id, project.Revision)));
+        await Expect(400, () => store.SaveFolderLayoutAsync(new("One", "threads", [], null, project.Revision)));
+        var two = project.Folders.Single(f => f.Path == "Two").Id;
+        project = await store.SaveFolderLayoutAsync(new("", "outline", ["folder:Two", "folder:One"], two, project.Revision));
         var stale = project.Revision;
         project = await store.CreateFolderAsync(new("Three", project.Revision));
-        await Expect(409, () => store.SaveFolderLayoutAsync(new("", "board", [], [], null, stale)));
+        await Expect(409, () => store.SaveFolderLayoutAsync(new("", "board", [], null, stale)));
+        Require(project.Folders.Single(f => f.Path == "").GridFolder == two, "Grid column folder was lost.");
         Require((await store.GetProjectAsync()).Folders.Single(f => f.Path == "").ItemOrder.SequenceEqual(new[] { "folder:Two", "folder:One" }), "Root folder order was lost.");
         await Expect(409, () => store.RemoveFolderAsync(new("One", project.Revision)));
     }),
@@ -231,8 +234,9 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         Require(scene.Document.Kind == DocumentKind.Scene && character.Document.Kind == DocumentKind.Character && note.Document.Kind == DocumentKind.Note, "Kinds were not derived from folders.");
         var project = await store.GetProjectAsync();
         var updated = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, project.Revision, [character.Document.Id]));
-        Require(updated.Documents.Single(x => x.Id == scene.Document.Id).Characters.SequenceEqual([character.Document.Id]), "Attached characters were not stored.");
-        await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, updated.Revision, [note.Document.Id])));
+        Require(updated.Documents.Single(x => x.Id == scene.Document.Id).Links.SequenceEqual([character.Document.Id]), "Attached characters were not stored.");
+        Require(updated.Documents.Single(x => x.Id == character.Document.Id).Links.SequenceEqual([scene.Document.Id]), "Links are undirected: the character should list the scene.");
+        await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, updated.Revision, [scene.Document.Id])));
         Require(!(await store.ExportAsync()).Contains("A cartographer."), "Characters must not appear in the manuscript export.");
     }),
     ("An invalid metadata request leaves existing details unchanged", async (_, store) =>
@@ -260,7 +264,7 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
             var details = current.Documents.Single(x => x.Id == scene.Document.Id);
             Require(details.Title == "Keep title" && details.Synopsis == "Keep synopsis" && details.Notes == "Keep notes"
                 && details.Status == DocumentStatus.Draft && details.WordGoal == 1000
-                && details.Characters.SequenceEqual([character.Document.Id]), "Rejected request changed the in-memory metadata.");
+                && details.Links.SequenceEqual([character.Document.Id]), "Rejected request changed the in-memory metadata.");
             var persisted = await File.ReadAllBytesAsync(manifestPath);
             Require(current.Revision == project.Revision && original.SequenceEqual(persisted),
                 "A later scan persisted a rejected request.");
@@ -328,43 +332,54 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
 };
 
 checks.AddRange([
-    ("Threads are documents in the Threads folder, validated and preserved through ordinary metadata edits", async (root, store) =>
+    ("Links are undirected, kept on both sides, and legacy character, location and thread lists migrate", async (root, store) =>
     {
         var scene = await store.CreateAsync(new("Arrival", "Manuscript", "Scene prose"));
         var first = await store.CreateAsync(new("Race", "Threads", "Thread notes only"));
         var second = await store.CreateAsync(new("Meet Cute", "Threads/Story Beats", "A nested thread"));
+        var mara = await store.CreateAsync(new("Mara", "Characters", "Biography"));
         Require(first.Document.Kind == DocumentKind.Thread && second.Document.Kind == DocumentKind.Thread, "Thread file was classified as a scene.");
-        var revision = (await store.GetProjectAsync()).Revision;
-        await Expect(400, () => store.UpdateMetadataAsync(second.Document.Id, new("Meet Cute", "", "", DocumentStatus.Draft, 1000,
-            revision, Threads: [first.Document.Id])));
-        Require((await store.GetDocumentAsync(second.Document.Id)).Content == "A nested thread", "Rejected link modified the original document.");
-        var threadManifest = Path.Combine(root, "Threads", ".odysseum", "folder.json");
-        var legacy = JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!;
-        legacy["documents"]![first.Document.Id]!["threads"] = new JsonArray(second.Document.Id);
-        await File.WriteAllTextAsync(threadManifest, legacy.ToJsonString());
-        var original = await store.GetDocumentAsync(first.Document.Id);
-        Require(original.Document.Threads.Count == 0 && original.Content == "Thread notes only", "A thread placed on a thread remained visible or altered its source.");
-        Require(JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!["documents"]![first.Document.Id]!["threads"]![0]!.GetValue<string>() == second.Document.Id,
-            "Hiding a stored thread link discarded metadata.");
         var project = await store.GetProjectAsync();
-        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000,
-            project.Revision, Threads: [first.Document.Id, second.Document.Id]));
+        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, project.Revision, [first.Document.Id, second.Document.Id]));
         var current = project.Documents.Single(d => d.Id == scene.Document.Id);
-        Require(current.Threads.SequenceEqual(new[] { first.Document.Id, second.Document.Id }) && current.Order == scene.Document.Order,
-            "Joining threads changed manuscript order or lost a thread.");
-        await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Rejected", "", "", DocumentStatus.Draft, 1000,
-            project.Revision, Threads: [scene.Document.Id])));
+        Require(current.Links.SequenceEqual(new[] { first.Document.Id, second.Document.Id }) && current.Order == scene.Document.Order, "Linking changed manuscript order or lost a link.");
+        Require(project.Documents.Single(d => d.Id == first.Document.Id).Links.SequenceEqual([scene.Document.Id]), "The thread should list the scene back.");
+        var threadManifest = Path.Combine(root, "Threads", ".odysseum", "folder.json");
+        Require(JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!["documents"]![first.Document.Id]!["links"]![0]!.GetValue<string>() == scene.Document.Id, "The reverse side was not persisted.");
+        // Threads may link to each other and to anything else: there is one kind of link.
+        project = await store.UpdateMetadataAsync(second.Document.Id, new("Meet Cute", "", "", DocumentStatus.Draft, 1000, project.Revision, [scene.Document.Id, first.Document.Id]));
+        Require(project.Documents.Single(d => d.Id == first.Document.Id).Links.OrderBy(x => x).SequenceEqual(new[] { scene.Document.Id, second.Document.Id }.OrderBy(x => x)), "Thread-to-thread link was not mirrored.");
+        // Removing from either side removes the link from both.
+        project = await store.UpdateMetadataAsync(first.Document.Id, new("Race", "", "", DocumentStatus.Draft, 1000, project.Revision, []));
+        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Links.SequenceEqual([second.Document.Id])
+            && project.Documents.Single(d => d.Id == second.Document.Id).Links.SequenceEqual([scene.Document.Id]), "Removing a link from one side left it on the other.");
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated", "", DocumentStatus.Draft, 1000, project.Revision));
-        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Threads.Count == 2, "Omitting threads removed attachments.");
-        var folder = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Manuscript", ".odysseum", "folder.json")))!;
-        Require(folder["documents"]![scene.Document.Id]!["threads"]![1]!.GetValue<string>() == second.Document.Id, "Threads were not persisted in the owning folder.");
+        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Links.Count == 1, "Omitting links removed them.");
+        // A one-sided link written by hand still counts, and legacy keys fold into links on the next write.
+        var manuscript = Path.Combine(root, "Manuscript", ".odysseum", "folder.json");
+        var legacy = JsonNode.Parse(await File.ReadAllTextAsync(manuscript))!;
+        legacy["documents"]![scene.Document.Id]!["characters"] = new JsonArray(mara.Document.Id);
+        legacy["documents"]![scene.Document.Id]!["threads"] = new JsonArray(first.Document.Id);
+        legacy["threads"] = new JsonArray(first.Document.Id);
+        legacy["threadAxis"] = "columns";
+        legacy["pinnedView"] = "threads";
+        await File.WriteAllTextAsync(manuscript, legacy.ToJsonString());
+        project = await store.GetProjectAsync();
+        current = project.Documents.Single(d => d.Id == scene.Document.Id);
+        Require(current.Links.OrderBy(x => x).SequenceEqual(new[] { second.Document.Id, mara.Document.Id, first.Document.Id }.OrderBy(x => x)), "Legacy character and thread lists were not read as links.");
+        Require(project.Documents.Single(d => d.Id == mara.Document.Id).Links.SequenceEqual([scene.Document.Id]), "A one-sided legacy link should read back from the other side.");
+        var folder = project.Folders.Single(f => f.Path == "Manuscript");
+        Require(folder.PinnedView == "grid", "Legacy thread pin did not become the grid.");
+        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated again", "", DocumentStatus.Draft, 1000, project.Revision));
+        var written = JsonNode.Parse(await File.ReadAllTextAsync(manuscript))!;
+        Require(written["documents"]![scene.Document.Id]!["characters"] is null && written["documents"]![scene.Document.Id]!["links"]!.AsArray().Count == 3 && written["threads"] is null && written["threadAxis"] is null,
+            "Legacy keys were not folded into links or dropped on write.");
         Require(!(await store.ExportAsync()).Contains("Thread notes only") && (await store.ExportAsync()).Contains("Scene prose"), "Thread notes were included in manuscript export.");
-        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated", "", DocumentStatus.Draft, 1000,
-            project.Revision, Threads: [second.Document.Id]));
-        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Threads.SequenceEqual(new[] { second.Document.Id }), "Leaving one thread did not persist.");
-        project = await store.SaveFolderLayoutAsync(new("Manuscript", null, [], [second.Document.Id, first.Document.Id], "rows", project.Revision));
-        Require(project.Folders.Single(f => f.Path == "Manuscript").Threads.SequenceEqual(new[] { second.Document.Id, first.Document.Id }), "Folder thread rows were not saved.");
-        await Expect(400, () => store.SaveFolderLayoutAsync(new("Manuscript", null, [], [first.Document.Id, first.Document.Id], null, project.Revision)));
+        var characters = project.Folders.Single(f => f.Path == "Characters").Id;
+        project = await store.SaveFolderLayoutAsync(new("Manuscript", null, [], characters, project.Revision));
+        Require(project.Folders.Single(f => f.Path == "Manuscript").GridFolder == characters, "Grid column folder was not saved.");
+        project = await store.SaveFolderLayoutAsync(new("Manuscript", null, [], null, project.Revision));
+        Require(project.Folders.Single(f => f.Path == "Manuscript").GridFolder is null, "Grid column folder was not cleared.");
     }),
     ("Migrates nested metadata into immediate-child manifests without rewriting prose", async (root, store) =>
     {
@@ -395,7 +410,8 @@ checks.AddRange([
         Require(chapter["documents"]![sceneId]!["custom"]!.GetValue<string>() == "retain document", "Document extension property was lost.");
         Require(File.Exists(Path.Combine(root, "Notes", "Empty", ".odysseum", "folder.json")), "Empty folders need manifests too.");
         var scene = project.Documents.Single(d => d.Id == sceneId);
-        Require(scene.Title == "A different title" && scene.Synopsis == "Keep synopsis" && scene.Order == 7 && scene.Characters.SequenceEqual([characterId]), "Migration lost document metadata or links.");
+        Require(scene.Title == "A different title" && scene.Synopsis == "Keep synopsis" && scene.Order == 7 && scene.Links.SequenceEqual([characterId]), "Migration lost document metadata or links.");
+        Require(project.Documents.Single(d => d.Id == characterId).Links.SequenceEqual([sceneId]), "A legacy one-sided link should read as undirected.");
         Require(await File.ReadAllTextAsync(Path.Combine(root, ".odysseum", "project.v1.json")) == legacy, "Legacy backup is not exact.");
         Require(await File.ReadAllTextAsync(Path.Combine(root, "Manuscript", "Chapter 01", "Arrival.md")) == prose, "Migration rewrote prose.");
         Require((await store.GetProjectAsync()).Revision == project.Revision, "Unchanged scans must not rewrite manifests.");
@@ -511,13 +527,13 @@ checks.AddRange([
         var character = await store.CreateAsync(new("Mara", "Characters", "Biography"));
         Require(place.Document.Kind == DocumentKind.Location, "Nested location was classified as a scene.");
         var project = await store.GetProjectAsync();
-        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, project.Revision, [character.Document.Id], [place.Document.Id, place.Document.Id]));
-        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Locations.SequenceEqual([place.Document.Id]), "Location link was not stored or deduplicated.");
-        await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Rejected", "", "", DocumentStatus.Done, 1, project.Revision, [], [character.Document.Id])));
-        await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Rejected", "", "", DocumentStatus.Done, 1, project.Revision, Locations: Enumerable.Repeat(place.Document.Id, 201).ToArray())));
+        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, project.Revision, [character.Document.Id, place.Document.Id, place.Document.Id]));
+        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Links.SequenceEqual([character.Document.Id, place.Document.Id]), "Links were not stored or deduplicated.");
+        await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Rejected", "", "", DocumentStatus.Done, 1, project.Revision, [Guid.NewGuid().ToString()])));
+        await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Rejected", "", "", DocumentStatus.Done, 1, project.Revision, Enumerable.Repeat(place.Document.Id, 201).ToArray())));
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Changed", "", DocumentStatus.Draft, 1000, project.Revision));
         var details = project.Documents.Single(d => d.Id == scene.Document.Id);
-        Require(details.Locations.SequenceEqual([place.Document.Id]) && details.Characters.SequenceEqual([character.Document.Id]), "Omitted links or rejected request cleared attachments.");
+        Require(details.Links.SequenceEqual([character.Document.Id, place.Document.Id]), "Omitted links or rejected request cleared attachments.");
         Require(!(await store.ExportAsync()).Contains("Location research"), "Locations leaked into manuscript export.");
         Require((await store.SearchAsync("Location research")).Single().Document.Id == place.Document.Id, "Location prose is not searchable.");
     }),

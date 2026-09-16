@@ -133,18 +133,16 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
                     || !Enum.IsDefined(document.Status) || document.WordGoal is < 0 or > 10000000
                     || !SafePath(document.Path, root && manifest.Version == 1))
                     throw new JsonException();
-                document.Characters ??= [];
-                document.Locations ??= [];
-                document.Threads ??= [];
-                if (document.Threads.Any(id => !Guid.TryParseExact(id, "D", out _)) || document.Threads.Distinct().Count() != document.Threads.Count) throw new JsonException();
+                document.Links ??= [];
+                MergeLegacyLinks(document);
+                if (document.Links.Any(id => !Guid.TryParseExact(id, "D", out _)) || document.Links.Distinct().Count() != document.Links.Count) throw new JsonException();
             }
-            if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "threads")
-                || manifest.ThreadAxis is not (null or "rows" or "columns")
-                || manifest.ItemOrder is null || manifest.Threads is null
+            MergeLegacyLayout(manifest);
+            if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "grid")
+                || manifest.ItemOrder is null
                 || manifest.ItemOrder.Any(string.IsNullOrWhiteSpace)
                 || manifest.ItemOrder.Distinct().Count() != manifest.ItemOrder.Length
-                || manifest.Threads.Any(id => !Guid.TryParseExact(id, "D", out _))
-                || manifest.Threads.Distinct().Count() != manifest.Threads.Length)
+                || (manifest.GridFolder is not null && !Guid.TryParseExact(manifest.GridFolder, "D", out _)))
                 throw new JsonException();
             // Removed-document metadata is retained by ID. A replacement may reuse its old filename.
             var localPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -167,6 +165,26 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
             return manifest;
         }
         catch (JsonException) { throw Invalid(path); }
+    }
+
+    private static List<string> LegacyIds(Dictionary<string, JsonElement>? extra, string key)
+    {
+        if (extra is null || !extra.Remove(key, out var value) || value.ValueKind != JsonValueKind.Array) return [];
+        return value.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!).ToList();
+    }
+    /// <summary>Character, location and thread lists from earlier releases become plain links on the next write.</summary>
+    private static void MergeLegacyLinks(DocumentMetadata document)
+    {
+        foreach (var key in new[] { "characters", "locations", "threads" })
+            foreach (var id in LegacyIds(document.Extra, key)) if (!document.Links.Contains(id)) document.Links.Add(id);
+        if (document.Extra is { Count: 0 }) document.Extra = null;
+    }
+    /// <summary>The Threads view of earlier releases becomes the grid; its stored rows and positions carried no meaning the grid keeps.</summary>
+    private static void MergeLegacyLayout(FolderManifest manifest)
+    {
+        foreach (var key in new[] { "threads", "threadAxis", "positions" }) manifest.Extra?.Remove(key);
+        if (manifest.PinnedView == "threads") manifest.PinnedView = "grid";
+        if (manifest.Extra is { Count: 0 }) manifest.Extra = null;
     }
 
     private static bool SafePath(string? path, bool nested) => !string.IsNullOrWhiteSpace(path)

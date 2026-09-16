@@ -1,7 +1,5 @@
-using Odysseum.Server.API.Enums;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Storage;
-using static Odysseum.Server.Services.Documents.DocumentRules;
 
 namespace Odysseum.Server.Services.Projects;
 
@@ -30,9 +28,8 @@ internal sealed class ProjectFolderService(ProjectState state, ProjectFileStore 
     public async Task SaveLayoutAsync(FolderLayoutRequest request)
     {
         CheckRevision(request.Revision);
-        if (request.Path is null || request.ItemOrder is null || request.Threads is null
-            || request.PinnedView is not (null or "write" or "board" or "outline" or "threads")
-            || request.ThreadAxis is not (null or "rows" or "columns"))
+        if (request.Path is null || request.ItemOrder is null
+            || request.PinnedView is not (null or "write" or "board" or "outline" or "grid"))
             throw new WorkspaceException(400, "Invalid folder layout.");
         var candidate = state.Manifest.Clone();
         var folder = request.Path == "" ? candidate : candidate.FolderManifests.GetValueOrDefault(request.Path)
@@ -41,13 +38,11 @@ internal sealed class ProjectFolderService(ProjectState state, ProjectFileStore 
             .Select(d => d.Id).Concat(folder.Folders.Values.Select(f => "folder:" + f.Path)).ToHashSet(StringComparer.Ordinal);
         if (request.ItemOrder.Distinct().Count() != request.ItemOrder.Length || request.ItemOrder.Any(key => !keys.Contains(key)))
             throw new WorkspaceException(400, "Layouts must refer to immediate children.");
-        if (request.Threads.Length > 200 || request.Threads.Distinct().Count() != request.Threads.Length
-            || request.Threads.Any(id => id is null || !state.Documents.TryGetValue(id, out var thread) || KindOf(thread.Path) != DocumentKind.Thread))
-            throw new WorkspaceException(400, "One of the threads no longer exists.");
+        if (request.GridFolder is not null && request.GridFolder != candidate.Id && candidate.FolderManifests.Values.All(f => f.Id != request.GridFolder))
+            throw new WorkspaceException(400, "The grid's column folder no longer exists.");
         folder.PinnedView = request.PinnedView;
         folder.ItemOrder = [.. request.ItemOrder];
-        folder.Threads = [.. request.Threads];
-        folder.ThreadAxis = request.ThreadAxis;
+        folder.GridFolder = request.GridFolder;
         await state.CommitManifestAsync(candidate, request.Revision);
         state.PublishChanges();
     }

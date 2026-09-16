@@ -3,8 +3,7 @@
   "version": 1,
   "pinnedView": null,
   "itemOrder": [],
-  "threads": [],
-  "threadAxis": null,
+  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000030": {
       "path": "How the map changes.md",
@@ -15,9 +14,7 @@
       "wordGoal": 0,
       "order": 30,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": [
+      "links": [
         "00d1e246-4f36-47e8-a308-000000000024"
       ]
     },
@@ -30,9 +27,7 @@
       "wordGoal": 0,
       "order": 31,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": [
+      "links": [
         "00d1e246-4f36-47e8-a308-000000000028"
       ]
     }

@@ -3,8 +3,7 @@
   "version": 1,
   "pinnedView": null,
   "itemOrder": [],
-  "threads": [],
-  "threadAxis": null,
+  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000021": {
       "path": "Mara’s flat.md",
@@ -15,11 +14,11 @@
       "wordGoal": 0,
       "order": 21,
       "lastKnownHash": "",
-      "characters": [
+      "links": [
+        "00d1e246-4f36-47e8-a308-000000000001",
+        "00d1e246-4f36-47e8-a308-000000000002",
         "00d1e246-4f36-47e8-a308-000000000006"
-      ],
-      "locations": [],
-      "threads": []
+      ]
     },
     "00d1e246-4f36-47e8-a308-000000000022": {
       "path": "The ferry office.md",
@@ -30,12 +29,11 @@
       "wordGoal": 0,
       "order": 22,
       "lastKnownHash": "",
-      "characters": [
-        "00d1e246-4f36-47e8-a308-000000000008"
-      ],
-      "locations": [],
-      "threads": [
-        "00d1e246-4f36-47e8-a308-000000000027"
+      "links": [
+        "00d1e246-4f36-47e8-a308-000000000003",
+        "00d1e246-4f36-47e8-a308-000000000008",
+        "00d1e246-4f36-47e8-a308-000000000027",
+        "00d1e246-4f36-47e8-a308-000000000033"
       ]
     }
   },

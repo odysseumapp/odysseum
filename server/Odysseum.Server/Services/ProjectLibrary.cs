@@ -80,7 +80,7 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsync
         settings.WordGoal = request.WordGoal ?? settings.WordGoal;
         var saved = await handle.Settings.SaveSettingsAsync(settings, view.Revision);
         // Default folders keep their conventional order until the writer rearranges the root.
-        await handle.Services.SaveFolderLayoutAsync(new FolderLayoutRequest("", null, [.. DefaultFolders.Select(name => "folder:" + name)], [], null, saved.Revision));
+        await handle.Services.SaveFolderLayoutAsync(new FolderLayoutRequest("", null, [.. DefaultFolders.Select(name => "folder:" + name)], null, saved.Revision));
         return await DescribeAsync(slug, Path.Combine(Root, slug));
     }
 

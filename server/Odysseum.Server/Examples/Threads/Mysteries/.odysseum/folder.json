@@ -3,8 +3,7 @@
   "version": 1,
   "pinnedView": null,
   "itemOrder": [],
-  "threads": [],
-  "threadAxis": null,
+  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000027": {
       "path": "What happened on the crossing.md",
@@ -15,9 +14,13 @@
       "wordGoal": 0,
       "order": 27,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": []
+      "links": [
+        "00d1e246-4f36-47e8-a308-000000000003",
+        "00d1e246-4f36-47e8-a308-000000000008",
+        "00d1e246-4f36-47e8-a308-000000000013",
+        "00d1e246-4f36-47e8-a308-000000000022",
+        "00d1e246-4f36-47e8-a308-000000000038"
+      ]
     },
     "00d1e246-4f36-47e8-a308-000000000028": {
       "path": "Where the bell tower went.md",
@@ -28,9 +31,15 @@
       "wordGoal": 0,
       "order": 28,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": []
+      "links": [
+        "00d1e246-4f36-47e8-a308-000000000004",
+        "00d1e246-4f36-47e8-a308-000000000015",
+        "00d1e246-4f36-47e8-a308-000000000020",
+        "00d1e246-4f36-47e8-a308-000000000031",
+        "00d1e246-4f36-47e8-a308-000000000034",
+        "00d1e246-4f36-47e8-a308-000000000035",
+        "00d1e246-4f36-47e8-a308-000000000036"
+      ]
     }
   },
   "folders": {}
