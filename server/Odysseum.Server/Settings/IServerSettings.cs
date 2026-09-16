@@ -14,6 +14,9 @@ public interface IServerSettings
     /// <summary>Directory for persistent data-protection keys; null uses the ASP.NET Core default.</summary>
     string? Keys { get; set; }
 
+    /// <summary>Installed, independently versioned static UI files. Null selects webui beside the settings file.</summary>
+    string? WebUi { get; set; }
+
     /// <summary>Full reconciliation interval for every open project.</summary>
     int ScanSeconds { get; set; }
 

@@ -14,6 +14,7 @@ public class ServerSettings : IServerSettings
     public bool Demo { get; set; }
 
     public string? Keys { get; set; }
+    public string? WebUi { get; set; }
 
     [Range(1, 300, ErrorMessage = "Scan interval must be between 1 and 300 seconds.")]
     public int ScanSeconds { get; set; } = 3;

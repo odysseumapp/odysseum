@@ -6,6 +6,7 @@ using Odysseum.Server.API.Models;
 using Odysseum.Server.Bootstrap;
 using Odysseum.Server.Services;
 using Odysseum.Server.Settings;
+using Odysseum.Server.Services.WebUi;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Scalar.AspNetCore;
@@ -16,6 +17,34 @@ var startupLoggers = LoggerFactory.Create(logging => logging.AddConsole());
 
 var settingsProvider = new SettingsProvider(startupLoggers.CreateLogger<SettingsProvider>(), builder.Configuration, builder.Environment);
 var settings = settingsProvider.GetSettings();
+
+var webUi = new WebUiInstallation(settings.WebUi!);
+// Installation commands run without opening projects or starting an HTTP listener.
+if (builder.Configuration["install-webui"] is { } archive)
+{
+    var release = await webUi.InstallAsync(archive);
+    Console.WriteLine($"Installed web UI {release.Version} in {webUi.Root}");
+    return;
+}
+if (builder.Configuration["update-webui"] is { } version || builder.Configuration["download-webui"] is not null)
+{
+    using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+    var releases = new WebUiReleases(http, builder.Configuration["webui-feed"] ?? WebUiReleases.DefaultFeed);
+    var destination = builder.Configuration["download-webui"];
+    var temporary = destination ?? Path.Combine(Path.GetTempPath(), "odysseum-webui-" + Guid.NewGuid().ToString("N") + ".zip");
+    try
+    {
+        var release = await releases.DownloadAsync(temporary, builder.Configuration["update-webui"] ?? builder.Configuration["webui-version"] ?? "latest");
+        if (destination is null) await webUi.InstallAsync(temporary, release.Sha256, release.Version);
+        Console.WriteLine(destination is null ? $"Installed web UI {release.Version} in {webUi.Root}" : $"Downloaded web UI {release.Version} to {destination}");
+    }
+    finally { if (destination is null && File.Exists(temporary)) File.Delete(temporary); }
+    return;
+}
+var bundledUi = Path.Combine(AppContext.BaseDirectory, "webui.zip");
+if (webUi.CurrentDirectory is null && File.Exists(bundledUi)) await webUi.InstallAsync(bundledUi);
+builder.Services.AddSingleton(webUi);
+builder.Services.AddSingleton<WebUiFileProvider>();
 
 settingsProvider.DebugSettingsToLog();
 
@@ -73,6 +102,8 @@ await app.Services.GetRequiredService<ProjectLibrary>().ListAsync(); // Fail at 
 
 app.UseMiddleware<ResponseHeadersMiddleware>();
 app.UseMiddleware<ApiExceptionMiddleware>();
+app.UseWebUi();
+app.UseRouting();
 
 app.UseAuthentication();
 

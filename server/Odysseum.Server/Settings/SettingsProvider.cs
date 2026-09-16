@@ -84,6 +84,8 @@ public class SettingsProvider : ISettingsProvider
         settings.Password = _configuration["ODYSSEUM_PASSWORD"];
         settings.Demo = _configuration.GetValue("ODYSSEUM_DEMO", settings.Demo);
         settings.Keys = _configuration["ODYSSEUM_KEYS"] ?? settings.Keys;
+        settings.WebUi = Path.GetFullPath(_configuration["ODYSSEUM_WEBUI"] ?? settings.WebUi
+            ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_settingsPath))!, "webui"));
         settings.ScanSeconds = _configuration.GetValue("ODYSSEUM_SCAN_SECONDS", settings.ScanSeconds);
         Validate(settings);
         settings.Workspace = Path.GetFullPath(settings.Workspace);
