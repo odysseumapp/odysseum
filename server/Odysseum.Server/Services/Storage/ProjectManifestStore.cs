@@ -133,18 +133,19 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
                     || !Enum.IsDefined(document.Status) || document.WordGoal is < 0 or > 10000000
                     || !SafePath(document.Path, root && manifest.Version == 1))
                     throw new JsonException();
-                document.Characters ??= [];
-                document.Locations ??= [];
-                document.Threads ??= [];
-                if (document.Threads.Any(id => !Guid.TryParseExact(id, "D", out _)) || document.Threads.Distinct().Count() != document.Threads.Count) throw new JsonException();
+                document.Links ??= [];
+                MergeLegacyLinks(document);
+                if (document.Links.Any(id => !Guid.TryParseExact(id, "D", out _)) || document.Links.Distinct().Count() != document.Links.Count) throw new JsonException();
             }
-            if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "threads")
-                || manifest.ThreadAxis is not (null or "rows" or "columns")
-                || manifest.ItemOrder is null || manifest.Threads is null
+            MergeLegacyLayout(manifest);
+            if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "grid")
+                || manifest.Axis is not (null or "rows" or "columns")
+                || manifest.ItemOrder is null
                 || manifest.ItemOrder.Any(string.IsNullOrWhiteSpace)
                 || manifest.ItemOrder.Distinct().Count() != manifest.ItemOrder.Length
-                || manifest.Threads.Any(id => !Guid.TryParseExact(id, "D", out _))
-                || manifest.Threads.Distinct().Count() != manifest.Threads.Length)
+                || manifest.Rows.Any(id => !Guid.TryParseExact(id, "D", out _)) || manifest.Rows.Distinct().Count() != manifest.Rows.Length
+                || manifest.Columns.Any(key => !Guid.TryParseExact(key.EndsWith("/*") ? key[..^2] : key, "D", out _))
+                || manifest.Columns.Distinct().Count() != manifest.Columns.Length)
                 throw new JsonException();
             // Removed-document metadata is retained by ID. A replacement may reuse its old filename.
             var localPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -167,6 +168,29 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
             return manifest;
         }
         catch (JsonException) { throw Invalid(path); }
+    }
+
+    private static List<string> LegacyIds(Dictionary<string, JsonElement>? extra, string key)
+    {
+        if (extra is null || !extra.Remove(key, out var value) || value.ValueKind != JsonValueKind.Array) return [];
+        return value.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!).ToList();
+    }
+    /// <summary>Character, location and thread lists from earlier releases become plain links on the next write.</summary>
+    private static void MergeLegacyLinks(DocumentMetadata document)
+    {
+        foreach (var key in new[] { "characters", "locations", "threads" })
+            foreach (var id in LegacyIds(document.Extra, key)) if (!document.Links.Contains(id)) document.Links.Add(id);
+        if (document.Extra is { Count: 0 }) document.Extra = null;
+    }
+    /// <summary>The Threads view of earlier releases becomes the grid: threads are rows, the axis keeps its meaning.</summary>
+    private static void MergeLegacyLayout(FolderManifest manifest)
+    {
+        manifest.Rows ??= [];
+        manifest.Columns ??= [];
+        manifest.Rows = [.. manifest.Rows.Concat(LegacyIds(manifest.Extra, "threads")).Distinct()];
+        if (manifest.Extra is not null && manifest.Extra.Remove("threadAxis", out var axis) && axis.ValueKind == JsonValueKind.String) manifest.Axis ??= axis.GetString();
+        if (manifest.PinnedView == "threads") manifest.PinnedView = "grid";
+        if (manifest.Extra is { Count: 0 }) manifest.Extra = null;
     }
 
     private static bool SafePath(string? path, bool nested) => !string.IsNullOrWhiteSpace(path)

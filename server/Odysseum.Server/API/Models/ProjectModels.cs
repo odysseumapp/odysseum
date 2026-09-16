@@ -11,14 +11,15 @@ public record CreateProjectRequest(string Title, int? WordGoal);
 public record ProjectResponse(string Id, ProjectSettings Settings, string Revision,
     IReadOnlyList<DocumentSummary> Documents, string? Warning, IReadOnlyList<FolderSummary> Folders);
 
-/// <summary>A physical folder, including the project root (empty path). Layout keys are document IDs or folder:name.
-/// <c>Threads</c> lists the thread documents shown in the folder's Threads view; <c>ThreadAxis</c> is "rows" (default) or "columns".</summary>
+/// <summary>A physical folder, including the project root (empty path). <c>ItemOrder</c> keys are document IDs or folder:name.
+/// The grid: <c>Rows</c> are document IDs; <c>Columns</c> are document IDs, folder IDs, or <c>folderId/*</c> for every document
+/// under that folder in order (empty means this folder's children); <c>Axis</c> is "rows" (default) or "columns".</summary>
 public record FolderSummary(string Id, string Path, string Name, string? Parent, string? PinnedView,
-    string[] ItemOrder, string[] Threads, string? ThreadAxis);
+    string[] ItemOrder, string[] Rows, string[] Columns, string? Axis);
 public record CreateFolderRequest(string Path, string Revision);
 public record RemoveFolderRequest(string Path, string Revision);
 public record FolderLayoutRequest(string Path, string? PinnedView, string[] ItemOrder,
-    string[] Threads, string? ThreadAxis, string Revision);
+    string[] Rows, string[] Columns, string? Axis, string Revision);
 
 /// <summary><c>Revision</c> is the project metadata revision the client last saw; stale values are rejected with 409.</summary>
 public record ProjectSettingsRequest(string Title, int WordGoal, int DefaultSceneWordGoal, string Revision);

@@ -20,6 +20,8 @@ The Manuscript folder mixes several ways of organising a book on purpose. Every 
 
 The *Prologue*, *Interlude* and *Epilogue* are files sitting directly in Manuscript, ordered between the Part folders. Anything can sit at any level.
 
-## Threads
+## Links and the grid
 
-Whatever the structure, threads run across it. Open Manuscript’s Threads tab to see *Mara’s return* and *The changing map* pass through Parts, chapter folders and chapter files alike; open a Part or a chapter for the finer grain.
+Every document can be linked to any other: a scene to its characters and locations, a note to a thread, a thread to a character. Links go both ways, so the character’s page lists the scene too.
+
+Whatever the structure, the Grid tab shows those links across it. Its rows are whatever you add — threads, but also a character or a location — and its columns are the folder’s items unless you choose others. Open Manuscript’s Grid to see *Mara’s return*, *The changing map* and *Mara Vale* herself pass through Parts, chapter folders and chapter files alike. Open the Threads folder for the timeline: every thread against every scene of the manuscript in story order, which is just a grid whose columns are *Manuscript · each document*.

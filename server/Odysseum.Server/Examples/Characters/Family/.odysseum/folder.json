@@ -3,8 +3,9 @@
   "version": 1,
   "pinnedView": null,
   "itemOrder": [],
-  "threads": [],
-  "threadAxis": null,
+  "rows": [],
+  "columns": [],
+  "axis": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000013": {
       "path": "Aldous Vale.md",
@@ -15,11 +16,11 @@
       "wordGoal": 0,
       "order": 13,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": [
-        "00d1e246-4f36-47e8-a308-000000000027",
-        "00d1e246-4f36-47e8-a308-000000000024"
+      "links": [
+        "00d1e246-4f36-47e8-a308-000000000010",
+        "00d1e246-4f36-47e8-a308-000000000019",
+        "00d1e246-4f36-47e8-a308-000000000024",
+        "00d1e246-4f36-47e8-a308-000000000027"
       ]
     },
     "00d1e246-4f36-47e8-a308-000000000014": {
@@ -31,9 +32,7 @@
       "wordGoal": 0,
       "order": 14,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": []
+      "links": []
     }
   },
   "folders": {}

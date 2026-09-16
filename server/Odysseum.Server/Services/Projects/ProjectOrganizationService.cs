@@ -1,4 +1,3 @@
-using Odysseum.Server.API.Enums;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Settings;
 using static Odysseum.Server.Services.Documents.DocumentRules;
@@ -24,13 +23,14 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         metadata.Notes = request.Notes;
         metadata.Status = request.Status;
         metadata.WordGoal = request.WordGoal;
-        if (request.Characters is not null) metadata.Characters = ValidateLinks(request.Characters, DocumentKind.Character, "characters");
-        if (request.Locations is not null) metadata.Locations = ValidateLinks(request.Locations, DocumentKind.Location, "locations");
-        if (request.Threads is not null)
+        if (request.Links is not null)
         {
-            if (request.Threads.Length > 0 && KindOf(document.Path) == DocumentKind.Thread)
-                throw new WorkspaceException(400, "A thread cannot be placed on another thread.");
-            metadata.Threads = ValidateLinks(request.Threads, DocumentKind.Thread, "threads");
+            var links = ValidateLinks(request.Links, id);
+            // Links are undirected: the other documents list this one too, so they change with it.
+            var before = Links.Of(candidate, id);
+            foreach (var removed in before.Except(links)) candidate.Documents[removed].Links.Remove(id);
+            foreach (var added in links.Except(before)) if (!candidate.Documents[added].Links.Contains(id)) candidate.Documents[added].Links.Add(id);
+            metadata.Links = links;
         }
         await state.CommitManifestAsync(candidate, state.Revision);
         state.PublishChanges();
@@ -45,12 +45,12 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         state.PublishChanges();
     }
 
-    private List<string> ValidateLinks(string[] ids, DocumentKind kind, string label)
+    private List<string> ValidateLinks(string[] ids, string self)
     {
-        if (ids.Length > 200) throw new WorkspaceException(400, $"Too many {label} attached.");
+        if (ids.Length > 200) throw new WorkspaceException(400, "Too many links attached.");
         var distinct = ids.Distinct().ToList();
-        if (distinct.Any(id => id is null || !state.Documents.TryGetValue(id, out var document) || KindOf(document.Path) != kind))
-            throw new WorkspaceException(400, $"One of the attached {label} no longer exists.");
+        if (distinct.Any(id => id is null || id == self || !state.Documents.ContainsKey(id)))
+            throw new WorkspaceException(400, "One of the linked documents no longer exists.");
         return distinct;
     }
 

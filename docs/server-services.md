@@ -35,7 +35,7 @@ The per-project instance file lock continues to prevent another server process f
 Metadata changes and scans work on a candidate manifest. `ProjectState` replaces its current manifest and
 revision only after persistence succeeds. Rejected requests, failed replacements, and incomplete scans
 therefore cannot leave changes that a later operation accidentally saves. Returned document summaries
-also copy character, location, and thread lists so callers cannot mutate stored metadata through a response.
+also copy link lists so callers cannot mutate stored metadata through a response.
 
 The coordinator refreshes state before queries and writes. Document writes are followed by a scan before
 returning a response; organization changes already have their new manifest and need no second scan.
@@ -47,9 +47,11 @@ Settings updates return the project response produced by the write, avoiding a s
 
 HTTP routes, JSON response envelopes, document IDs, and the SSE `workspace` event name remain compatible
 with existing clients. The root manifest migrates to version 2 with metadata owned by each content folder;
-see [the project format](project-format.md). Locations and threads add document kinds and optional metadata request fields. Markdown and manifest replacement are still separate
+see [the project format](project-format.md). Links are one undirected relation between any two documents; `Projects/Links` reads them from either side. Markdown and manifest replacement are still separate
 filesystem operations, and arbitrary external editors do not participate in the project's semaphore.
 
-The Threads view is a grid: the thread documents a folder's layout lists (`threads`, `threadAxis`) against the
-folder's items. Membership belongs to the member document's `threads` list, so joining a thread never changes
-manuscript order. Thread documents cannot join threads. The browser queues memberships as ordinary metadata operations and layout rows as folder layouts, remapping thread IDs during offline replay.
+The Grid view is a folder layout (`rows`, `columns`, `axis`): chosen documents against chosen columns, with a card
+wherever the two are linked. Columns default to the folder's items and may reference any folder or document by ID,
+or every document under a folder (`id/*`), which turns the manuscript into a timeline. Linking from the grid is an
+ordinary metadata update; the server mirrors the link onto the other document, and the browser does the same in its
+offline overlay, remapping IDs during replay.

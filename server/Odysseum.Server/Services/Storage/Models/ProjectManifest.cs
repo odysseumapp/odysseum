@@ -13,7 +13,7 @@ public sealed class ProjectManifest : FolderManifest
     internal ProjectManifest Clone() => new()
     {
         Id = Id, Version = Version, Settings = Settings.Clone(),
-        PinnedView = PinnedView, ItemOrder = [.. ItemOrder], Threads = [.. Threads], ThreadAxis = ThreadAxis,
+        PinnedView = PinnedView, ItemOrder = [.. ItemOrder], Rows = [.. Rows], Columns = [.. Columns], Axis = Axis,
         Documents = Documents.ToDictionary(pair => pair.Key, pair => pair.Value.Clone()),
         Folders = Folders.ToDictionary(pair => pair.Key, pair => pair.Value.Clone()),
         FolderManifests = FolderManifests.ToDictionary(pair => pair.Key, pair => pair.Value.CloneFolder()),

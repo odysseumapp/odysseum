@@ -84,9 +84,7 @@ Each folder manifest has its own stable UUID, immediate child folder references,
       "status": "draft",
       "wordGoal": 1000,
       "order": 0,
-      "characters": [],
-      "locations": [],
-      "threads": [],
+      "links": [],
       "lastKnownHash": "sha256 of the complete file bytes"
     }
   }
@@ -95,11 +93,11 @@ Each folder manifest has its own stable UUID, immediate child folder references,
 
 The server discovers folders from disk and reconciles their parent indexes. Renaming or moving a folder with its manifest preserves its identity and document metadata. Moving an individual file transfers its metadata between owners. Copying a folder requires new folder and document UUIDs; duplicate manifest IDs block writes.
 
-`characters`, `locations`, and `threads` contain UUIDs of linked character, location, and thread documents. The server validates the target kind. Omitting a list in an API metadata update leaves that list unchanged; sending `[]` clears it. Kind follows the top-level folder (case-insensitive): `Characters/` is character, `Locations/` is location, `Threads/` is thread, `Notes/`, `Research/`, and `Story notes/` are notes; everything else is a scene. Only scenes contribute to manuscript progress and export.
+`links` contains UUIDs of documents this one is linked to: characters, locations, threads, notes, other scenes — there is one kind of link. Links are undirected. The server writes both sides (a scene that links a character makes the character link the scene), and when reading it treats either side as sufficient, so a hand-written one-sided link still counts. An API metadata update sends the complete set; omitting `links` leaves them unchanged and `[]` clears them from both sides. The lists `characters`, `locations`, and `threads` from earlier releases are read as links and folded into `links` the next time the document's manifest is written. Offline replay rewrites temporary IDs when the server assigns permanent ones.
 
-A thread is an ordinary Markdown document anywhere under `Threads/`; its title names the thread and its prose can hold planning notes. Subfolders of `Threads/` only group threads visually. Any other document joins a thread by listing the thread's UUID in `threads`; a thread cannot be placed on another thread, and such stored links are hidden in API responses while the metadata is retained. Removing a UUID leaves the thread without deleting its file, and offline replay rewrites temporary thread IDs when the server assigns permanent ones.
+Kind follows the top-level folder (case-insensitive): `Characters/` is character, `Locations/` is location, `Threads/` is thread, `Notes/`, `Research/`, and `Story notes/` are notes; everything else is a scene. Kinds only affect icons, grouping, and export: only scenes contribute to manuscript progress and export. A thread is an ordinary Markdown document anywhere under `Threads/`; its title names the thread and its prose holds planning notes.
 
-Each folder manifest may also carry `threads`, the thread UUIDs the writer added to that folder's Threads view, and `threadAxis` (`rows` by default, or `columns`). The view is a grid of those threads against the folder's immediate items in `itemOrder` order; a document sits at the intersection of its thread and its own column, or its containing subfolder's column. Threads that no longer exist are rejected when the layout is saved.
+Each folder manifest may also carry a grid: `rows` (document UUIDs — threads, characters, whatever the writer added), `columns`, and `axis` (`rows` by default, or `columns`). A column is a document UUID, a folder UUID (one column listing every document under it), or `folderUUID/*` (one column per document under that folder, in order — the manuscript folder this way is a timeline). Empty `columns` means the folder's own items in `itemOrder` order. A card sits where a row and a column are linked. Rows and columns that no longer exist are rejected when the layout is saved. Earlier `threads` and `threadAxis` keys become `rows` and `axis`, and a pinned `threads` view becomes `grid`.
 
 `status` is `draft`, `revised`, or `done`. Document `order` retains the existing project-wide sequence used by the API, outline, and export. Child folder entries have their own order values; the current API does not expose a separate folder-reordering operation. Reordering documents changes metadata without renaming files. `lastKnownHash` helps change detection and conservative legacy rename matching.
 

@@ -18,7 +18,7 @@ public class FoldersController(ProjectLibrary library) : ControllerBase
     public async Task<IResult> Remove(string project, [FromBody] RemoveFolderRequest request) =>
         ApiResults.Success(await (await library.OpenServicesAsync(project)).RemoveFolderAsync(request));
 
-    /// <summary>Save a folder's pinned view, child order, and the threads shown in its Threads view.</summary>
+    /// <summary>Save a folder's pinned view, child order, and grid (rows, columns, axis).</summary>
     [HttpPut("layout")]
     public async Task<IResult> Layout(string project, [FromBody] FolderLayoutRequest request) =>
         ApiResults.Success(await (await library.OpenServicesAsync(project)).SaveFolderLayoutAsync(request));

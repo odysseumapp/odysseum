@@ -8,10 +8,11 @@
     "folder:World building",
     "folder:Research"
   ],
-  "threads": [
+  "rows": [
     "00d1e246-4f36-47e8-a308-000000000024"
   ],
-  "threadAxis": null,
+  "columns": [],
+  "axis": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000029": {
       "path": "Style and voice.md",
@@ -22,9 +23,7 @@
       "wordGoal": 0,
       "order": 29,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": []
+      "links": []
     },
     "00d1e246-4f36-47e8-a308-000000000007": {
       "path": "Bellwether Island.md",
@@ -35,9 +34,7 @@
       "wordGoal": 0,
       "order": 41,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": [
+      "links": [
         "00d1e246-4f36-47e8-a308-000000000024"
       ]
     },
@@ -50,9 +47,7 @@
       "wordGoal": 0,
       "order": 44,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [],
-      "threads": []
+      "links": []
     }
   },
   "folders": {

@@ -3,8 +3,9 @@
   "version": 1,
   "pinnedView": null,
   "itemOrder": [],
-  "threads": [],
-  "threadAxis": null,
+  "rows": [],
+  "columns": [],
+  "axis": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000032": {
       "path": "Lighthouse mechanics.md",
@@ -15,11 +16,9 @@
       "wordGoal": 0,
       "order": 32,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [
+      "links": [
         "00d1e246-4f36-47e8-a308-000000000017"
-      ],
-      "threads": []
+      ]
     },
     "00d1e246-4f36-47e8-a308-000000000033": {
       "path": "Tides and timetables.md",
@@ -30,11 +29,9 @@
       "wordGoal": 0,
       "order": 33,
       "lastKnownHash": "",
-      "characters": [],
-      "locations": [
+      "links": [
         "00d1e246-4f36-47e8-a308-000000000022"
-      ],
-      "threads": []
+      ]
     }
   },
   "folders": {}
