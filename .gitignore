@@ -15,3 +15,6 @@ server-settings.json
 server/Odysseum.Server/webui/
 server/Odysseum.Server/themes/
 /webui.zip
+desktop/node_modules/
+desktop/dist/
+desktop/server/

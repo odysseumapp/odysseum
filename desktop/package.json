@@ -1,0 +1,29 @@
+{
+  "name": "odysseum-desktop",
+  "productName": "Odysseum",
+  "version": "0.1.0",
+  "description": "Novel and book writing software",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "author": "Odysseum",
+  "homepage": "https://github.com/odysseumapp/odysseum",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never",
+    "smoke": "node smoke-test.mjs"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "app.odysseum.desktop",
+    "files": ["main.js", "splash.html"],
+    "extraResources": [{ "from": "server", "to": "server" }],
+    "artifactName": "Odysseum-${version}-${os}-${arch}.${ext}",
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg", "category": "public.app-category.productivity", "identity": "-" },
+    "linux": { "target": ["AppImage", "deb"], "category": "Office" }
+  }
+}
