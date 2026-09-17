@@ -81,6 +81,9 @@ public class SettingsProvider : ISettingsProvider
                 _logger.LogWarning(ex, "Ignoring unreadable settings file {Path}", _settingsPath);
             }
         }
+        // TODO: paths are stored absolute, so a settings file cannot move between machines or operating systems.
+        // Store them relative to known roots (~, Documents) and expand here; when a workspace does not exist on
+        // this machine, fall back to the default instead of failing so the desktop app can ask for the folder.
         settings.Workspace = _configuration["ODYSSEUM_WORKSPACE"] ?? settings.Workspace;
         settings.Password = _configuration["ODYSSEUM_PASSWORD"];
         settings.Demo = _configuration.GetValue("ODYSSEUM_DEMO", settings.Demo);

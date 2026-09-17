@@ -42,6 +42,8 @@ function startServer(port) {
 
   // Environment variables always win over the settings file, so the workspace is seeded here
   // instead of being passed as ODYSSEUM_WORKSPACE; the writer can then move it later.
+  // TODO: ask for the projects folder on first run instead of assuming Documents/Odysseum, which may already
+  // exist for another purpose (case-insensitive file systems make "odysseum" the same folder).
   const settings = path.join(data, 'server-settings.json')
   if (!fs.existsSync(settings)) {
     const workspace = path.join(app.getPath('documents'), 'Odysseum')
