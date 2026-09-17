@@ -136,6 +136,8 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
                 document.Links ??= [];
                 MergeLegacyLinks(document);
                 if (document.Links.Any(id => !Guid.TryParseExact(id, "D", out _)) || document.Links.Distinct().Count() != document.Links.Count) throw new JsonException();
+                document.LinkNotes ??= [];
+                if (document.LinkNotes.Any(note => !Guid.TryParseExact(note.Key, "D", out _) || note.Value is null)) throw new JsonException();
             }
             MergeLegacyLayout(manifest);
             if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "grid")

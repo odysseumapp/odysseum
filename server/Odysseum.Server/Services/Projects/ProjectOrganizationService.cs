@@ -28,9 +28,28 @@ internal sealed class ProjectOrganizationService(ProjectState state)
             var links = ValidateLinks(request.Links, id);
             // Links are undirected: the other documents list this one too, so they change with it.
             var before = Links.Of(candidate, id);
-            foreach (var removed in before.Except(links)) candidate.Documents[removed].Links.Remove(id);
+            foreach (var removed in before.Except(links))
+            {
+                candidate.Documents[removed].Links.Remove(id);
+                // A note belongs to its link and goes with it.
+                candidate.Documents[removed].LinkNotes.Remove(id);
+                metadata.LinkNotes.Remove(removed);
+            }
             foreach (var added in links.Except(before)) if (!candidate.Documents[added].Links.Contains(id)) candidate.Documents[added].Links.Add(id);
             metadata.Links = links;
+        }
+        if (request.LinkNotes is not null)
+        {
+            var current = Links.Of(candidate, id);
+            if (request.LinkNotes.Values.Any(note => note is null || note.Length > 2000)) throw new WorkspaceException(400, "A link note is too long.");
+            // Notes are shared like the links they sit on: both ends carry the same text, and an empty note is no note.
+            // A note for a document that is not linked is dropped rather than refused, so a replayed edit survives an unlink.
+            foreach (var other in current)
+            {
+                var note = request.LinkNotes.GetValueOrDefault(other)?.Trim() ?? "";
+                if (note.Length == 0) { metadata.LinkNotes.Remove(other); candidate.Documents[other].LinkNotes.Remove(id); }
+                else metadata.LinkNotes[other] = candidate.Documents[other].LinkNotes[id] = note;
+            }
         }
         await state.CommitManifestAsync(candidate, state.Revision);
         state.PublishChanges();

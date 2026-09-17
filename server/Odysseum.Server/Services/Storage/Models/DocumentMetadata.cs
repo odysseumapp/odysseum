@@ -17,12 +17,15 @@ public sealed class DocumentMetadata
     /// <summary>Ids of documents this one is linked to: characters, locations, threads, notes, anything. Links are
     /// undirected; the store keeps both sides listed, and readers treat either side as sufficient.</summary>
     public List<string> Links { get; set; } = [];
+    /// <summary>An optional note on a link, keyed by the linked document's id. Like the link it is shared: the store
+    /// writes it on both sides, and readers take this side's note before the other's.</summary>
+    public Dictionary<string, string> LinkNotes { get; set; } = [];
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 
     internal DocumentMetadata Clone() => new()
     {
         Path = Path, Title = Title, Synopsis = Synopsis, Notes = Notes, Status = Status,
         WordGoal = WordGoal, Order = Order, LastKnownHash = LastKnownHash,
-        Links = [.. Links], Extra = Extra is null ? null : new(Extra),
+        Links = [.. Links], LinkNotes = new(LinkNotes), Extra = Extra is null ? null : new(Extra),
     };
 }
