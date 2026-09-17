@@ -1,0 +1,104 @@
+name: Desktop
+
+# Builds the Electron desktop app with the self-contained server bundled inside it.
+# Manual runs and desktop pull requests upload installers as workflow artifacts; v* tags also attach them to a draft GitHub release.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            arch: x64
+          - os: macos-latest
+            rid: osx-arm64
+            arch: arm64
+          - os: macos-latest
+            rid: osx-x64
+            arch: x64
+          - os: ubuntu-22.04
+            rid: linux-x64
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: odysseumapp/odysseum-web
+          path: odysseum-web
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The csproj bundles a webui.zip found at the repository root; the server installs it on first start.
+      - name: Build web UI
+        working-directory: odysseum-web
+        run: |
+          npm ci
+          npm run build
+          npm run package -- ../webui.zip
+
+      - name: Publish server
+        run: |
+          dotnet publish server/Odysseum.Server/Odysseum.Server.csproj -c Release -r ${{ matrix.rid }} --self-contained \
+            -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+            -p:DebugType=none -o publish
+          mkdir -p desktop/server
+          cp publish/Odysseum.Server* desktop/server/
+
+      - name: Build installers
+        working-directory: desktop
+        run: |
+          npm ci
+          npm run dist -- --${{ matrix.arch }}
+
+      # Launches the unpacked app that electron-builder leaves in dist/ and checks the bundled server starts and stops with it.
+      - name: Smoke test
+        working-directory: desktop
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y xvfb
+            xvfb-run -a node smoke-test.mjs
+          else
+            node smoke-test.mjs
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: odysseum-desktop-${{ matrix.rid }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+          if-no-files-found: error
+
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          draft: true
+          files: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb

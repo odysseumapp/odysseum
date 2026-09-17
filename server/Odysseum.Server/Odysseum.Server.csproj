@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Examples/**/*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- A webui.zip at the repository root ships beside the server, which installs it on first start. -->
+    <Content Include="../../webui.zip" Link="webui.zip" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../webui.zip')" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />

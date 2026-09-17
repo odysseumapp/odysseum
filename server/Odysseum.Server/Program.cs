@@ -98,6 +98,20 @@ builder.Services.AddRateLimiter(limiter =>
 
 var app = builder.Build();
 
+// The desktop shell passes its process id so a crashed or force-closed shell never leaves the server running behind it.
+if (builder.Configuration.GetValue<int?>("ODYSSEUM_PARENT_PID") is { } parentId)
+{
+    try
+    {
+        var parent = System.Diagnostics.Process.GetProcessById(parentId);
+        parent.EnableRaisingEvents = true;
+        parent.Exited += (_, _) => app.Lifetime.StopApplication();
+        app.Lifetime.ApplicationStopped.Register(parent.Dispose); // Also keeps the watcher reachable while the server runs.
+        if (parent.HasExited) return;
+    }
+    catch (ArgumentException) { return; } // The shell was gone before the server finished starting.
+}
+
 DemoContent.Seed(settings);
 
 await app.Services.GetRequiredService<ProjectLibrary>().ListAsync(); // Fail at startup when the workspace root is unreadable.
