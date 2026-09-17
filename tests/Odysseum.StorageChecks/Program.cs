@@ -332,6 +332,37 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
 };
 
 checks.AddRange([
+    ("A link carries one note shared by both ends, and the note goes when the link does", async (root, store) =>
+    {
+        var scene = await store.CreateAsync(new("Arrival", "Manuscript", "Scene prose"));
+        var thread = await store.CreateAsync(new("Race", "Threads", "Thread notes"));
+        var other = await store.CreateAsync(new("Mara", "Characters", "Biography"));
+        var project = await store.GetProjectAsync();
+        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, project.Revision, [thread.Document.Id],
+            new() { [thread.Document.Id] = "  Mara first doubts the map  ", [other.Document.Id] = "Not linked" }));
+        var notes = project.Documents.Single(d => d.Id == scene.Document.Id).LinkNotes;
+        Require(notes.Count == 1 && notes[thread.Document.Id] == "Mara first doubts the map", "The note was not stored trimmed, or a note without a link was kept.");
+        Require(project.Documents.Single(d => d.Id == thread.Document.Id).LinkNotes[scene.Document.Id] == "Mara first doubts the map", "The other end should read the same note.");
+        var threadManifest = Path.Combine(root, "Threads", ".odysseum", "folder.json");
+        Require(JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!["documents"]![thread.Document.Id]!["linkNotes"]![scene.Document.Id]!.GetValue<string>() == "Mara first doubts the map", "The note was not persisted on the other side.");
+        // Editing from the other end changes the one note; an unrelated save leaves it alone.
+        project = await store.UpdateMetadataAsync(thread.Document.Id, new("Race", "", "", DocumentStatus.Draft, 1000, project.Revision, null, new() { [scene.Document.Id] = "Rewritten" }));
+        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Synopsis", "", DocumentStatus.Draft, 1000, project.Revision));
+        Require(project.Documents.Single(d => d.Id == scene.Document.Id).LinkNotes[thread.Document.Id] == "Rewritten", "A note edited from the other end did not change here, or an unrelated save lost it.");
+        // A note written by hand on one side reads from both.
+        var manifest = JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!;
+        manifest["documents"]![thread.Document.Id]!["linkNotes"] = new JsonObject();
+        await File.WriteAllTextAsync(threadManifest, manifest.ToJsonString());
+        project = await store.GetProjectAsync();
+        Require(project.Documents.Single(d => d.Id == thread.Document.Id).LinkNotes[scene.Document.Id] == "Rewritten", "A one-sided note should read from the other end.");
+        await Expect(400, () => store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, project.Revision, null, new() { [thread.Document.Id] = new string('x', 2001) })));
+        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, project.Revision, null, new()));
+        Require(project.Documents.All(d => d.LinkNotes.Count == 0), "An empty note set should clear the note on both sides.");
+        project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "", "", DocumentStatus.Draft, 1000, project.Revision, null, new() { [thread.Document.Id] = "Back" }));
+        project = await store.UpdateMetadataAsync(thread.Document.Id, new("Race", "", "", DocumentStatus.Draft, 1000, project.Revision, []));
+        project = await store.UpdateMetadataAsync(thread.Document.Id, new("Race", "", "", DocumentStatus.Draft, 1000, project.Revision, [scene.Document.Id]));
+        Require(project.Documents.All(d => d.LinkNotes.Count == 0), "Unlinking should take the note with it on both sides.");
+    }),
     ("Links are undirected, kept on both sides, and legacy character, location and thread lists migrate", async (root, store) =>
     {
         var scene = await store.CreateAsync(new("Arrival", "Manuscript", "Scene prose"));

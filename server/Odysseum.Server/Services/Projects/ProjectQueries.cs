@@ -58,8 +58,12 @@ internal sealed class ProjectQueries(ProjectState state)
     {
         var m = state.Manifest.Documents[d.Id];
         var links = m.Links.Where(state.Documents.ContainsKey).Concat(reverse.GetValueOrDefault(d.Id) ?? []).Distinct().ToArray();
+        // A note reads from this side first, then from the other end, as a hand-written one-sided link does.
+        var notes = new Dictionary<string, string>();
+        foreach (var other in links)
+            if ((m.LinkNotes.TryGetValue(other, out var note) || state.Manifest.Documents[other].LinkNotes.TryGetValue(d.Id, out note)) && note.Length > 0) notes[other] = note;
         return new(d.Id, d.Path, m.Title, Path.GetDirectoryName(d.Path)?.Replace('\\', '/') ?? "",
-            m.Synopsis, m.Notes, m.Status, m.WordGoal, m.Order, CountWords(d.Body), d.Revision, d.Modified, KindOf(d.Path), links);
+            m.Synopsis, m.Notes, m.Status, m.WordGoal, m.Order, CountWords(d.Body), d.Revision, d.Modified, KindOf(d.Path), links, notes);
     }
     private IEnumerable<DiskDocument> Ordered() => state.Documents.Values.OrderBy(x => state.Manifest.Documents[x.Id].Order).ThenBy(x => x.Path, StringComparer.Ordinal);
 }
