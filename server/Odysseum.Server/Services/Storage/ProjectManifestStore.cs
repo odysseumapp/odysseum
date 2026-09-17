@@ -187,10 +187,20 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
         if (manifest.Extra is { Count: 0 }) manifest.Extra = null;
     }
 
-    private static bool SafePath(string? path, bool nested) => !string.IsNullOrWhiteSpace(path)
-        && !Path.IsPathRooted(path) && !path.Contains('\\') && !path.Contains(':') && (nested || !path.Contains('/'))
-        && path.Split('/').All(part => !string.IsNullOrWhiteSpace(part) && !part.StartsWith('.') && !part.EndsWith('.')
-            && !part.EndsWith(' ') && part.IndexOfAny(Path.GetInvalidFileNameChars()) < 0);
+    /// <summary>Hidden names are refused except a folder's own document, <c>.Name.md</c>. The name need not match the
+    /// folder's current name: after an external rename the old entry is retained metadata, like any removed file's.</summary>
+    private static bool SafePath(string? path, bool nested)
+    {
+        if (string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path) || path.Contains('\\') || path.Contains(':') || (!nested && path.Contains('/'))) return false;
+        var parts = path.Split('/');
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            if (string.IsNullOrWhiteSpace(part) || part.EndsWith('.') || part.EndsWith(' ') || part.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return false;
+            if (part.StartsWith('.') && !(i == parts.Length - 1 && part.Length > 4 && part.EndsWith(".md", StringComparison.OrdinalIgnoreCase))) return false;
+        }
+        return true;
+    }
     private static WorkspaceException Invalid(string path) => new(422, $"The metadata is invalid or uses an unsupported version. Fix {path} before saving.");
     private static WorkspaceException Changed() => new(409, "Project metadata changed on disk. Refresh before saving again.");
 }

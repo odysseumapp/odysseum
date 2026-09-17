@@ -38,9 +38,16 @@ public sealed class ProjectServices : IDisposable
     {
         _instanceLock = _files.AcquireInstanceLock();
         await new ManifestTransaction(_files).RecoverAsync();
-        await _scanner.ScanAsync();
+        await RescanAsync();
         return true;
     }, scan: false);
+
+    /// <summary>Scans, then gives any folder that lacks its own document one, which needs a second scan to be seen.</summary>
+    private async Task RescanAsync()
+    {
+        await _scanner.ScanAsync();
+        if (await _documents.EnsureFolderDocumentsAsync()) await _scanner.ScanAsync();
+    }
 
     public Task ScanAsync() => ExecuteAsync(() => Task.FromResult(true));
     public Task<ProjectResponse> GetProjectAsync() => ReadAsync(_queries.GetProject);
@@ -81,7 +88,7 @@ public sealed class ProjectServices : IDisposable
     private Task<ProjectResponse> ChangeFolderAsync(Action change) => ExecuteAsync(async () =>
     {
         change();
-        await _scanner.ScanAsync();
+        await RescanAsync();
         return _queries.GetProject();
     });
 
@@ -102,7 +109,8 @@ public sealed class ProjectServices : IDisposable
     private Task<DocumentContent> WriteDocumentAsync(Func<Task<string>> write) => ExecuteAsync(async () =>
     {
         var id = await write();
-        await _scanner.ScanAsync();
+        // A document may have introduced a folder, which gets its own document straight away.
+        await RescanAsync();
         return _queries.GetDocument(id);
     });
 
@@ -117,7 +125,7 @@ public sealed class ProjectServices : IDisposable
         await _gate.WaitAsync();
         try
         {
-            if (scan) await _scanner.ScanAsync();
+            if (scan) await RescanAsync();
             return await action();
         }
         finally { _gate.Release(); }

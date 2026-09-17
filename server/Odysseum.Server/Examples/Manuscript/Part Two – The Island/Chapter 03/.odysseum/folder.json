@@ -3,19 +3,18 @@
   "version": 1,
   "pinnedView": "outline",
   "itemOrder": [
-    "00d1e246-4f36-47e8-a308-000000000039",
     "00d1e246-4f36-47e8-a308-000000000005",
     "00d1e246-4f36-47e8-a308-000000000012"
   ],
   "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000039": {
-      "path": "Chapter 03.md",
+      "path": ".Chapter 03.md",
       "title": "Chapter 03",
-      "synopsis": "Chapter heading and epigraph. Opens when you click the Chapter 03 folder; the scenes sit beside it.",
-      "notes": "Chapter-as-folder with an introduction document. Keep the epigraph; cut the rest if it reads as throat-clearing.",
+      "synopsis": "Chapter heading and epigraph, kept in the chapter folder’s own document. It opens when you click the folder.",
+      "notes": "Every folder has one of these; this one has something in it. Keep the epigraph; cut the rest if it reads as throat-clearing.",
       "status": "draft",
-      "wordGoal": 100,
+      "wordGoal": 0,
       "order": 5,
       "lastKnownHash": "",
       "links": [

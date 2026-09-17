@@ -1,6 +1,7 @@
 using System.Text;
 using Odysseum.Server.Services.Storage;
 using Odysseum.Server.Services.Storage.Models;
+using static Odysseum.Server.Services.Documents.DocumentRules;
 using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;
 using static Odysseum.Server.Services.Storage.ContentRevision;
 
@@ -46,10 +47,11 @@ internal sealed class ProjectScanner(ProjectState state, ProjectFileStore files,
             next[id] = new(id, relativePath, bytes, prefix, body, hash, files.LastModified(relativePath));
             if (!candidate.Documents.TryGetValue(id, out var metadata))
             {
+                // A folder's own document is titled after the folder and carries no word goal.
                 metadata = new DocumentMetadata
                 {
-                    Title = Path.GetFileNameWithoutExtension(relativePath),
-                    WordGoal = candidate.Settings.DefaultSceneWordGoal,
+                    Title = IsFolderDocument(relativePath) ? Path.GetFileName(Path.GetDirectoryName(relativePath)!) : Path.GetFileNameWithoutExtension(relativePath),
+                    WordGoal = IsFolderDocument(relativePath) ? 0 : candidate.Settings.DefaultSceneWordGoal,
                     Order = candidate.Documents.Count == 0 ? 0 : candidate.Documents.Values.Max(x => x.Order) + 1
                 };
                 candidate.Documents[id] = metadata;
