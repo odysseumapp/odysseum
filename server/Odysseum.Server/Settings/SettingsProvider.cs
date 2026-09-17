@@ -62,6 +62,7 @@ public class SettingsProvider : ISettingsProvider
         var settings = GetSettings();
         _logger.LogInformation("Settings file: {Path} ({State})", _settingsPath, File.Exists(_settingsPath) ? "present" : "absent");
         _logger.LogInformation("Workspace: {Workspace}", settings.Workspace);
+        _logger.LogInformation("Themes: {Themes}", settings.Themes);
         _logger.LogInformation("Demo seeding: {Demo}; scan interval: {Seconds}s; keys: {Keys}; password: {Password}; deleting default folders: {DefaultFolders}",
             settings.Demo, settings.ScanSeconds, settings.Keys ?? "(default)", settings.PasswordRequired ? "configured" : "not set", settings.AllowDeletingDefaultFolders ? "allowed" : "blocked");
     }
@@ -86,6 +87,8 @@ public class SettingsProvider : ISettingsProvider
         settings.Keys = _configuration["ODYSSEUM_KEYS"] ?? settings.Keys;
         settings.WebUi = Path.GetFullPath(_configuration["ODYSSEUM_WEBUI"] ?? settings.WebUi
             ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_settingsPath))!, "webui"));
+        settings.Themes = Path.GetFullPath(_configuration["ODYSSEUM_THEMES"] ?? settings.Themes
+            ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_settingsPath))!, "themes"));
         settings.ScanSeconds = _configuration.GetValue("ODYSSEUM_SCAN_SECONDS", settings.ScanSeconds);
         settings.AllowDeletingDefaultFolders = _configuration.GetValue("ODYSSEUM_ALLOW_DELETING_DEFAULT_FOLDERS", settings.AllowDeletingDefaultFolders);
         Validate(settings);

@@ -15,6 +15,7 @@ public class ServerSettings : IServerSettings
 
     public string? Keys { get; set; }
     public string? WebUi { get; set; }
+    public string? Themes { get; set; }
 
     public bool AllowDeletingDefaultFolders { get; set; }
 

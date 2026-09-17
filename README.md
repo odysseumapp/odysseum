@@ -81,6 +81,7 @@ Open **http://localhost:5080**. To open a different directory:
 | `ODYSSEUM_SCAN_SECONDS` | `3` | Full reconciliation interval, 1–300 seconds |
 | `ODYSSEUM_KEYS` | ASP.NET Core default (`/data/keys` in Docker) | Persistent authentication key directory |
 | `ODYSSEUM_SETTINGS` | `server-settings.json` beside the server (`/data/server-settings.json` in Docker) | Optional settings file |
+| `ODYSSEUM_THEMES` | `themes` beside the settings file | Saved colour schemes, one JSON file per theme |
 
 ## API
 Odysseum's API is described at **http://localhost:5080/scalar**.

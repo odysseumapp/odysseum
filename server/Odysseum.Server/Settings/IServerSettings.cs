@@ -17,6 +17,9 @@ public interface IServerSettings
     /// <summary>Installed, independently versioned static UI files. Null selects webui beside the settings file.</summary>
     string? WebUi { get; set; }
 
+    /// <summary>Saved colour schemes, one JSON file each. Null selects themes beside the settings file.</summary>
+    string? Themes { get; set; }
+
     /// <summary>Whether the folders every project starts with may be removed once empty.</summary>
     bool AllowDeletingDefaultFolders { get; set; }
 

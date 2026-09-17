@@ -6,6 +6,7 @@ using Odysseum.Server.API.Models;
 using Odysseum.Server.Bootstrap;
 using Odysseum.Server.Services;
 using Odysseum.Server.Settings;
+using Odysseum.Server.Services.Themes;
 using Odysseum.Server.Services.WebUi;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -45,6 +46,7 @@ var bundledUi = Path.Combine(AppContext.BaseDirectory, "webui.zip");
 if (webUi.CurrentDirectory is null && File.Exists(bundledUi)) await webUi.InstallAsync(bundledUi);
 builder.Services.AddSingleton(webUi);
 builder.Services.AddSingleton<WebUiFileProvider>();
+builder.Services.AddSingleton(new ThemeStore(settings.Themes!));
 
 settingsProvider.DebugSettingsToLog();
 

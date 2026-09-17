@@ -14,7 +14,7 @@ The Manuscript folder mixes several ways of organising a book on purpose. Every 
 
 ## Chapters as files
 
-*Chapter 04*, *05*, *06* and *07* are single documents with scene breaks inside. Fewer files, less structure; the Threads view still places the whole chapter on a thread.
+*Chapter 04*, *05*, *06* and *07* are single documents with scene breaks inside. Fewer files, less structure; the Grid still places the whole chapter on a thread.
 
 ## Loose pieces
 
