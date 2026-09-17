@@ -5,7 +5,7 @@
   "description": "Novel and book writing software",
   "private": true,
   "license": "AGPL-3.0-only",
-  "author": "Odysseum",
+  "author": { "name": "Odysseum", "email": "odysseumapp@proton.me" },
   "homepage": "https://github.com/odysseumapp/odysseum",
   "main": "main.js",
   "scripts": {

@@ -58,6 +58,8 @@ function startServer(port) {
     env: {
       ...process.env,
       ASPNETCORE_URLS: `http://127.0.0.1:${port}`,
+      // The server stops itself when this process disappears, so a crash here never leaves it holding the port.
+      ODYSSEUM_PARENT_PID: String(process.pid),
       ODYSSEUM_SETTINGS: settings,
       ODYSSEUM_KEYS: path.join(data, 'keys'),
       // The server only installs its bundled UI into an empty directory; one per app version makes upgrades pick up the new UI.

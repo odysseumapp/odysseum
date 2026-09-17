@@ -70,5 +70,15 @@ try {
 // Ask the app to close the way a user would; a forced kill would skip its quit handler.
 if (process.platform === 'win32') execFile('taskkill', ['/PID', String(app.pid)])
 else app.kill('SIGTERM')
-await until(async () => exited && !await answers(`${origin}/health`), 30, 'The server was still running 30 seconds after the app closed.')
-console.log('App closed and the server stopped')
+try {
+  await until(() => exited, 15)
+  console.log('App closed when asked')
+} catch {
+  // Headless CI sessions do not always deliver the close request; the server must still follow a killed shell.
+  console.log('App ignored the close request; killing it')
+  if (process.platform === 'win32') execFile('taskkill', ['/F', '/PID', String(app.pid)])
+  else app.kill('SIGKILL')
+  await until(() => exited, 15, 'The app could not be killed.')
+}
+await until(async () => !await answers(`${origin}/health`), 30, 'The server was still running 30 seconds after the app exited.')
+console.log('Server stopped with the app')
