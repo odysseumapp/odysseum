@@ -67,7 +67,7 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         var original = Encoding.UTF8.GetBytes("# Existing\n\nText with **meaning**.\n");
         await File.WriteAllBytesAsync(path, original);
         var project = await store.GetProjectAsync();
-        Require(project.Documents.Count == 1, "Document was not discovered.");
+        Require(project.Documents.Count(Visible) == 1, "Document was not discovered.");
         var after = await File.ReadAllBytesAsync(path);
         Require(original.SequenceEqual(after), "Scan rewrote the file.");
     }),
@@ -121,7 +121,7 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         Require(results.Count(success => success) == 1, "Expected exactly one metadata revision to succeed.");
         var after = await store.GetProjectAsync();
         Require(after.Settings.Title == (results[0] ? "Updated project" : before.Settings.Title), "Settings did not match the successful update.");
-        Require(after.Documents.Single().Title == (results[1] ? "Updated document" : "Original"), "Rejected document metadata leaked into state.");
+        Require(after.Documents.Where(Visible).Single().Title == (results[1] ? "Updated document" : "Original"), "Rejected document metadata leaked into state.");
     }),
     ("Retains metadata through an external move and content edit", async (root, store) =>
     {
@@ -282,7 +282,7 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         File.Delete(candidate);
         File.Delete(duplicate);
         var after = await store.GetProjectAsync();
-        Require(after.Revision == before.Revision && after.Documents.Count == 1,
+        Require(after.Revision == before.Revision && after.Documents.Count(Visible) == 1,
             "An aborted scan left partial changes in the manifest.");
     }),
     ("Failed manifest replacements leave metadata, settings, and order unchanged", async (root, store) =>
@@ -381,6 +381,34 @@ checks.AddRange([
         project = await store.SaveFolderLayoutAsync(new("Manuscript", null, [], null, project.Revision));
         Require(project.Folders.Single(f => f.Path == "Manuscript").GridFolder is null, "Grid column folder was not cleared.");
     }),
+    ("Every folder gets a hidden document named after it, hidden from listings that expect emptiness and export", async (root, store) =>
+    {
+        var project = await store.GetProjectAsync();
+        project = await store.CreateFolderAsync(new("Manuscript", project.Revision));
+        project = await store.CreateFolderAsync(new("Manuscript/Chapter 09", project.Revision));
+        var chapter = project.Documents.Single(d => d.Path == "Manuscript/Chapter 09/.Chapter 09.md");
+        Require(chapter.Title == "Chapter 09" && chapter.WordGoal == 0 && chapter.Kind == DocumentKind.Scene, "Folder document was not created with the folder's name.");
+        Require(File.Exists(Path.Combine(root, "Manuscript", "Chapter 09", ".Chapter 09.md")), "Folder document is missing on disk.");
+        Require(project.Documents.Any(d => d.Path == "Manuscript/.Manuscript.md") && project.Documents.All(d => d.Path != ".Sample manuscript.md" && !d.Path.StartsWith('.')), "Top-level folders get documents; the project root does not.");
+        // Dropped-in folders get theirs on the next scan, and other hidden files stay ignored.
+        Directory.CreateDirectory(Path.Combine(root, "Manuscript", "Chapter 10"));
+        await File.WriteAllTextAsync(Path.Combine(root, "Manuscript", "Chapter 10", ".notes.md"), "ignored");
+        project = await store.GetProjectAsync();
+        Require(project.Documents.Any(d => d.Path == "Manuscript/Chapter 10/.Chapter 10.md") && project.Documents.All(d => !d.Path.EndsWith("/.notes.md")), "Dropped-in folder did not get its document, or another hidden file leaked in.");
+        var scene = await store.CreateAsync(new("Arrival", "Manuscript/Chapter 09", "Scene prose"));
+        project = await store.GetProjectAsync();
+        project = await store.UpdateMetadataAsync(chapter.Id, new("Chapter 09", "Where it starts", "", DocumentStatus.Draft, 0, project.Revision, [scene.Document.Id]));
+        Require(project.Documents.Single(d => d.Id == scene.Document.Id).Links.SequenceEqual([chapter.Id]), "Folder documents link like any other.");
+        var saved = await store.SaveAsync(chapter.Id, new("# Nine\n\nAn epigraph.", (await store.GetDocumentAsync(chapter.Id)).Document.Revision));
+        Require(saved.Content == "# Nine\n\nAn epigraph." && !(await store.ExportAsync()).Contains("An epigraph."), "Folder document prose was not saved, or leaked into the export.");
+        // A folder holding only its own document and metadata still counts as empty.
+        project = await store.GetProjectAsync();
+        project = await store.CreateFolderAsync(new("Manuscript/Empty", project.Revision));
+        project = await store.RemoveFolderAsync(new("Manuscript/Empty", project.Revision));
+        Require(project.Folders.All(f => f.Path != "Manuscript/Empty") && project.Documents.All(d => d.Path != "Manuscript/Empty/.Empty.md"), "A folder with only its own document could not be removed.");
+        var plain = await store.CreateAsync(new(".Chapter 09", "Manuscript/Chapter 09", ""));
+        Require(plain.Document.Path == "Manuscript/Chapter 09/Chapter 09.md", "A title starting with a dot must not create a hidden file.");
+    }),
     ("Migrates nested metadata into immediate-child manifests without rewriting prose", async (root, store) =>
     {
         var sceneId = Guid.NewGuid().ToString();
@@ -431,7 +459,7 @@ checks.AddRange([
         var moved = await store.MoveAsync(scene.Document.Id, new("Manuscript/Second/Arrival.md", renamed.Document.Revision));
         var source = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Manuscript", "Renamed", ".odysseum", "folder.json")))!;
         var target = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Manuscript", "Second", ".odysseum", "folder.json")))!;
-        Require(source["documents"]!.AsObject().Count == 0 && target["documents"]![scene.Document.Id] is not null && moved.Document.Synopsis == "Keep me", "Move left duplicate metadata owners.");
+        Require(source["documents"]!.AsObject().All(pair => pair.Value!["path"]!.GetValue<string>().StartsWith('.')) && target["documents"]![scene.Document.Id] is not null && moved.Document.Synopsis == "Keep me", "Move left duplicate metadata owners.");
     }),
     ("External folder metadata changes invalidate revisions and preserve extensions", async (root, store) =>
     {
@@ -444,7 +472,7 @@ checks.AddRange([
         await File.WriteAllTextAsync(path, local.ToJsonString());
         await Expect(409, () => store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Stale", "", DocumentStatus.Draft, 1, before.Revision)));
         var current = await store.GetProjectAsync();
-        Require(current.Documents.Single().Synopsis == "From another editor" && current.Revision != before.Revision, "Folder edits were not observed.");
+        Require(current.Documents.Where(Visible).Single().Synopsis == "From another editor" && current.Revision != before.Revision, "Folder edits were not observed.");
         await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "New", "", DocumentStatus.Done, 1, current.Revision));
         Require(JsonNode.Parse(await File.ReadAllTextAsync(path))!["custom"]!.GetValue<string>() == "folder extension", "Folder extension was lost.");
         local = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
@@ -461,8 +489,8 @@ checks.AddRange([
         var bytes = await File.ReadAllBytesAsync(path);
         var replacementId = Guid.NewGuid().ToString();
         await File.WriteAllTextAsync(path, $"---\nwriter_id: {replacementId}\n---\n\nReplacement");
-        Require((await store.GetProjectAsync()).Documents.Single().Id == replacementId, "Replacement retained the wrong identity.");
-        Require((await store.GetProjectAsync()).Documents.Single().Id == replacementId, "Retained metadata made the next scan invalid.");
+        Require((await store.GetProjectAsync()).Documents.Where(Visible).Single().Id == replacementId, "Replacement retained the wrong identity.");
+        Require((await store.GetProjectAsync()).Documents.Where(Visible).Single().Id == replacementId, "Retained metadata made the next scan invalid.");
         await File.WriteAllBytesAsync(path, bytes);
         Require((await store.GetDocumentAsync(original.Document.Id)).Document.Title == "Arrival", "Restoring the original lost its metadata.");
     }),
@@ -480,7 +508,7 @@ checks.AddRange([
         using var reopened = new ProjectServices(legacyRoot, new ProjectEvents());
         await reopened.InitializeAsync();
         var current = await reopened.GetProjectAsync();
-        Require(current.Settings.Title == "Legacy title" && current.Documents.Single().Title == "Arrival", "Legacy metadata was not carried over.");
+        Require(current.Settings.Title == "Legacy title" && current.Documents.Where(Visible).Single().Title == "Arrival", "Legacy metadata was not carried over.");
         Require(Directory.Exists(Path.Combine(legacyRoot, "Manuscript", ".odysseum")) && !Directory.Exists(Path.Combine(legacyRoot, ".writer")), "Legacy metadata directories were not renamed.");
     }),
     ("Default folders can be removed when the server setting allows it", async (root, _) =>
@@ -515,7 +543,7 @@ checks.AddRange([
         await File.WriteAllTextAsync(Path.Combine(recoveryRoot, ".odysseum", "pending-manifests.json"), journal);
         using var reopened = new ProjectServices(recoveryRoot, new ProjectEvents());
         await reopened.InitializeAsync();
-        Require((await reopened.GetProjectAsync()).Documents.Single().Title == "Arrival", "Incomplete batch was treated as committed.");
+        Require((await reopened.GetProjectAsync()).Documents.Where(Visible).Single().Title == "Arrival", "Incomplete batch was treated as committed.");
         var restored = await File.ReadAllBytesAsync(folderPath);
         Require(original.SequenceEqual(restored), "Recovery did not restore the exact original manifest.");
         Require(!File.Exists(Path.Combine(recoveryRoot, ".odysseum", "pending-manifests.json")), "Recovery journal was not cleared.");
@@ -591,7 +619,7 @@ var libraryChecks = new List<(string Name, Func<string, ProjectLibrary, Task> Ru
         Require(ReferenceEquals(one, (await library.OpenAsync("One")).Services), "A project should open once per process.");
         await one.CreateAsync(new("Only here", "Manuscript", "Text"));
         var two = (await library.OpenAsync("Two")).Services;
-        Require((await two.GetProjectAsync()).Documents.Count == 0 && (await one.GetProjectAsync()).Documents.Count == 1, "Documents leaked between projects.");
+        Require((await two.GetProjectAsync()).Documents.Count(Visible) == 0 && (await one.GetProjectAsync()).Documents.Count(Visible) == 1, "Documents leaked between projects.");
     }),
     ("Listing uses legacy manifest settings without writing and survives invalid metadata", async (root, library) =>
     {
@@ -633,6 +661,8 @@ foreach (var (name, check) in libraryChecks)
 }
 Console.WriteLine($"\n{passed} storage checks passed. Fixtures: {testRoot}");
 
+/// <summary>Every folder's hidden ".Name.md" document, which most checks look past.</summary>
+static bool Visible(DocumentSummary document) => document.Path.Split('/') is var parts && !(parts.Length >= 2 && parts[^1] == $".{parts[^2]}.md");
 static void Require(bool condition, string message)
 {
     if (!condition) throw new Exception(message);

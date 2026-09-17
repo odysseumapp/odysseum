@@ -51,6 +51,24 @@ internal sealed class ProjectDocumentService(ProjectState state, ProjectFileStor
         return id;
     }
 
+    /// <summary>Gives every folder its hidden document, <c>.Name.md</c>, where it is missing. Returns whether any were created.</summary>
+    public async Task<bool> EnsureFolderDocumentsAsync()
+    {
+        var missing = files.EnumerateFolders().Where(folder => !files.Exists(FolderDocumentPath(folder))).ToArray();
+        if (missing.Length == 0) return false;
+        var candidate = state.Manifest.Clone();
+        var order = candidate.Documents.Count == 0 ? 0 : candidate.Documents.Values.Max(x => x.Order) + 1;
+        foreach (var folder in missing)
+        {
+            var id = Guid.NewGuid().ToString();
+            var relative = FolderDocumentPath(folder);
+            await files.WriteAsync(relative, Encode($"---\nwriter_id: {id}\n---\n\n", ""), overwrite: false);
+            candidate.Documents[id] = new DocumentMetadata { Path = relative, Title = Path.GetFileName(folder), WordGoal = 0, Order = order++ };
+        }
+        await state.CommitManifestAsync(candidate, state.Revision);
+        return true;
+    }
+
     public async Task<string> MoveAsync(string id, MoveDocumentRequest request)
     {
         var document = state.Find(id);

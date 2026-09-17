@@ -29,7 +29,7 @@ internal sealed class ProjectQueries(ProjectState state)
 
     public string Export()
     {
-        return $"# {state.Manifest.Settings.Title}\n\n" + string.Join("\n\n---\n\n", Ordered().Where(x => KindOf(x.Path) == DocumentKind.Scene).Select(x =>
+        return $"# {state.Manifest.Settings.Title}\n\n" + string.Join("\n\n---\n\n", Ordered().Where(x => KindOf(x.Path) == DocumentKind.Scene && !IsFolderDocument(x.Path)).Select(x =>
             $"## {state.Manifest.Documents[x.Id].Title}\n\n{x.Body.Trim()}")) + "\n";
     }
 

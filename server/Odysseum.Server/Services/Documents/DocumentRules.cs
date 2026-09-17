@@ -31,6 +31,13 @@ internal static partial class DocumentRules
     };
 
     public static bool IsDocument(string path) => Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown" or ".txt";
+    /// <summary>Every folder owns one hidden document, <c>.Name.md</c>, that opens when the folder is opened.</summary>
+    public static string FolderDocumentPath(string folder) => $"{folder}/.{Path.GetFileName(folder)}.md";
+    public static bool IsFolderDocument(string path)
+    {
+        var parts = path.Split('/');
+        return parts.Length >= 2 && parts[^1] == $".{parts[^2]}.md";
+    }
     [GeneratedRegex("[<>:\"/\\\\|?*\\x00-\\x1f]")] private static partial Regex UnsafeName();
     [GeneratedRegex(@"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", RegexOptions.IgnoreCase)] private static partial Regex ReservedName();
 }

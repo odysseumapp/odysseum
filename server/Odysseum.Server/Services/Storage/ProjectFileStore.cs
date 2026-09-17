@@ -78,7 +78,8 @@ internal sealed class ProjectFileStore(string root)
     {
         var path = ResolvePath(relative);
         if (!Directory.Exists(path)) return;
-        if (Directory.EnumerateFileSystemEntries(path).Any(entry => Path.GetFileName(entry) != ".odysseum"))
+        // The folder's own hidden document and metadata go with it; anything else makes it non-empty.
+        if (Directory.EnumerateFileSystemEntries(path).Any(entry => Path.GetFileName(entry) is var name && name != ".odysseum" && name != $".{Path.GetFileName(path)}.md"))
             throw new WorkspaceException(409, "Only empty folders can be removed. Move their files and subfolders first.");
         // Keep the folder manifest recoverable, including metadata for externally removed files.
         var destination = ResolvePath(".odysseum/removed-folders/" + Guid.NewGuid().ToString("N"), true);
@@ -118,7 +119,8 @@ internal sealed class ProjectFileStore(string root)
         foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
         {
             var name = Path.GetFileName(entry);
-            if (name.StartsWith('.') || (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) continue;
+            var folderDocument = directory != Root && name == $".{Path.GetFileName(directory)}.md";
+            if ((name.StartsWith('.') && !folderDocument) || (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) continue;
             if (Directory.Exists(entry))
             {
                 foreach (var child in EnumerateDocuments(entry)) yield return child;
@@ -134,7 +136,7 @@ internal sealed class ProjectFileStore(string root)
         var segments = relative.Split('/');
         if (segments.Any(x => string.IsNullOrWhiteSpace(x) || x is "." or ".." || x.EndsWith('.') || x.EndsWith(' ')
             || x.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-            || (!allowMetadata && segments.Any(x => x.StartsWith('.'))))
+            || (!allowMetadata && segments.Where((x, i) => x.StartsWith('.') && !(i > 0 && i == segments.Length - 1 && x == $".{segments[i - 1]}.md")).Any()))
             throw new WorkspaceException(400, "That path is not allowed.");
         var current = Root;
         AssertNoLinks(current);

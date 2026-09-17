@@ -10,7 +10,7 @@ The Manuscript folder mixes several ways of organising a book on purpose. Every 
 
 ## Chapters as folders
 
-*Chapter 01*, *02* and *03* are folders of scene files. Reorder scenes on the Corkboard or Outline; the export follows that order. *Chapter 03* also contains a document called *Chapter 03* — a document named after its folder opens when you click the folder, which is a good place for a heading, an epigraph or the chapter’s plan.
+*Chapter 01*, *02* and *03* are folders of scene files. Reorder scenes on the Corkboard or Outline; the export follows that order. Every folder also has a hidden document of its own — click the folder and it opens. *Chapter 03*’s holds a heading and an epigraph; the others are empty until you want a chapter plan, a part title page, or a note about the folder.
 
 ## Chapters as files
 
