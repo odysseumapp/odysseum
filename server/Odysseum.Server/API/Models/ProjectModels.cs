@@ -5,7 +5,8 @@ namespace Odysseum.Server.API.Models;
 /// <summary>A project as listed in the workspace. <c>Slug</c> is the folder name used in URLs.</summary>
 public record ProjectInfo(string Slug, string Title, string Id, DateTime LastModified);
 
-public record CreateProjectRequest(string Title, int? WordGoal);
+/// <summary><c>Template</c> names the project template to start from; omitted, the project starts from <c>Default</c>.</summary>
+public record CreateProjectRequest(string Title, int? WordGoal, string? Template = null);
 
 /// <summary>The open project: settings, documents, and all physical folders with their view layouts.</summary>
 public record ProjectResponse(string Id, ProjectSettings Settings, string Revision,

@@ -20,6 +20,9 @@ public interface IServerSettings
     /// <summary>Saved colour schemes, one JSON file each. Null selects themes beside the settings file.</summary>
     string? Themes { get; set; }
 
+    /// <summary>Saved project templates, one JSON file each. Null selects templates beside the settings file.</summary>
+    string? Templates { get; set; }
+
     /// <summary>Whether the folders every project starts with may be removed once empty.</summary>
     bool AllowDeletingDefaultFolders { get; set; }
 
