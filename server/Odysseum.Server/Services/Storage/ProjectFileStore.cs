@@ -129,15 +129,25 @@ internal sealed class ProjectFileStore(string root)
         }
     }
 
+    private static bool IsRelative(string? relative) =>
+        !string.IsNullOrWhiteSpace(relative) && !Path.IsPathRooted(relative) && !relative.Contains('\\') && !relative.Contains(':');
+
+    private static bool HasSafeSegments(string relative, bool allowMetadata)
+    {
+        var segments = relative.Split('/');
+        return !segments.Any(x => string.IsNullOrWhiteSpace(x) || x is "." or ".." || x.EndsWith('.') || x.EndsWith(' ')
+            || x.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            && (allowMetadata || !segments.Where((x, i) => x.StartsWith('.') && !(i > 0 && i == segments.Length - 1 && x == $".{segments[i - 1]}.md")).Any());
+    }
+
+    /// <summary>Whether a content path would be accepted here, for callers that must refuse a whole batch before writing any of it.</summary>
+    public static bool IsSafePath(string? relative) => IsRelative(relative) && HasSafeSegments(relative!, allowMetadata: false);
+
     private string ResolvePath(string relative, bool allowMetadata = false)
     {
-        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) || relative.Contains('\\') || relative.Contains(':'))
-            throw new WorkspaceException(400, "Use a relative path inside the workspace.");
+        if (!IsRelative(relative)) throw new WorkspaceException(400, "Use a relative path inside the workspace.");
+        if (!HasSafeSegments(relative, allowMetadata)) throw new WorkspaceException(400, "That path is not allowed.");
         var segments = relative.Split('/');
-        if (segments.Any(x => string.IsNullOrWhiteSpace(x) || x is "." or ".." || x.EndsWith('.') || x.EndsWith(' ')
-            || x.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-            || (!allowMetadata && segments.Where((x, i) => x.StartsWith('.') && !(i > 0 && i == segments.Length - 1 && x == $".{segments[i - 1]}.md")).Any()))
-            throw new WorkspaceException(400, "That path is not allowed.");
         var current = Root;
         AssertNoLinks(current);
         foreach (var segment in segments)

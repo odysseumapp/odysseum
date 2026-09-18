@@ -4,6 +4,7 @@ using Odysseum.Server.API.Enums;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services;
 using Odysseum.Server.Services.Monitoring;
+using Odysseum.Server.Services.Templates;
 using Odysseum.Server.Settings;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -620,9 +621,57 @@ var libraryChecks = new List<(string Name, Func<string, ProjectLibrary, Task> Ru
         var project = await services.GetProjectAsync();
         Require(Directory.Exists(Path.Combine(root, created.Slug, "Manuscript", "Chapter 01")) && project.Folders.Any(f => f.Path == "Manuscript/Chapter 01"), "Chapter 01 was not seeded.");
         Require(project.Folders.Single(f => f.Path == "").ItemOrder.SequenceEqual(ProjectLibrary.DefaultFolders.Select(name => "folder:" + name)), "Default folders were not ordered.");
+        var scene = project.Documents.Single(Visible);
+        Require(scene.Path == "Manuscript/Chapter 01/Scene 01.md" && scene.Title == "Scene 01" && scene.WordGoal == 1000, "Scene 01 was not seeded.");
         await Expect(403, () => services.RemoveFolderAsync(new("Threads", project.Revision)));
-        project = await services.RemoveFolderAsync(new("Manuscript/Chapter 01", project.Revision));
-        Require(project.Folders.All(f => f.Path != "Manuscript/Chapter 01"), "The seeded chapter should be removable.");
+        // The seeded chapter is not protected; it only refuses removal while it still holds its scene.
+        await Expect(409, () => services.RemoveFolderAsync(new("Manuscript/Chapter 01", project.Revision)));
+    }),
+    ("Project templates capture a project by path and seed new projects with fresh ids", async (root, _) =>
+    {
+        var templates = new TemplateStore(Path.Combine(root, ".templates"));
+        templates.EnsureDefault();
+        Require(File.Exists(Path.Combine(root, ".templates", "Default.json")) && templates.List().Single().Name == "Default", "The Default template was not written.");
+        await using var library = new ProjectLibrary(Path.Combine(root, "workspace"), new ProjectFactory(NullLoggerFactory.Instance, 300), templates);
+        var source = await library.OpenServicesAsync((await library.CreateAsync(new("Source", 70000))).Slug);
+        var project = await source.GetProjectAsync();
+        project = await source.CreateFolderAsync(new("Manuscript/Chapter 02", project.Revision));
+        var scene = await source.CreateAsync(new("Opening", "Manuscript/Chapter 02", "Once."));
+        var mara = await source.CreateAsync(new("Mara", "Characters", "Sheet"));
+        project = await source.GetProjectAsync();
+        project = await source.UpdateMetadataAsync(scene.Document.Id, new("The Opening", "It begins.", "", DocumentStatus.Done, 250, project.Revision, [mara.Document.Id],
+            new() { [mara.Document.Id] = "First sight" }));
+        var characters = project.Folders.Single(f => f.Path == "Characters");
+        await source.SaveFolderLayoutAsync(new("Manuscript/Chapter 02", "board", [scene.Document.Id], characters.Id, project.Revision));
+
+        var saved = templates.Save(await source.CaptureTemplateAsync("Novel"));
+        Require(saved.Documents.Select(d => d.Path).SequenceEqual(["Manuscript/Chapter 01/Scene 01.md", "Manuscript/Chapter 02/Opening.md", "Characters/Mara.md"]),
+            "The template should list documents in order and leave out folders' own documents.");
+        var json = File.ReadAllText(Path.Combine(root, ".templates", "Novel.json"));
+        Require(!json.Contains(scene.Document.Id) && !json.Contains("Once.") && !json.Contains("It begins."), "A project template carries neither ids nor what documents hold.");
+
+        var copy = await library.OpenServicesAsync((await library.CreateAsync(new("Copy", null, "Novel"))).Slug);
+        var view = await copy.GetProjectAsync();
+        var opening = view.Documents.Single(d => d.Path == "Manuscript/Chapter 02/Opening.md");
+        var sheet = view.Documents.Single(d => d.Path == "Characters/Mara.md");
+        Require(view.Settings.Title == "Copy" && view.Settings.WordGoal == 70000, "Template goals were not applied.");
+        Require(opening.Id != scene.Document.Id && sheet.Id != mara.Document.Id, "Documents made from a template need their own ids.");
+        Require(opening.Title == "The Opening" && opening.Synopsis == "" && opening.WordGoal == 1000 && opening.Status == DocumentStatus.Draft
+            && opening.Links.Count == 0 && (await copy.GetDocumentAsync(opening.Id)).Content == "", "Documents made from a template should start empty under their title.");
+        var chapter = view.Folders.Single(f => f.Path == "Manuscript/Chapter 02");
+        Require(chapter.PinnedView == "board" && chapter.ItemOrder.SequenceEqual([opening.Id]) && chapter.GridFolder == view.Folders.Single(f => f.Path == "Characters").Id
+            && chapter.GridFolder != characters.Id, "Folder layouts were not rebuilt.");
+        Require(view.Folders.Single(f => f.Path == "").ItemOrder.SequenceEqual(ProjectLibrary.DefaultFolders.Select(name => "folder:" + name)), "The root order was lost.");
+
+        await Expect(404, () => library.CreateAsync(new("Orphan", null, "Missing")));
+        Require(!Directory.Exists(Path.Combine(root, "workspace", "Orphan")), "A missing template left an empty project behind.");
+        await File.WriteAllTextAsync(Path.Combine(root, ".templates", "Bad.json"), "{\"documents\":[{\"path\":\"../escape.md\"}]}");
+        Require(templates.List().Select(t => t.Name).SequenceEqual(["Default", "Novel"]), "An unsafe template should be skipped.");
+        ExpectSync(400, () => templates.Save(new() { Name = "Unsafe", Documents = [new() { Path = ".odysseum/project.json" }] }));
+        templates.Delete("Novel");
+        ExpectSync(404, () => templates.Get("Novel"));
+        templates.Delete("Default");
+        Require(File.Exists(Path.Combine(root, ".templates", "Default.json")), "Deleting Default should restore the shipped one.");
     }),
     ("Lists dropped-in folders and ignores files, hidden, and metadata directories", async (root, library) =>
     {
@@ -650,7 +699,7 @@ var libraryChecks = new List<(string Name, Func<string, ProjectLibrary, Task> Ru
         Require(ReferenceEquals(one, (await library.OpenAsync("One")).Services), "A project should open once per process.");
         await one.CreateAsync(new("Only here", "Manuscript", "Text"));
         var two = (await library.OpenAsync("Two")).Services;
-        Require((await two.GetProjectAsync()).Documents.Count(Visible) == 0 && (await one.GetProjectAsync()).Documents.Count(Visible) == 1, "Documents leaked between projects.");
+        Require((await two.GetProjectAsync()).Documents.Count(Visible) == 1 && (await one.GetProjectAsync()).Documents.Count(Visible) == 2, "Documents leaked between projects.");
     }),
     ("Listing uses legacy manifest settings without writing and survives invalid metadata", async (root, library) =>
     {
@@ -697,6 +746,12 @@ static bool Visible(DocumentSummary document) => document.Path.Split('/') is var
 static void Require(bool condition, string message)
 {
     if (!condition) throw new Exception(message);
+}
+static void ExpectSync(int status, Action action)
+{
+    try { action(); }
+    catch (WorkspaceException ex) when (ex.Status == status) { return; }
+    throw new Exception($"Expected HTTP {status} rejection.");
 }
 static async Task Expect(int status, Func<Task> action)
 {

@@ -14,6 +14,7 @@ playwright-report/
 server-settings.json
 server/Odysseum.Server/webui/
 server/Odysseum.Server/themes/
+server/Odysseum.Server/templates/
 /webui.zip
 /webui.zip.sha256
 desktop/node_modules/

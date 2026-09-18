@@ -108,6 +108,31 @@ Each folder's Grid view needs no setup: its rows are the folder's documents in o
 
 Unknown root, folder, child folder, and document properties round-trip. Invalid JSON, unsafe local paths, and unsupported versions block saves instead of being replaced. Removed-file entries remain in surviving folders so restored documents can recover metadata. Removing a folder removes its metadata with it; back up the complete folder to preserve that information.
 
+## Project templates
+
+A project template is what a new project starts with. Templates live beside the settings file in `templates/` (`ODYSSEUM_TEMPLATES`), one JSON file each, and belong to the workspace rather than to any project; the file name is the template's name. They are separate from document kinds, which still follow the top-level folder.
+
+A template is made by saving an existing project as one (`PUT /api/templates/{name}` with `{ "project": "<folder name>" }`), and chosen when a project is created (`POST /api/projects` with `"template": "<name>"`). It records the project's word goals, every folder with its layout, and which documents exist, by path and title. What a document holds (prose, synopsis, notes, links, status, history) is not part of a project template: a project made from one gets empty documents with fresh UUIDs. Folders' own hidden documents are not recorded; every folder gets one anyway.
+
+```json
+{
+  "name": "Default",
+  "settings": { "wordGoal": 50000, "defaultSceneWordGoal": 1000 },
+  "folders": [
+    { "path": "", "itemOrder": ["folder:Manuscript", "folder:Characters", "folder:Locations", "folder:Threads", "folder:Notes"] },
+    { "path": "Manuscript", "itemOrder": [] },
+    { "path": "Manuscript/Chapter 01", "pinnedView": "board", "itemOrder": ["document:Scene 01.md"], "gridFolder": "Threads" }
+  ],
+  "documents": [
+    { "path": "Manuscript/Chapter 01/Scene 01.md", "title": "Scene 01" }
+  ]
+}
+```
+
+The project root is the folder with the empty path. `itemOrder` keys are `folder:Name` or `document:File.md`, `gridFolder` is a folder path, and `documents` are in manuscript order; each takes `defaultSceneWordGoal`. A template whose paths could not be written into a project is refused when saved and skipped when listed.
+
+`Default` always exists. The server writes `Default.json` at startup when it is missing — the five default folders, `Manuscript/Chapter 01`, and an empty `Scene 01` — and deleting it restores that file. Saving a project over `Default` changes what new projects start with.
+
 ## Migration and revisions
 
 Opening a version 1 project automatically distributes its centralized document metadata into the owning folders and upgrades the root to version 2. The original root bytes are retained in `.odysseum/project.v1.json` before migration. Markdown, document UUIDs, ordering, links, and history are preserved. Old top-level `title` and `wordGoal` settings are migrated into `settings`. Project listing is read-only and does not migrate files.

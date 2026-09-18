@@ -2,6 +2,7 @@ using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Monitoring;
 using Odysseum.Server.Services.Projects;
 using Odysseum.Server.Services.Storage;
+using Odysseum.Server.Services.Templates;
 using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
@@ -18,6 +19,7 @@ public sealed class ProjectServices : IDisposable
     private readonly ProjectOrganizationService _organization;
     private readonly ProjectFolderService _folders;
     private readonly ProjectQueries _queries;
+    private readonly ProjectTemplateService _templates;
     private FileStream? _instanceLock;
     public string Root => _files.Root;
 
@@ -32,6 +34,7 @@ public sealed class ProjectServices : IDisposable
         _organization = new ProjectOrganizationService(_state);
         _folders = new ProjectFolderService(_state, _files, () => settings?.GetSettings().AllowDeletingDefaultFolders ?? false);
         _queries = new ProjectQueries(_state);
+        _templates = new ProjectTemplateService(_state, _files);
     }
 
     public Task InitializeAsync() => ExecuteAsync(async () =>
@@ -84,6 +87,23 @@ public sealed class ProjectServices : IDisposable
     public Task<ProjectResponse> CreateFolderAsync(CreateFolderRequest request) => ChangeFolderAsync(() => _folders.Create(request));
     public Task<ProjectResponse> RemoveFolderAsync(RemoveFolderRequest request) => ChangeFolderAsync(() => _folders.Remove(request));
     public Task<ProjectResponse> SaveFolderLayoutAsync(FolderLayoutRequest request) => ChangeProjectAsync(() => _folders.SaveLayoutAsync(request));
+
+    /// <summary>The project as a template: its goals, folders, and documents, named by path.</summary>
+    public Task<ProjectTemplate> CaptureTemplateAsync(string name) => ReadAsync(() => _templates.Capture(name));
+
+    /// <summary>Fills a new project from a template, under the settings it was created with.</summary>
+    public Task<ProjectResponse> ApplyTemplateAsync(ProjectTemplate template, IProjectSettings settings)
+    {
+        var validated = ProjectSettings.From(settings, out var error);
+        if (error is not null) throw new WorkspaceException(400, error);
+        return ExecuteAsync(async () =>
+        {
+            var ids = await _templates.WriteFilesAsync(template);
+            await RescanAsync();
+            await _templates.ApplyDetailsAsync(template, ids, validated);
+            return _queries.GetProject();
+        });
+    }
 
     private Task<ProjectResponse> ChangeFolderAsync(Action change) => ExecuteAsync(async () =>
     {

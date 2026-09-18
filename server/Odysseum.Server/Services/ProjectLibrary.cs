@@ -4,6 +4,8 @@ using System.Collections.Concurrent;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Documents;
 using Odysseum.Server.Services.Storage;
+using Odysseum.Server.Services.Templates;
+using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
 
@@ -11,11 +13,10 @@ namespace Odysseum.Server.Services;
 /// The workspace root holds one directory per project. Each project is opened lazily as its own
 /// <see cref="ProjectServices"/> with a monitor and event stream, and stays open until shutdown.
 /// </summary>
-public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsyncDisposable
+public sealed class ProjectLibrary(string root, ProjectFactory factory, TemplateStore? templates = null) : IAsyncDisposable
 {
-    /// <summary>Created with every project, in sidebar order. Only a server setting allows removing them.</summary>
+    /// <summary>The Default template's top-level folders, in sidebar order. Only a server setting allows removing them.</summary>
     public static readonly string[] DefaultFolders = ["Manuscript", "Characters", "Locations", "Threads", "Notes"];
-    public const string DefaultSubfolder = "Manuscript/Chapter 01";
     public static bool IsDefaultFolder(string path) => DefaultFolders.Contains(path, StringComparer.OrdinalIgnoreCase);
 
     // Windows directory names are case-insensitive; two spellings must not open two stores on one folder.
@@ -60,6 +61,10 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsync
     {
         var title = DocumentRules.ValidateTitle(request.Title);
         var stem = DocumentRules.FileName(title);
+        // Read before anything is created, so a missing template leaves no empty project behind.
+        var template = templates?.Get(string.IsNullOrWhiteSpace(request.Template) ? TemplateStore.DefaultName : request.Template)
+            ?? (string.IsNullOrWhiteSpace(request.Template) || TemplateStore.IsDefault(request.Template) ? TemplateStore.Default()
+                : throw new WorkspaceException(404, $"There is no project template called '{request.Template}'."));
         string slug;
         await _createGate.WaitAsync();
         try
@@ -69,18 +74,14 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory) : IAsync
             var suffix = 2;
             while (Directory.Exists(Path.Combine(Root, slug)) || File.Exists(Path.Combine(Root, slug))) slug = $"{stem}-{suffix++}";
             Directory.CreateDirectory(Path.Combine(Root, slug));
-            foreach (var folder in DefaultFolders.Append(DefaultSubfolder))
-                Directory.CreateDirectory(Path.Combine(Root, slug, folder));
         }
         finally { _createGate.Release(); }
         var handle = await OpenAsync(slug);
-        var view = await handle.Services.GetProjectAsync();
-        var settings = view.Settings.Clone();
-        settings.Title = title;
-        settings.WordGoal = request.WordGoal ?? settings.WordGoal;
-        var saved = await handle.Settings.SaveSettingsAsync(settings, view.Revision);
-        // Default folders keep their conventional order until the writer rearranges the root.
-        await handle.Services.SaveFolderLayoutAsync(new FolderLayoutRequest("", null, [.. DefaultFolders.Select(name => "folder:" + name)], null, saved.Revision));
+        var settings = new ProjectSettings
+        {
+            Title = title, WordGoal = request.WordGoal ?? template.Settings.WordGoal, DefaultSceneWordGoal = template.Settings.DefaultSceneWordGoal,
+        };
+        await handle.Services.ApplyTemplateAsync(template, settings);
         return await DescribeAsync(slug, Path.Combine(Root, slug));
     }
 
