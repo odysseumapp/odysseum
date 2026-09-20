@@ -29,5 +29,8 @@ public interface IServerSettings
     /// <summary>Full reconciliation interval for every open project.</summary>
     int ScanSeconds { get; set; }
 
+    /// <summary>How long a project must be quiet after a change before a version is saved. Zero saves none automatically.</summary>
+    int VersionSeconds { get; set; }
+
     bool PasswordRequired { get; }
 }

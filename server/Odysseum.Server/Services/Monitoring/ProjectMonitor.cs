@@ -2,8 +2,9 @@ using System.Threading.Channels;
 
 namespace Odysseum.Server.Services.Monitoring;
 
-/// <summary>Watches one project directory and rescans its services after filesystem notifications or on a timer.</summary>
-public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int seconds) : IAsyncDisposable
+/// <summary>Watches one project directory and rescans its services after filesystem notifications or on a timer.
+/// Once the project has been quiet for <paramref name="versionSeconds"/> after a change, it saves a version; zero turns that off.</summary>
+public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int seconds, int versionSeconds = 0) : IAsyncDisposable
 {
     private readonly CancellationTokenSource _stopping = new();
     private Task _loop = Task.CompletedTask;
@@ -32,19 +33,37 @@ public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int
         watcher.Error += (_, _) => changes.Writer.TryWrite(true);
         try { watcher.EnableRaisingEvents = true; }
         catch (IOException ex) { logger.LogWarning(ex, "File notifications are unavailable for {Root}; using polling.", services.Root); }
+        DateTime? changedAt = null;
         try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
                 using var iteration = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                 var notification = changes.Reader.WaitToReadAsync(iteration.Token).AsTask();
-                var timer = Task.Delay(TimeSpan.FromSeconds(seconds), iteration.Token);
+                var wait = TimeSpan.FromSeconds(seconds);
+                if (versionSeconds > 0 && changedAt is { } pending)
+                {
+                    var due = pending.AddSeconds(versionSeconds) - DateTime.UtcNow;
+                    if (due < wait) wait = due > TimeSpan.Zero ? due : TimeSpan.Zero;
+                }
+                var timer = Task.Delay(wait, iteration.Token);
                 await Task.WhenAny(notification, timer);
                 await iteration.CancelAsync();
                 stoppingToken.ThrowIfCancellationRequested();
                 await Task.Delay(200, stoppingToken);
-                while (changes.Reader.TryRead(out _)) { }
-                try { await services.ScanAsync(); }
+                var notified = false;
+                while (changes.Reader.TryRead(out _)) notified = true;
+                if (notified) changedAt = DateTime.UtcNow;
+                try
+                {
+                    await services.ScanAsync();
+                    // A version per keystroke would be noise; one after the writer pauses is a state worth going back to.
+                    if (versionSeconds > 0 && changedAt is { } at && DateTime.UtcNow - at >= TimeSpan.FromSeconds(versionSeconds))
+                    {
+                        changedAt = null;
+                        await services.SaveAutomaticVersionAsync();
+                    }
+                }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WorkspaceException)
                 { logger.LogWarning("Scan of {Root} deferred: {Message}", services.Root, ex.Message); }
             }

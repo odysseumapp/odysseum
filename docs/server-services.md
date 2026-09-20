@@ -19,10 +19,11 @@ Use a `Service` suffix when it clarifies an application workflow; it is not requ
 | `Storage/ProjectManifestStore` | Reads and migrates root and folder manifests, assembles the flat project view, and checks a combined revision. |
 | `Storage/ManifestTransaction` | Journals multi-manifest writes and restores incomplete batches under the project lock. |
 | `Storage/DocumentHistoryStore` | Writes and reads Markdown recovery snapshots, deduplicated by hash. |
+| `Versioning/ProjectVersionStore` | Saves, lists, and restores whole-project versions in a git repository inside the project folder. |
 | `Storage/Models/` | Represents persisted metadata and observed documents. |
 | `Documents/MarkdownDocumentCodec` | Encodes UTF-8, separates preserved frontmatter/BOM from prose, and counts words. |
 | `Documents/DocumentRules` | Defines supported document extensions, folder classification, and naming rules. |
-| `Monitoring/ProjectMonitor` | Requests scans after filesystem notifications and on a timer. |
+| `Monitoring/ProjectMonitor` | Requests scans after filesystem notifications and on a timer; saves a version once the project has been quiet. |
 | `Monitoring/ProjectEvents` | Publishes project invalidations to subscribers; the API controller supplies SSE transport. |
 | `Bootstrap/DemoContent` | Seeds the sample project when enabled and the workspace is empty. |
 
@@ -49,6 +50,16 @@ HTTP routes, JSON response envelopes, document IDs, and the SSE `workspace` even
 with existing clients. The root manifest migrates to version 2 with metadata owned by each content folder;
 see [the project format](project-format.md). Links are one undirected relation between any two documents; `Projects/Links` reads them from either side. Markdown and manifest replacement are still separate
 filesystem operations, and arbitrary external editors do not participate in the project's semaphore.
+
+Versions are whole-project states. `ProjectVersionStore` keeps them as commits on one branch of a git repository at
+`<project>/.git`, made with LibGit2Sharp, so no git installation is needed and nothing in the API or UI says "commit".
+Opening a project with documents saves a version (a new project's first version is its template), the monitor saves one after the project has been quiet for `VersionSeconds`
+(`ODYSSEUM_VERSION_SECONDS`, 60 by default, 0 for none) since the last change, and `POST /api/projects/{project}/versions`
+saves a named one. A restore (`POST .../versions/{id}/restore`) first saves the state being replaced, writes the chosen
+version's files over the project, and records that as a new version, so history only grows and any restore can be
+undone by restoring the version before it. Recovery snapshots, the instance lock, and transaction scratch are excluded
+through `.git/info/exclude`; the repository sets `core.autocrlf` off so files round-trip byte for byte. libgit2 has no
+garbage collection, so loose objects accumulate until a repack is added.
 
 Every scan is followed by `ProjectDocumentService.EnsureFolderDocumentsAsync`, which gives any folder lacking its own `.Name.md` document one and rescans; this is the only write a read triggers.
 

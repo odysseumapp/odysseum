@@ -722,6 +722,39 @@ var libraryChecks = new List<(string Name, Func<string, ProjectLibrary, Task> Ru
     }),
 };
 
+checks.AddRange([
+    ("Versions keep the whole project, and a restore is itself a new version", async (root, store) =>
+    {
+        var scene = await store.CreateAsync(new("Arrival", "Manuscript", "First draft"));
+        var external = Path.Combine(root, "Notes", "crlf.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(external)!);
+        byte[] bytes = [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes("Line one\r\nLine two\r\n")];
+        await File.WriteAllBytesAsync(external, bytes);
+        var named = await store.SaveVersionAsync("  Draft one ");
+        Require(named.Name == "Draft one" && !named.Automatic, "A named version should carry its trimmed name.");
+        await store.SaveAsync(scene.Document.Id, new("Second draft", scene.Document.Revision));
+        await File.WriteAllTextAsync(external, "Rewritten\n");
+        var extra = await store.CreateAsync(new("Mara", "Characters", "Biography"));
+        var automatic = await store.SaveAutomaticVersionAsync();
+        Require(automatic is { Automatic: true, Name: null, Changes: >= 3 }, "An automatic version records every changed file.");
+        Require(await store.SaveAutomaticVersionAsync() is null, "Nothing changed, so no version should be saved.");
+        var versions = await store.GetVersionsAsync();
+        Require(versions[0].Id == automatic!.Id && versions[1].Id == named.Id, "Versions list newest first.");
+        Require((await File.ReadAllTextAsync(Path.Combine(root, ".git", "info", "exclude"))).Contains("history"), "Recovery snapshots must stay out of versions.");
+        var restored = await store.RestoreVersionAsync(named.Id);
+        Require(restored.Documents.All(d => d.Id != extra.Document.Id) && !File.Exists(Path.Combine(root, extra.Document.Path)), "A restore removes documents added since.");
+        Require((await store.GetDocumentAsync(scene.Document.Id)).Content == "First draft", "A restore brings back the old prose.");
+        Require((await File.ReadAllBytesAsync(external)).SequenceEqual(bytes), "Restored files must match byte for byte, BOM and CRLF included.");
+        versions = await store.GetVersionsAsync();
+        Require(versions[0].Name!.StartsWith("Restored") && versions[1].Id == automatic.Id, "A restore is a new version on top, not a rewind.");
+        restored = await store.RestoreVersionAsync(versions[1].Id);
+        Require(restored.Documents.Any(d => d.Id == extra.Document.Id) && (await store.GetDocumentAsync(scene.Document.Id)).Content == "Second draft", "Restoring the version before a restore undoes it.");
+        await Expect(404, () => store.RestoreVersionAsync("0123456789abcdef0123456789abcdef01234567"));
+        await Expect(404, () => store.RestoreVersionAsync("HEAD~1"));
+        await Expect(400, () => store.SaveVersionAsync("  "));
+    }),
+]);
+
 foreach (var (name, check) in checks)
 {
     var root = Path.Combine(testRoot, passed.ToString());

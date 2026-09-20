@@ -23,6 +23,9 @@ public class ServerSettings : IServerSettings
     [Range(1, 300, ErrorMessage = "Scan interval must be between 1 and 300 seconds.")]
     public int ScanSeconds { get; set; } = 3;
 
+    [Range(0, 3600, ErrorMessage = "Version interval must be between 0 and 3600 seconds.")]
+    public int VersionSeconds { get; set; } = 60;
+
     [JsonIgnore]
     public bool PasswordRequired => !string.IsNullOrEmpty(Password);
 }
