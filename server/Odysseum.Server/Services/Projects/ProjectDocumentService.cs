@@ -39,7 +39,7 @@ internal sealed class ProjectDocumentService(ProjectState state, ProjectFileStor
             relative = string.IsNullOrEmpty(folder) ? $"{slug}-{suffix++}.md" : $"{folder}/{slug}-{suffix++}.md";
         }
         var id = Guid.NewGuid().ToString();
-        var bytes = Encode($"---\nwriter_id: {id}\n---\n\n", request.Content ?? "");
+        var bytes = Encode($"---\nwriter_id: {id}\n---\n\n", string.IsNullOrEmpty(request.Content) ? StarterContent(relative) : request.Content);
         await files.WriteAsync(relative, bytes, overwrite: false);
         var candidate = state.Manifest.Clone();
         candidate.Documents[id] = new DocumentMetadata
