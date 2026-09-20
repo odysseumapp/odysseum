@@ -16,7 +16,7 @@ namespace Odysseum.Server.Services;
 public sealed class ProjectLibrary(string root, ProjectFactory factory, TemplateStore? templates = null) : IAsyncDisposable
 {
     /// <summary>The Default template's top-level folders, in sidebar order. Only a server setting allows removing them.</summary>
-    public static readonly string[] DefaultFolders = ["Manuscript", "Characters", "Locations", "Threads", "Notes"];
+    public static readonly string[] DefaultFolders = ["Manuscript", "Characters", "Locations", "Threads", "Notes", "Styles"];
     public static bool IsDefaultFolder(string path) => DefaultFolders.Contains(path, StringComparer.OrdinalIgnoreCase);
 
     // Windows directory names are case-insensitive; two spellings must not open two stores on one folder.

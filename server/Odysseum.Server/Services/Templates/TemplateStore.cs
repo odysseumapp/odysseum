@@ -36,11 +36,13 @@ public sealed class TemplateFolder
     public string? GridFolder { get; set; }
 }
 
-/// <summary>An empty document the project starts with. It takes the template's default scene goal.</summary>
+/// <summary>A document the project starts with, empty unless <c>Content</c> says otherwise. It takes the template's default scene goal.</summary>
 public sealed class TemplateDocument
 {
     public string Path { get; set; } = "";
     public string Title { get; set; } = "";
+    /// <summary>Capturing a project never fills this; the shipped Default uses it for the stylesheet every project starts with.</summary>
+    public string? Content { get; set; }
 }
 
 /// <summary>
@@ -61,7 +63,13 @@ public sealed partial class TemplateStore(string root)
 
     public static bool IsDefault(string name) => string.Equals(name, DefaultName, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>What every project started with before templates, plus a first scene to write in.</summary>
+    /// <summary>The stylesheet every project starts with: what normal text looks like, and one style to show the shape of the thing.</summary>
+    public const string DefaultStylesheet = "```css\n/* Only .name blocks count. .normal is what untagged text looks like;\n"
+        + "   every other .name is a style you can pick from the toolbar,\n"
+        + "   for a whole block or for selected text. */\n"
+        + ".normal {\n  font-family: Georgia, serif;\n}\n\n.letter {\n  font-style: italic;\n}\n```\n";
+
+    /// <summary>What every project started with before templates, plus a first scene to write in and the Default stylesheet.</summary>
     public static ProjectTemplate Default() => new()
     {
         Name = DefaultName,
@@ -72,7 +80,11 @@ public sealed partial class TemplateStore(string root)
             new() { Path = "Manuscript/Chapter 01" },
             .. ProjectLibrary.DefaultFolders.Skip(1).Select(name => new TemplateFolder { Path = name }),
         ],
-        Documents = [new() { Path = "Manuscript/Chapter 01/Scene 01.md", Title = "Scene 01" }],
+        Documents =
+        [
+            new() { Path = "Manuscript/Chapter 01/Scene 01.md", Title = "Scene 01" },
+            new() { Path = "Styles/Default.md", Title = "Default", Content = DefaultStylesheet },
+        ],
     };
 
     /// <summary>Writes the shipped Default beside the saved templates so it can be read and edited like any other.</summary>

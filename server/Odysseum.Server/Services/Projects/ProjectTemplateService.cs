@@ -52,7 +52,7 @@ internal sealed class ProjectTemplateService(ProjectState state, ProjectFileStor
         {
             if (files.Exists(document.Path)) continue;
             var id = Guid.NewGuid().ToString();
-            await files.WriteAsync(document.Path, Encode($"---\nwriter_id: {id}\n---\n\n", ""), overwrite: false);
+            await files.WriteAsync(document.Path, Encode($"---\nwriter_id: {id}\n---\n\n", document.Content ?? ""), overwrite: false);
             ids[document.Path] = id;
         }
         return ids;
