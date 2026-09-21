@@ -61,7 +61,8 @@ internal sealed partial class ProjectVersionStore : IDisposable
         if (commit is null) throw new WorkspaceException(404, "That version no longer exists.");
         Save(null); // The state being replaced stays recoverable.
         _repository.Checkout(commit.Tree, null, new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force });
-        return Commit(RestoredPrefix + commit.Committer.When.UtcDateTime.ToString("u"), allowEmpty: true);
+        var source = Describe(commit);
+        return Commit(source.Name is { } name ? $"Restored “{name}”" : RestoredPrefix + commit.Committer.When.UtcDateTime.ToString("u"), allowEmpty: true);
     });
 
     /// <summary>libgit2 reports a read-only or damaged repository through its own exception type; the API knows the workspace one.</summary>
