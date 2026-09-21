@@ -12,6 +12,7 @@ namespace Odysseum.Server.Services.Versioning;
 internal sealed partial class ProjectVersionStore : IDisposable
 {
     private const string AutomaticMessage = "Automatic version";
+    private const string BeforeRestoreMessage = "Before restoring";
     private const string RestoredPrefix = "Restored the version from ";
     // Recovery snapshots, the process lock, and transaction scratch are not project content.
     private static readonly string[] Excluded =
@@ -39,12 +40,14 @@ internal sealed partial class ProjectVersionStore : IDisposable
     }
 
     /// <summary>Records the current files as a version. Without a name, nothing is recorded unless something changed.</summary>
-    public VersionInfo? Save(string? name) => Guarded(() =>
+    public VersionInfo? Save(string? name) => Guarded(() => SaveIfChanged(name, AutomaticMessage));
+
+    private VersionInfo? SaveIfChanged(string? name, string automaticMessage)
     {
         var changed = _repository.RetrieveStatus(new StatusOptions()).IsDirty;
         if (!changed && name is null) return null;
-        return Commit(name ?? AutomaticMessage, allowEmpty: true);
-    });
+        return Commit(name ?? automaticMessage, allowEmpty: true);
+    }
 
     public IReadOnlyList<VersionInfo> List(int take = 100) => Guarded<IReadOnlyList<VersionInfo>>(() =>
     {
@@ -59,10 +62,13 @@ internal sealed partial class ProjectVersionStore : IDisposable
     {
         var commit = VersionId().IsMatch(id) ? _repository.Lookup<Commit>(id) : null;
         if (commit is null) throw new WorkspaceException(404, "That version no longer exists.");
-        Save(null); // The state being replaced stays recoverable.
+        SaveIfChanged(null, BeforeRestoreMessage); // The state being replaced stays recoverable.
         _repository.Checkout(commit.Tree, null, new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force });
+        // Restoring a restore names the same files, not how many times they came back.
         var source = Describe(commit);
-        return Commit(source.Name is { } name ? $"Restored “{name}”" : RestoredPrefix + commit.Committer.When.UtcDateTime.ToString("u"), allowEmpty: true);
+        var message = source.Name is { } name ? name.StartsWith("Restored ", StringComparison.Ordinal) ? name : $"Restored “{name}”"
+            : RestoredPrefix + commit.Committer.When.UtcDateTime.ToString("u");
+        return Commit(message, allowEmpty: true);
     });
 
     /// <summary>libgit2 reports a read-only or damaged repository through its own exception type; the API knows the workspace one.</summary>
@@ -83,8 +89,8 @@ internal sealed partial class ProjectVersionStore : IDisposable
     {
         var parent = commit.Parents.FirstOrDefault();
         var changes = _repository.Diff.Compare<TreeChanges>(parent?.Tree, commit.Tree).Count;
-        var automatic = commit.MessageShort == AutomaticMessage;
-        return new(commit.Sha, automatic ? null : commit.MessageShort, automatic, commit.Committer.When.UtcDateTime, changes);
+        var automatic = commit.MessageShort is AutomaticMessage or BeforeRestoreMessage;
+        return new(commit.Sha, commit.MessageShort == AutomaticMessage ? null : commit.MessageShort, automatic, commit.Committer.When.UtcDateTime, changes);
     }
 
     public void Dispose() => _repository.Dispose();
