@@ -6,7 +6,7 @@ The Manuscript folder mixes several ways of organising a book on purpose. Every 
 
 ## Parts
 
-*Part One – The Mainland*, *Part Two – The Island* and *Part Three – The Northern Shore* are folders. A Part can hold chapter folders, chapter files, or both. Drag a Part in the sidebar to move the whole section.
+*Part One – The Mainland* and *Part Two – The Island* are folders. A Part can hold chapter folders, chapter files, or both. Drag a Part in the sidebar to move the whole section.
 
 ## Chapters as folders
 
@@ -14,11 +14,15 @@ The Manuscript folder mixes several ways of organising a book on purpose. Every 
 
 ## Chapters as files
 
-*Chapter 04*, *05*, *06* and *07* are single documents with scene breaks inside. Fewer files, less structure; the Grid still places the whole chapter on a thread.
+*Chapter 04* is a single document with scene breaks inside. Fewer files, less structure; the Grid still places the whole chapter on a thread.
 
 ## Loose pieces
 
-The *Prologue*, *Interlude* and *Epilogue* are files sitting directly in Manuscript, ordered between the Part folders. Anything can sit at any level.
+The *Prologue* and the *Interlude* are files sitting directly in Manuscript, ordered between the Part folders. Anything can sit at any level.
+
+## Fonts
+
+Your files stay plain Markdown. Anything Markdown cannot say — for now, the font of a paragraph — is kept in the folder’s `.odysseum/formatting` next to the file and re-attached to the right paragraphs if you edit the file in another program. The letter in *The letter arrives* is set in a typewriter face, the note in *A map of missing places* in handwriting, and the whole *Interlude* in Georgia; pick a paragraph and use the font menu above the editor to change any of them.
 
 ## Links and the grid
 

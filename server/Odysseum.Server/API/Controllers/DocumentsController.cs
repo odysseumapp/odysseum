@@ -40,7 +40,7 @@ public class DocumentsController : ControllerBase
         return ApiResults.Success(await services.GetDocumentAsync(id));
     }
 
-    /// <summary>Save prose; rejected with 409 when the file changed since the given revision.</summary>
+    /// <summary>Save prose. Returns 409 when the file changed since the given revision.</summary>
     [HttpPut("{id}")]
     public async Task<IResult> Save(string project, string id, [FromBody] SaveDocumentRequest request)
     {

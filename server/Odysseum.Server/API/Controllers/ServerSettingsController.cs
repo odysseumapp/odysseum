@@ -12,7 +12,7 @@ public class ServerSettingsController(ISettingsProvider settingsProvider) : Cont
     [HttpGet]
     public IResult Get() => ApiResults.Success(Describe(settingsProvider.GetSettings()));
 
-    /// <summary>Save server settings. Takes effect at once; an ODYSSEUM_* environment variable wins again after a restart.</summary>
+    /// <summary>Save server settings. Changes apply immediately, but an ODYSSEUM_* environment variable overrides them again after a restart.</summary>
     [HttpPut]
     public IResult Update([FromBody] ServerSettingsRequest request)
     {

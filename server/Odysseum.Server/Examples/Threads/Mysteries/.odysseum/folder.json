@@ -5,23 +5,6 @@
   "itemOrder": [],
   "gridFolder": null,
   "documents": {
-    "00d1e246-4f36-47e8-a308-000000000027": {
-      "path": "What happened on the crossing.md",
-      "title": "What happened on the crossing",
-      "synopsis": "Tomas ferried Aldous Vale to the mainland and back the day he vanished. Something was said on the water. Tomas has never repeated it.",
-      "notes": "Answer this one. The reader has earned it by the end.",
-      "status": "draft",
-      "wordGoal": 0,
-      "order": 27,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000003",
-        "00d1e246-4f36-47e8-a308-000000000008",
-        "00d1e246-4f36-47e8-a308-000000000013",
-        "00d1e246-4f36-47e8-a308-000000000022",
-        "00d1e246-4f36-47e8-a308-000000000038"
-      ]
-    },
     "00d1e246-4f36-47e8-a308-000000000028": {
       "path": "Where the bell tower went.md",
       "title": "Where the bell tower went",
@@ -35,9 +18,7 @@
         "00d1e246-4f36-47e8-a308-000000000004",
         "00d1e246-4f36-47e8-a308-000000000015",
         "00d1e246-4f36-47e8-a308-000000000020",
-        "00d1e246-4f36-47e8-a308-000000000031",
         "00d1e246-4f36-47e8-a308-000000000034",
-        "00d1e246-4f36-47e8-a308-000000000035",
         "00d1e246-4f36-47e8-a308-000000000036"
       ]
     }

@@ -17,20 +17,8 @@
       "links": [
         "00d1e246-4f36-47e8-a308-000000000010",
         "00d1e246-4f36-47e8-a308-000000000019",
-        "00d1e246-4f36-47e8-a308-000000000024",
-        "00d1e246-4f36-47e8-a308-000000000027"
+        "00d1e246-4f36-47e8-a308-000000000024"
       ]
-    },
-    "00d1e246-4f36-47e8-a308-000000000014": {
-      "path": "Ines Vale.md",
-      "title": "Ines Vale",
-      "synopsis": "Mara’s mother. Left the island with Mara at sixteen and never spoke of it again. Started with the kettle.",
-      "notes": "Dead before the story starts. Present in Mara’s habits.",
-      "status": "draft",
-      "wordGoal": 0,
-      "order": 14,
-      "lastKnownHash": "",
-      "links": []
     }
   },
   "folders": {}

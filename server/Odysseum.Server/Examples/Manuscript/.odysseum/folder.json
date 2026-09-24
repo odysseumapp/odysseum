@@ -6,9 +6,7 @@
     "00d1e246-4f36-47e8-a308-000000000010",
     "folder:Part One – The Mainland",
     "folder:Part Two – The Island",
-    "00d1e246-4f36-47e8-a308-000000000036",
-    "folder:Part Three – The Northern Shore",
-    "00d1e246-4f36-47e8-a308-000000000011"
+    "00d1e246-4f36-47e8-a308-000000000036"
   ],
   "gridFolder": null,
   "documents": {
@@ -42,36 +40,12 @@
         "00d1e246-4f36-47e8-a308-000000000020",
         "00d1e246-4f36-47e8-a308-000000000028"
       ]
-    },
-    "00d1e246-4f36-47e8-a308-000000000011": {
-      "path": "Where we left it.md",
-      "title": "Epilogue: Where we left it",
-      "synopsis": "A year later Mara draws the island for the last time and leaves the northern shore blank on purpose. Tomas takes her back to the mainland; the island stays where she put it.",
-      "notes": "Mirror the prologue. She keeps the rule and breaks it in the same gesture.",
-      "status": "draft",
-      "wordGoal": 700,
-      "order": 13,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000006",
-        "00d1e246-4f36-47e8-a308-000000000008",
-        "00d1e246-4f36-47e8-a308-000000000009",
-        "00d1e246-4f36-47e8-a308-000000000018",
-        "00d1e246-4f36-47e8-a308-000000000019",
-        "00d1e246-4f36-47e8-a308-000000000023",
-        "00d1e246-4f36-47e8-a308-000000000025",
-        "00d1e246-4f36-47e8-a308-000000000026"
-      ]
     }
   },
   "folders": {
     "0ad487f0-00b8-42b3-9c58-c27cfa200002": {
       "path": "Part One – The Mainland",
       "order": 0
-    },
-    "0ad487f0-00b8-42b3-9c58-c27cfa200007": {
-      "path": "Part Three – The Northern Shore",
-      "order": 1
     },
     "0ad487f0-00b8-42b3-9c58-c27cfa200005": {
       "path": "Part Two – The Island",

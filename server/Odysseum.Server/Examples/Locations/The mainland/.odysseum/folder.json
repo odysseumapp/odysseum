@@ -19,22 +19,6 @@
         "00d1e246-4f36-47e8-a308-000000000002",
         "00d1e246-4f36-47e8-a308-000000000006"
       ]
-    },
-    "00d1e246-4f36-47e8-a308-000000000022": {
-      "path": "The ferry office.md",
-      "title": "The ferry office",
-      "synopsis": "A paint-flaked ticket office at the mainland harbor with a timetable that says there has never been a ferry to Bellwether.",
-      "notes": "Liminal. Tomas mends nets here for boats that do not exist.",
-      "status": "draft",
-      "wordGoal": 0,
-      "order": 22,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000003",
-        "00d1e246-4f36-47e8-a308-000000000008",
-        "00d1e246-4f36-47e8-a308-000000000027",
-        "00d1e246-4f36-47e8-a308-000000000033"
-      ]
     }
   },
   "folders": {}

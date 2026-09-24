@@ -32,7 +32,7 @@ public class VersionsController : ControllerBase
         return ApiResults.Created(version, $"/api/projects/{Uri.EscapeDataString(project)}/versions/{version!.Id}");
     }
 
-    /// <summary>Put every file back as it was in that version. The state being replaced is saved first, so a restore can be undone.</summary>
+    /// <summary>Put every file back as it was in that version. The server saves the current state first, so a restore can be undone.</summary>
     [HttpPost("{version}/restore")]
     public async Task<IResult> Restore(string project, string version)
     {
