@@ -1,6 +1,6 @@
 using Odysseum.Server.Repositories.Manifests;
 
-namespace Odysseum.Server.Services.Projects;
+namespace Odysseum.Server.Repositories;
 
 internal static class Links
 {

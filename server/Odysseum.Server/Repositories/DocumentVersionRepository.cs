@@ -1,7 +1,6 @@
 using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text.RegularExpressions;
-using Odysseum.Server.API.Models;
 using Odysseum.Server.Models;
 using Odysseum.Server.Services.Documents;
 
@@ -16,18 +15,6 @@ public sealed partial class DocumentVersionRepository(IFileManager files) : IDoc
         if (files.EnumerateFiles(folder, $"*-{hash}.md", metadata: true).Any()) return;
         var name = $"{DateTime.UtcNow:yyyyMMddTHHmmssfffffff}-{hash}.md";
         await files.WriteAsync($"{folder}/{name}", bytes, overwrite: false, metadata: true);
-    }
-
-    public async Task<IReadOnlyList<SnapshotInfo>> ListAsync(string id)
-    {
-        var result = new List<SnapshotInfo>();
-        foreach (var path in files.EnumerateFiles($".odysseum/history/{id}", "*.md", metadata: true).OrderDescending().Take(100))
-        {
-            var content = MarkdownDocumentCodec.Decode(await files.ReadAsync(path, metadata: true));
-            result.Add(new(Path.GetFileNameWithoutExtension(path), files.LastModified(path, metadata: true),
-                MarkdownDocumentCodec.CountWords(MarkdownDocumentCodec.Split(content).Body)));
-        }
-        return result;
     }
 
     public Task<IReadOnlyList<DocumentVersion>> ListAsync(Document document)

@@ -3,7 +3,6 @@ using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Models;
 using Odysseum.Server.Repositories.Manifests;
 using Odysseum.Server.Services;
-using Odysseum.Server.Services.Projects;
 using static Odysseum.Server.Repositories.ContentRevision;
 using static Odysseum.Server.Services.Documents.DocumentRules;
 using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;

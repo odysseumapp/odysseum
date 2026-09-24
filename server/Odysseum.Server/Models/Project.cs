@@ -1,8 +1,8 @@
 using Odysseum.Abstractions.Folders;
 using Odysseum.Abstractions.Projects;
+using Odysseum.Server.Repositories;
 using Odysseum.Server.Repositories.Manifests;
 using Odysseum.Server.Services;
-using Odysseum.Server.Services.Projects;
 using ProjectSettings = Odysseum.Server.Settings.ProjectSettings;
 
 namespace Odysseum.Server.Models;
