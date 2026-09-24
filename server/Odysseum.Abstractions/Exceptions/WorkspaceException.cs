@@ -1,14 +1,4 @@
-namespace Odysseum.Abstractions;
-
-public enum WorkspaceError
-{
-    Invalid,
-    NotFound,
-    Conflict,
-    TooLarge,
-    Corrupt,
-    Unavailable,
-}
+namespace Odysseum.Abstractions.Exceptions;
 
 public sealed class WorkspaceException(WorkspaceError error, string message) : Exception(message)
 {

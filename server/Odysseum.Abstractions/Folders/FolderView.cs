@@ -1,4 +1,4 @@
-namespace Odysseum.Abstractions;
+namespace Odysseum.Abstractions.Folders;
 
 public enum FolderView
 {
