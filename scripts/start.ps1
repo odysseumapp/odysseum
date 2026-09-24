@@ -29,7 +29,6 @@ foreach ($name in $environment.Keys) {
     [Environment]::SetEnvironmentVariable($name, $environment[$name], 'Process')
 }
 
-# One .NET process serves the API and the installed static UI. Ctrl+C stops it.
 Push-Location $serverRoot
 try {
     Write-Host "Odysseum: http://localhost:$Port"

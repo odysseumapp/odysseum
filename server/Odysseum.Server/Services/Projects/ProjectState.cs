@@ -5,7 +5,6 @@ using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services.Projects;
 
-/// <summary>One project's committed state. Mutations run under ProjectServices' operation lock.</summary>
 internal sealed class ProjectState
 {
     private readonly string _root;

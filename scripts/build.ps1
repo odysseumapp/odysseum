@@ -27,7 +27,6 @@ try {
     dotnet build (Join-Path $serverRoot 'Odysseum.Server.csproj') --nologo
     if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }
 
-    # The API keeps installed UI releases beside its settings file, so install from the server directory.
     Write-Host 'Installing UI release into the API...'
     Push-Location $serverRoot
     try {

@@ -6,8 +6,6 @@ public static class DemoContent
 {
     public const string ProjectSlug = "Sample manuscript";
 
-    /// <summary>Copies the sample project into the workspace whenever it is missing. Delete the folder to get a fresh
-    /// copy after the examples change; an existing sample, and every other project, is never touched.</summary>
     public static void Seed(IServerSettings settings)
     {
         Directory.CreateDirectory(settings.Workspace);

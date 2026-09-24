@@ -4,7 +4,6 @@ using System.Text.Json;
 
 namespace Odysseum.Server.Services.WebUi;
 
-/// <summary>Validates UI archives and atomically selects an immutable release directory.</summary>
 public sealed class WebUiInstallation(string root)
 {
     public const long MaxArchiveBytes = 100 * 1024 * 1024;
@@ -71,7 +70,6 @@ public sealed class WebUiInstallation(string root)
             var installed = Path.Combine(versions, hash);
             if (!Directory.Exists(installed)) Directory.Move(staging, installed);
             else await ReadReleaseAsync(installed);
-            // Keep the old pointer until the new release is completely extracted and validated.
             var current = Path.Combine(Root, "current.json");
             if (File.Exists(current)) await AtomicWriteAsync(Path.Combine(Root, "previous.json"), await File.ReadAllTextAsync(current));
             await AtomicWriteAsync(current, JsonSerializer.Serialize(hash, Json));
@@ -79,7 +77,6 @@ public sealed class WebUiInstallation(string root)
         }
         finally
         {
-            // Only this installation's generated staging directory can be removed.
             if (Directory.Exists(staging) && Path.GetDirectoryName(Path.GetFullPath(staging)) == versions
                 && Path.GetFileName(staging).StartsWith(".staging-", StringComparison.Ordinal)) Directory.Delete(staging, recursive: true);
         }

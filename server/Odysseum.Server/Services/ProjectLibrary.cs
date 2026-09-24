@@ -9,17 +9,11 @@ using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
 
-/// <summary>
-/// The workspace root holds one directory per project. Each project is opened lazily as its own
-/// <see cref="ProjectServices"/> with a monitor and event stream, and stays open until shutdown.
-/// </summary>
 public sealed class ProjectLibrary(string root, ProjectFactory factory, TemplateStore? templates = null) : IAsyncDisposable
 {
-    /// <summary>The Default template's top-level folders, in sidebar order. Only a server setting allows removing them.</summary>
     public static readonly string[] DefaultFolders = ["Manuscript", "Characters", "Locations", "Threads", "Notes", "Styles"];
     public static bool IsDefaultFolder(string path) => DefaultFolders.Contains(path, StringComparer.OrdinalIgnoreCase);
 
-    // Windows directory names are case-insensitive; two spellings must not open two stores on one folder.
     private readonly ConcurrentDictionary<string, Lazy<Task<ProjectHandle>>> _open =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     private readonly SemaphoreSlim _createGate = new(1, 1);
@@ -61,7 +55,6 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
     {
         var title = DocumentRules.ValidateTitle(request.Title);
         var stem = DocumentRules.FileName(title);
-        // Read before anything is created, so a missing template leaves no empty project behind.
         var template = templates?.Get(string.IsNullOrWhiteSpace(request.Template) ? TemplateStore.DefaultName : request.Template)
             ?? (string.IsNullOrWhiteSpace(request.Template) || TemplateStore.IsDefault(request.Template) ? TemplateStore.Default()
                 : throw new WorkspaceException(404, $"There is no project template called '{request.Template}'."));
@@ -85,7 +78,6 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         return await DescribeAsync(slug, Path.Combine(Root, slug));
     }
 
-    /// <summary>The services for a route's project segment, opened on first use.</summary>
     public async Task<ProjectServices> OpenServicesAsync(string slug) => (await OpenAsync(slug)).Services;
 
     public static string ValidateSlug(string slug)
@@ -111,14 +103,13 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
             }
             else if (File.Exists(Path.Combine(directory, ".writer", "project.json")))
             {
-                // Listing never migrates files; a project from an earlier release is renamed when it is opened.
                 var legacy = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(directory, ".writer", "project.json")));
                 title = Text(legacy?["settings"]?["title"]) ?? Text(legacy?["title"]) ?? title;
                 id = Text(legacy?["id"]) ?? id;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WorkspaceException or JsonException)
-        { /* The listing stays available; opening the project reports the real problem. */ }
+        {  }
         return new(slug, title, id, Directory.GetLastWriteTimeUtc(directory));
     }
 
@@ -130,7 +121,7 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         {
             if (!entry.IsValueCreated) continue;
             try { await (await entry.Value).DisposeAsync(); }
-            catch (WorkspaceException) { /* Never opened successfully; nothing to release. */ }
+            catch (WorkspaceException) {  }
         }
         _open.Clear();
         _createGate.Dispose();

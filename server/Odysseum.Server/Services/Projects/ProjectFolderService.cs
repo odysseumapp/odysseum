@@ -3,7 +3,6 @@ using Odysseum.Server.Services.Storage;
 
 namespace Odysseum.Server.Services.Projects;
 
-/// <summary>Folder operations and view layouts, independent of document kinds.</summary>
 internal sealed class ProjectFolderService(ProjectState state, ProjectFileStore files, Func<bool> allowDeletingDefaultFolders)
 {
     private void CheckRevision(string revision)

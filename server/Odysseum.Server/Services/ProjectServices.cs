@@ -8,7 +8,6 @@ using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
 
-/// <summary>The public entry point for one project's operations. Coordinates focused services under one lock.</summary>
 public sealed class ProjectServices : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -45,12 +44,10 @@ public sealed class ProjectServices : IDisposable
         await new ManifestTransaction(_files).RecoverAsync();
         _versions = new ProjectVersionStore(Root);
         await RescanAsync();
-        // The state a project opens in is always there to go back to; an empty folder is not a state worth keeping.
         if (_state.Documents.Count > 0) Versions.Save(null);
         return true;
     }, scan: false);
 
-    /// <summary>Scans, then gives any folder that lacks its own document one, which needs a second scan to be seen.</summary>
     private async Task RescanAsync()
     {
         await _scanner.ScanAsync();
@@ -93,10 +90,8 @@ public sealed class ProjectServices : IDisposable
     public Task<ProjectResponse> RemoveFolderAsync(RemoveFolderRequest request) => ChangeFolderAsync(() => _folders.Remove(request));
     public Task<ProjectResponse> SaveFolderLayoutAsync(FolderLayoutRequest request) => ChangeProjectAsync(() => _folders.SaveLayoutAsync(request));
 
-    /// <summary>The project as a template: its goals, folders, and documents, named by path.</summary>
     public Task<ProjectTemplate> CaptureTemplateAsync(string name) => ReadAsync(() => _templates.Capture(name));
 
-    /// <summary>Fills a new project from a template, under the settings it was created with.</summary>
     public Task<ProjectResponse> ApplyTemplateAsync(ProjectTemplate template, IProjectSettings settings)
     {
         var validated = ProjectSettings.From(settings, out var error);
@@ -106,7 +101,7 @@ public sealed class ProjectServices : IDisposable
             var ids = await _templates.WriteFilesAsync(template);
             await RescanAsync();
             await _templates.ApplyDetailsAsync(template, ids, validated);
-            Versions.Save(null); // A new project's first version is the template, not the empty folder before it.
+            Versions.Save(null);
             return _queries.GetProject();
         });
     }
@@ -132,7 +127,6 @@ public sealed class ProjectServices : IDisposable
 
     public Task<IReadOnlyList<VersionInfo>> GetVersionsAsync() => ExecuteAsync(() => Task.FromResult(Versions.List()), scan: false);
 
-    /// <summary>Saves the project as it is now, even when nothing changed since the last version.</summary>
     public Task<VersionInfo> SaveVersionAsync(string name)
     {
         name = name?.Trim() ?? "";
@@ -140,10 +134,8 @@ public sealed class ProjectServices : IDisposable
         return ExecuteAsync(() => Task.FromResult(Versions.Save(name)!));
     }
 
-    /// <summary>Saves a version only when something changed since the last one; the monitor calls this after a quiet period.</summary>
     public Task<VersionInfo?> SaveAutomaticVersionAsync() => ExecuteAsync(() => Task.FromResult(Versions.Save(null)));
 
-    /// <summary>Puts every file back as it was in a version, saving the current state first so the restore can be undone.</summary>
     public Task<ProjectResponse> RestoreVersionAsync(string id) => ExecuteAsync(async () =>
     {
         Versions.Restore(id);
@@ -158,7 +150,6 @@ public sealed class ProjectServices : IDisposable
     private Task<DocumentContent> WriteDocumentAsync(Func<Task<string>> write) => ExecuteAsync(async () =>
     {
         var id = await write();
-        // A document may have introduced a folder, which gets its own document straight away.
         await RescanAsync();
         return _queries.GetDocument(id);
     });

@@ -11,7 +11,6 @@ public sealed class ProjectEvents
     public (Guid Id, ChannelReader<long> Reader) Subscribe()
     {
         var id = Guid.NewGuid();
-        // A change invalidates the workspace; one queued invalidation is sufficient.
         var channel = Channel.CreateBounded<long>(new BoundedChannelOptions(1)
         { FullMode = BoundedChannelFullMode.DropOldest });
         _listeners[id] = channel;

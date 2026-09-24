@@ -3,22 +3,15 @@ using System.Text.RegularExpressions;
 
 namespace Odysseum.Server.Services.Themes;
 
-/// <summary>A named colour scheme: one Tailwind palette per interface role.</summary>
 public sealed class Theme
 {
     public string Name { get; set; } = "";
     public Dictionary<string, string> Colors { get; set; } = [];
 }
 
-/// <summary>
-/// The saved colour schemes, one JSON file each in the themes directory. Nothing here is per project:
-/// a theme belongs to the workspace, and the browser remembers which one it is showing.
-/// </summary>
 public sealed partial class ThemeStore(string root)
 {
-    /// <summary>Every role the interface colours; a theme names a palette for each one.</summary>
     public static readonly string[] Roles = ["primary", "secondary", "success", "info", "warning", "error", "neutral"];
-    /// <summary>The Tailwind palettes a role may name. The value becomes a CSS variable, so nothing else is accepted.</summary>
     public static readonly string[] Palettes =
     [
         "red", "orange", "amber", "yellow", "lime", "green", "emerald", "teal", "cyan", "sky", "blue",
@@ -37,7 +30,6 @@ public sealed partial class ThemeStore(string root)
         var themes = new List<Theme>();
         foreach (var file in Directory.EnumerateFiles(Root, "*.json").OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
-            // A file someone hand-edited into nonsense is skipped rather than breaking the whole list.
             if (Read(file, Path.GetFileNameWithoutExtension(file)) is { } theme) themes.Add(theme);
         }
         return themes;
@@ -73,7 +65,6 @@ public sealed partial class ThemeStore(string root)
             if (new FileInfo(path).Length > MaxFileBytes) return null;
             var theme = JsonSerializer.Deserialize<Theme>(File.ReadAllBytes(path), Json);
             if (theme is null) return null;
-            // The file name is the theme's identity; a mismatched name inside it is ignored.
             theme.Name = fallbackName;
             theme.Colors = ValidColors(theme.Colors);
             return theme;
@@ -81,7 +72,6 @@ public sealed partial class ThemeStore(string root)
         catch (Exception ex) when (ex is JsonException or WorkspaceException) { return null; }
     }
 
-    /// <summary>The name is the file name, so it has to survive a round trip through the filesystem unchanged.</summary>
     public static string ValidName(string? name)
     {
         name = name?.Trim() ?? "";

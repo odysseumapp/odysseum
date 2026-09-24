@@ -6,8 +6,6 @@ using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;
 
 namespace Odysseum.Server.Services.Projects;
 
-/// <summary>Turns a project into a template and a template into a project's first contents. Identifiers never
-/// leave the project: a template names folders and documents by path, and applying one mints fresh ids.</summary>
 internal sealed class ProjectTemplateService(ProjectState state, ProjectFileStore files)
 {
     private static string Parent(string path) => Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
@@ -33,13 +31,11 @@ internal sealed class ProjectTemplateService(ProjectState state, ProjectFileStor
                     : manifest.FolderManifests.FirstOrDefault(pair => pair.Value.Id == folder.GridFolder).Key,
             });
         }
-        // Every folder gets its own document anyway, so only the listed ones are recorded.
         foreach (var document in state.Documents.Values.Where(x => !IsFolderDocument(x.Path)).OrderBy(x => manifest.Documents[x.Id].Order).ThenBy(x => x.Path, StringComparer.Ordinal))
             template.Documents.Add(new() { Path = document.Path, Title = manifest.Documents[document.Id].Title });
         return template;
     }
 
-    /// <summary>Creates the template's folders and files. Returns the id given to each document path; the caller scans before the details are applied.</summary>
     public async Task<Dictionary<string, string>> WriteFilesAsync(ProjectTemplate template)
     {
         foreach (var path in template.Folders.Select(folder => folder.Path).Concat(template.Documents.Select(document => Parent(document.Path))).Where(path => path != ""))
@@ -70,7 +66,6 @@ internal sealed class ProjectTemplateService(ProjectState state, ProjectFileStor
             metadata.WordGoal = IsFolderDocument(document.Path) ? 0 : settings.DefaultSceneWordGoal;
             metadata.Order = order++;
         }
-        // Folders' own documents the template did not mention keep their order after the ones it did.
         var placed = ids.Values.ToHashSet(StringComparer.Ordinal);
         foreach (var metadata in candidate.Documents.Where(pair => !placed.Contains(pair.Key)).OrderBy(pair => pair.Value.Order).Select(pair => pair.Value))
             metadata.Order = order++;

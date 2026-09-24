@@ -2,8 +2,6 @@ using System.Threading.Channels;
 
 namespace Odysseum.Server.Services.Monitoring;
 
-/// <summary>Watches one project directory and rescans its services after filesystem notifications or on a timer.
-/// Once the project has been quiet for <paramref name="versionSeconds"/> after a change, it saves a version; zero turns that off.</summary>
 public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int seconds, int versionSeconds = 0) : IAsyncDisposable
 {
     private readonly CancellationTokenSource _stopping = new();
@@ -57,7 +55,6 @@ public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int
                 try
                 {
                     await services.ScanAsync();
-                    // A version per keystroke would be noise; one after the writer pauses is a state worth going back to.
                     if (versionSeconds > 0 && changedAt is { } at && DateTime.UtcNow - at >= TimeSpan.FromSeconds(versionSeconds))
                     {
                         changedAt = null;

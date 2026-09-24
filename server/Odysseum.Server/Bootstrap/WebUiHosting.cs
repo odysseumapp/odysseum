@@ -4,7 +4,6 @@ namespace Odysseum.Server.Bootstrap;
 
 public static class WebUiHosting
 {
-    /// <summary>Serves the installed static UI. Register before routing so the file middleware is not skipped by the SPA fallback endpoint.</summary>
     public static void UseWebUi(this WebApplication app)
     {
         var files = app.Services.GetRequiredService<WebUiFileProvider>();
@@ -21,7 +20,6 @@ public static class WebUiHosting
         app.MapFallback("/webui/{**path}", async context =>
         {
             var requestPath = context.Request.Path.Value!;
-            // Relative asset URLs in index.html resolve against the directory, so the base path needs its trailing slash.
             if (requestPath == "/webui") { context.Response.Redirect("/webui/"); return; }
             var path = requestPath["/webui".Length..];
             if ((!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method))

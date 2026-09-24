@@ -1,6 +1,5 @@
 namespace Odysseum.Server.Services.WebUi;
 
-/// <summary>The contract between independently released server and frontend packages.</summary>
 public sealed record WebUiRelease(string Version, int ApiVersion, string BasePath)
 {
     public const int SupportedApiVersion = 1;

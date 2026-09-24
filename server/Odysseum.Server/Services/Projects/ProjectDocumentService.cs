@@ -7,8 +7,6 @@ using static Odysseum.Server.Services.Storage.ContentRevision;
 
 namespace Odysseum.Server.Services.Projects;
 
-/// <summary>Creates, saves, and moves Markdown documents, including recovery snapshots and revision checks.
-/// The coordinator scans before and after these operations while holding the shared project lock.</summary>
 internal sealed class ProjectDocumentService(ProjectState state, ProjectFileStore files, DocumentHistoryStore history)
 {
     public async Task<string> SaveAsync(string id, SaveDocumentRequest request)
@@ -19,7 +17,6 @@ internal sealed class ProjectDocumentService(ProjectState state, ProjectFileStor
         if (!bytes.AsSpan().SequenceEqual(document.Bytes))
         {
             await history.SaveAsync(id, document.Bytes);
-            // Preserve both the observed disk revision and the attempted draft for recovery.
             await history.SaveAsync(id, bytes);
             Check(Hash(await files.ReadAsync(document.Path)), request.Revision);
             await files.WriteAsync(document.Path, bytes);
@@ -51,7 +48,6 @@ internal sealed class ProjectDocumentService(ProjectState state, ProjectFileStor
         return id;
     }
 
-    /// <summary>Gives every folder its hidden document, <c>.Name.md</c>, where it is missing. Returns whether any were created.</summary>
     public async Task<bool> EnsureFolderDocumentsAsync()
     {
         var missing = files.EnumerateFolders().Where(folder => !files.Exists(FolderDocumentPath(folder))).ToArray();

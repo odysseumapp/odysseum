@@ -5,7 +5,6 @@ using static Odysseum.Server.Services.Storage.ContentRevision;
 
 namespace Odysseum.Server.Services.Projects;
 
-/// <summary>Updates scene details, project settings, and manuscript order using candidate manifests.</summary>
 internal sealed class ProjectOrganizationService(ProjectState state)
 {
     public async Task UpdateMetadataAsync(string id, MetadataRequest request)
@@ -26,12 +25,10 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         if (request.Links is not null)
         {
             var links = ValidateLinks(request.Links, id);
-            // Links are undirected: the other documents list this one too, so they change with it.
             var before = Links.Of(candidate, id);
             foreach (var removed in before.Except(links))
             {
                 candidate.Documents[removed].Links.Remove(id);
-                // A note belongs to its link and goes with it.
                 candidate.Documents[removed].LinkNotes.Remove(id);
                 metadata.LinkNotes.Remove(removed);
             }
@@ -42,8 +39,6 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         {
             var current = Links.Of(candidate, id);
             if (request.LinkNotes.Values.Any(note => note is null || note.Length > 2000)) throw new WorkspaceException(400, "A link note is too long.");
-            // Notes are shared like the links they sit on: both ends carry the same text, and an empty note is no note.
-            // A note for a document that is not linked is dropped rather than refused, so a replayed edit survives an unlink.
             foreach (var other in current)
             {
                 var note = request.LinkNotes.GetValueOrDefault(other)?.Trim() ?? "";
@@ -76,7 +71,6 @@ internal sealed class ProjectOrganizationService(ProjectState state)
     public async Task ReorderAsync(ReorderRequest request)
     {
         Check(state.Revision, request.Revision);
-        // Folders' own documents may be left out; they keep their relative order after the listed ones.
         var required = state.Documents.Values.Where(d => !IsFolderDocument(d.Path)).Select(d => d.Id);
         if (request.Ids.Distinct().Count() != request.Ids.Length || request.Ids.Any(id => !state.Documents.ContainsKey(id))
             || required.Any(id => !request.Ids.Contains(id))) throw new WorkspaceException(400, "The document list changed. Refresh and try again.");

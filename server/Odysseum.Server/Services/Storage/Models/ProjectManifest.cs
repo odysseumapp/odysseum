@@ -3,11 +3,9 @@ using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services.Storage.Models;
 
-/// <summary>Project settings and metadata. Persistence splits the aggregated documents into their owning folders.</summary>
 public sealed class ProjectManifest : FolderManifest
 {
     public ProjectSettings Settings { get; set; } = new();
-    // Services see project-relative documents; only the persistence layer splits them by owner.
     [JsonIgnore] internal Dictionary<string, FolderManifest> FolderManifests { get; set; } = [];
 
     internal ProjectManifest Clone() => new()

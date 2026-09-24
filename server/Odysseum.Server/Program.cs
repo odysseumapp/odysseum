@@ -21,7 +21,6 @@ var settingsProvider = new SettingsProvider(startupLoggers.CreateLogger<Settings
 var settings = settingsProvider.GetSettings();
 
 var webUi = new WebUiInstallation(settings.WebUi!);
-// Installation commands run without opening projects or starting an HTTP listener.
 if (builder.Configuration["install-webui"] is { } archive)
 {
     var release = await webUi.InstallAsync(archive);
@@ -62,7 +61,6 @@ builder.Services.AddSingleton<ISettingsProvider>(settingsProvider);
 
 builder.Services.AddSingleton(provider => new ProjectFactory(provider.GetRequiredService<ILoggerFactory>(), settings.ScanSeconds, settingsProvider, settings.VersionSeconds));
 builder.Services.AddSingleton(provider => new ProjectLibrary(settings.Workspace, provider.GetRequiredService<ProjectFactory>(), templates));
-// ApiResults writes through TypedResults.Json, which uses these options; MVC's AddJsonOptions below only covers model binding.
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
@@ -70,7 +68,6 @@ builder.Services.AddControllers()
     .AddJsonOptions(json => json.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)))
     .ConfigureApiBehaviorOptions(behavior => behavior.InvalidModelStateResponseFactory = context =>
     {
-        // JSON binding failures are keyed "$.field"; name the field rather than echoing the generic "request is required".
         var field = context.ModelState.Keys.FirstOrDefault(key => key.StartsWith("$."))?[2..];
         var message = field is not null ? $"The value for '{field}' could not be read."
             : context.ModelState.Values.SelectMany(state => state.Errors).Select(error => error.ErrorMessage)
@@ -104,7 +101,6 @@ builder.Services.AddRateLimiter(limiter =>
 
 var app = builder.Build();
 
-// The desktop shell passes its process id so a crashed or force-closed shell never leaves the server running behind it.
 if (builder.Configuration.GetValue<int?>("ODYSSEUM_PARENT_PID") is { } parentId)
 {
     try
@@ -112,15 +108,15 @@ if (builder.Configuration.GetValue<int?>("ODYSSEUM_PARENT_PID") is { } parentId)
         var parent = System.Diagnostics.Process.GetProcessById(parentId);
         parent.EnableRaisingEvents = true;
         parent.Exited += (_, _) => app.Lifetime.StopApplication();
-        app.Lifetime.ApplicationStopped.Register(parent.Dispose); // Also keeps the watcher reachable while the server runs.
+        app.Lifetime.ApplicationStopped.Register(parent.Dispose);
         if (parent.HasExited) return;
     }
-    catch (ArgumentException) { return; } // The shell was gone before the server finished starting.
+    catch (ArgumentException) { return; }
 }
 
 DemoContent.Seed(settings);
 
-await app.Services.GetRequiredService<ProjectLibrary>().ListAsync(); // Fail at startup when the workspace root is unreadable.
+await app.Services.GetRequiredService<ProjectLibrary>().ListAsync();
 
 app.UseMiddleware<ResponseHeadersMiddleware>();
 app.UseMiddleware<ApiExceptionMiddleware>();

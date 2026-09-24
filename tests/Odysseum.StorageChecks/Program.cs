@@ -288,7 +288,6 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
     }),
     ("Failed manifest replacements leave metadata, settings, and order unchanged", async (root, store) =>
     {
-        // Windows denies replacement when another editor holds a handle without FileShare.Delete.
         if (!OperatingSystem.IsWindows()) return;
         var first = await store.CreateAsync(new("First", "Manuscript", "Text"));
         await store.CreateAsync(new("Second", "Manuscript", "Text"));
@@ -346,11 +345,9 @@ checks.AddRange([
         Require(project.Documents.Single(d => d.Id == thread.Document.Id).LinkNotes[scene.Document.Id] == "Mara first doubts the map", "The other end should read the same note.");
         var threadManifest = Path.Combine(root, "Threads", ".odysseum", "folder.json");
         Require(JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!["documents"]![thread.Document.Id]!["linkNotes"]![scene.Document.Id]!.GetValue<string>() == "Mara first doubts the map", "The note was not persisted on the other side.");
-        // Editing from the other end changes the one note; an unrelated save leaves it alone.
         project = await store.UpdateMetadataAsync(thread.Document.Id, new("Race", "", "", DocumentStatus.Draft, 1000, project.Revision, null, new() { [scene.Document.Id] = "Rewritten" }));
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Synopsis", "", DocumentStatus.Draft, 1000, project.Revision));
         Require(project.Documents.Single(d => d.Id == scene.Document.Id).LinkNotes[thread.Document.Id] == "Rewritten", "A note edited from the other end did not change here, or an unrelated save lost it.");
-        // A note written by hand on one side reads from both.
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!;
         manifest["documents"]![thread.Document.Id]!["linkNotes"] = new JsonObject();
         await File.WriteAllTextAsync(threadManifest, manifest.ToJsonString());
@@ -378,16 +375,13 @@ checks.AddRange([
         Require(project.Documents.Single(d => d.Id == first.Document.Id).Links.SequenceEqual([scene.Document.Id]), "The thread should list the scene back.");
         var threadManifest = Path.Combine(root, "Threads", ".odysseum", "folder.json");
         Require(JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!["documents"]![first.Document.Id]!["links"]![0]!.GetValue<string>() == scene.Document.Id, "The reverse side was not persisted.");
-        // Threads may link to each other and to anything else: there is one kind of link.
         project = await store.UpdateMetadataAsync(second.Document.Id, new("Meet Cute", "", "", DocumentStatus.Draft, 1000, project.Revision, [scene.Document.Id, first.Document.Id]));
         Require(project.Documents.Single(d => d.Id == first.Document.Id).Links.OrderBy(x => x).SequenceEqual(new[] { scene.Document.Id, second.Document.Id }.OrderBy(x => x)), "Thread-to-thread link was not mirrored.");
-        // Removing from either side removes the link from both.
         project = await store.UpdateMetadataAsync(first.Document.Id, new("Race", "", "", DocumentStatus.Draft, 1000, project.Revision, []));
         Require(project.Documents.Single(d => d.Id == scene.Document.Id).Links.SequenceEqual([second.Document.Id])
             && project.Documents.Single(d => d.Id == second.Document.Id).Links.SequenceEqual([scene.Document.Id]), "Removing a link from one side left it on the other.");
         project = await store.UpdateMetadataAsync(scene.Document.Id, new("Arrival", "Updated", "", DocumentStatus.Draft, 1000, project.Revision));
         Require(project.Documents.Single(d => d.Id == scene.Document.Id).Links.Count == 1, "Omitting links removed them.");
-        // A one-sided link written by hand still counts, and legacy keys fold into links on the next write.
         var manuscript = Path.Combine(root, "Manuscript", ".odysseum", "folder.json");
         var legacy = JsonNode.Parse(await File.ReadAllTextAsync(manuscript))!;
         legacy["documents"]![scene.Document.Id]!["characters"] = new JsonArray(mara.Document.Id);
@@ -422,7 +416,6 @@ checks.AddRange([
         Require(chapter.Title == "Chapter 09" && chapter.WordGoal == 0 && chapter.Kind == DocumentKind.Scene, "Folder document was not created with the folder's name.");
         Require(File.Exists(Path.Combine(root, "Manuscript", "Chapter 09", ".Chapter 09.md")), "Folder document is missing on disk.");
         Require(project.Documents.Any(d => d.Path == "Manuscript/.Manuscript.md") && project.Documents.All(d => d.Path != ".Sample manuscript.md" && !d.Path.StartsWith('.')), "Top-level folders get documents; the project root does not.");
-        // Dropped-in folders get theirs on the next scan, and other hidden files stay ignored.
         Directory.CreateDirectory(Path.Combine(root, "Manuscript", "Chapter 10"));
         await File.WriteAllTextAsync(Path.Combine(root, "Manuscript", "Chapter 10", ".notes.md"), "ignored");
         project = await store.GetProjectAsync();
@@ -433,7 +426,6 @@ checks.AddRange([
         Require(project.Documents.Single(d => d.Id == scene.Document.Id).Links.SequenceEqual([chapter.Id]), "Folder documents link like any other.");
         var saved = await store.SaveAsync(chapter.Id, new("# Nine\n\nAn epigraph.", (await store.GetDocumentAsync(chapter.Id)).Document.Revision));
         Require(saved.Content == "# Nine\n\nAn epigraph." && !(await store.ExportAsync()).Contains("An epigraph."), "Folder document prose was not saved, or leaked into the export.");
-        // A folder holding only its own document and metadata still counts as empty.
         project = await store.GetProjectAsync();
         project = await store.CreateFolderAsync(new("Manuscript/Empty", project.Revision));
         project = await store.RemoveFolderAsync(new("Manuscript/Empty", project.Revision));
@@ -624,7 +616,6 @@ var libraryChecks = new List<(string Name, Func<string, ProjectLibrary, Task> Ru
         var scene = project.Documents.Single(Visible);
         Require(scene.Path == "Manuscript/Chapter 01/Scene 01.md" && scene.Title == "Scene 01" && scene.WordGoal == 1000, "Scene 01 was not seeded.");
         await Expect(403, () => services.RemoveFolderAsync(new("Threads", project.Revision)));
-        // The seeded chapter is not protected; it only refuses removal while it still holds its scene.
         await Expect(409, () => services.RemoveFolderAsync(new("Manuscript/Chapter 01", project.Revision)));
     }),
     ("Project templates capture a project by path and seed new projects with fresh ids", async (root, _) =>
@@ -774,7 +765,6 @@ foreach (var (name, check) in libraryChecks)
 }
 Console.WriteLine($"\n{passed} storage checks passed. Fixtures: {testRoot}");
 
-/// <summary>Every folder's hidden ".Name.md" document, which most checks look past.</summary>
 static bool Visible(DocumentSummary document) => document.Path.Split('/') is var parts && !(parts.Length >= 2 && parts[^1] == $".{parts[^2]}.md");
 static void Require(bool condition, string message)
 {
@@ -793,7 +783,6 @@ static async Task Expect(int status, Func<Task> action)
     throw new Exception($"Expected HTTP {status} rejection.");
 }
 
-/// <summary>A settings provider for checks that need the default-folder protection switched off.</summary>
 sealed class AllowingSettings : ISettingsProvider
 {
     public IServerSettings GetSettings(bool copy = false) => new ServerSettings { AllowDeletingDefaultFolders = true };

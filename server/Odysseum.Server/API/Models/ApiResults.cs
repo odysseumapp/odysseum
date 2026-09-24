@@ -65,7 +65,6 @@ public static class ApiResults
         return response;
     }
 
-    // Success responses
     public static IResult Success<T>(T data) =>
         Response(data, StatusCodes.Status200OK);
 
@@ -78,7 +77,6 @@ public static class ApiResults
     public static IResult File(byte[] content, string contentType, string fileName) =>
         TypedResults.File(content, contentType, fileName);
 
-    // Error responses
     public static IResult Error(int statusCode, string message) =>
         TypedResults.Json(new ErrorResponse(ApiVersion, new ApiError(statusCode, message)), statusCode: statusCode);
 

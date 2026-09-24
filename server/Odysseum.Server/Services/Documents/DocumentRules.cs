@@ -3,7 +3,6 @@ using Odysseum.Server.API.Enums;
 
 namespace Odysseum.Server.Services.Documents;
 
-/// <summary>Document classification and naming rules shared by project and document creation.</summary>
 internal static partial class DocumentRules
 {
     public static string ValidateTitle(string title)
@@ -20,7 +19,6 @@ internal static partial class DocumentRules
         if (ReservedName().IsMatch(result)) result = "Scene-" + result;
         return result;
     }
-    /// <summary>The top-level folder decides what a document is; every kind shares the same file and metadata handling.</summary>
     public static DocumentKind KindOf(string path) => path.Split('/')[0].ToLowerInvariant() switch
     {
         "characters" => DocumentKind.Character,
@@ -31,14 +29,11 @@ internal static partial class DocumentRules
         _ => DocumentKind.Scene,
     };
 
-    /// <summary>Every stylesheet needs a <c>.normal</c>, the look of untagged text, so a new Style document starts with one.</summary>
     public const string StyleStarter = "```css\n/* Only .name blocks count. .normal is what untagged text looks like;\n"
         + "   every other .name is a style to pick from the toolbar. */\n.normal {\n}\n```\n";
-    /// <summary>What a document created without content holds.</summary>
     public static string StarterContent(string path) => KindOf(path) == DocumentKind.Style ? StyleStarter : "";
 
     public static bool IsDocument(string path) => Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown" or ".txt";
-    /// <summary>Every folder owns one hidden document, <c>.Name.md</c>, that opens when the folder is opened.</summary>
     public static string FolderDocumentPath(string folder) => $"{folder}/.{Path.GetFileName(folder)}.md";
     public static bool IsFolderDocument(string path)
     {

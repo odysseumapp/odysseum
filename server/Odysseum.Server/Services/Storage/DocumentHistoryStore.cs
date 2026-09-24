@@ -4,7 +4,6 @@ using Odysseum.Server.Services.Documents;
 
 namespace Odysseum.Server.Services.Storage;
 
-/// <summary>Readable recovery snapshots, deduplicated by content hash. Called under the project's lock.</summary>
 internal sealed partial class DocumentHistoryStore(ProjectFileStore files)
 {
     public async Task SaveAsync(string id, byte[] bytes)

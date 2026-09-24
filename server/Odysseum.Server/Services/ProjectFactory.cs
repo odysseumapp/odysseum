@@ -3,7 +3,6 @@ using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
 
-/// <summary>Constructs and starts one project. The library owns the returned handle until shutdown.</summary>
 public sealed class ProjectFactory(ILoggerFactory loggers, int scanSeconds, ISettingsProvider? settings = null, int versionSeconds = 0)
 {
     public async Task<ProjectHandle> OpenAsync(string slug, string path)

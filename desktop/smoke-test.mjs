@@ -3,8 +3,6 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from '
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-// Launches the unpacked app from dist/, waits for the bundled server and UI to answer,
-// then closes the app and checks the server went with it. Run after `npm run dist`.
 const PORT = 47615
 const origin = `http://127.0.0.1:${PORT}`
 const dist = path.join(import.meta.dirname, 'dist')
@@ -36,7 +34,6 @@ async function until(condition, seconds, message) {
 
 if (await answers(`${origin}/health`)) throw new Error(`Something is already listening on ${origin}; close it first.`)
 
-// A scratch profile and workspace keep the test away from the real Documents folder.
 const scratch = mkdtempSync(path.join(tmpdir(), 'odysseum-smoke-'))
 const workspace = path.join(scratch, 'workspace')
 mkdirSync(path.join(scratch, 'profile', 'server'), { recursive: true })
@@ -44,9 +41,9 @@ mkdirSync(workspace)
 writeFileSync(path.join(scratch, 'profile', 'server', 'server-settings.json'), JSON.stringify({ workspace, demo: true }))
 
 const env = { ...process.env }
-delete env.ELECTRON_RUN_AS_NODE // Set by VS Code terminals; it would make the app start as plain Node.
+delete env.ELECTRON_RUN_AS_NODE
 const args = [`--user-data-dir=${path.join(scratch, 'profile')}`]
-if (process.platform === 'linux') args.push('--no-sandbox') // The unpacked chrome-sandbox helper is not setuid.
+if (process.platform === 'linux') args.push('--no-sandbox')
 
 const binary = findApp()
 console.log(`Launching ${binary}`)
@@ -67,14 +64,12 @@ try {
   throw error
 }
 
-// Ask the app to close the way a user would; a forced kill would skip its quit handler.
 if (process.platform === 'win32') execFile('taskkill', ['/PID', String(app.pid)])
 else app.kill('SIGTERM')
 try {
   await until(() => exited, 15)
   console.log('App closed when asked')
 } catch {
-  // Headless CI sessions do not always deliver the close request; the server must still follow a killed shell.
   console.log('App ignored the close request; killing it')
   if (process.platform === 'win32') execFile('taskkill', ['/F', '/PID', String(app.pid)])
   else app.kill('SIGKILL')

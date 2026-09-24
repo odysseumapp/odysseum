@@ -11,6 +11,3 @@ services:
     volumes:
       - ./projects:/projects
       - ./data:/data
-# The web UI lives in the /data volume. Install or update it without rebuilding the image:
-#   docker compose run --rm api --update-webui latest
-#   docker compose run --rm api --install-webui /data/odysseum-webui.zip

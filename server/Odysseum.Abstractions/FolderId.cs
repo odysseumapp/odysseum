@@ -1,7 +1,5 @@
 namespace Odysseum.Abstractions;
 
-/// <summary>A folder's identity, stable across renames, moves, and storage backends. The project root is a folder too;
-/// <see cref="Project.Root"/> names it. The value is a GUID in "D" format.</summary>
 public readonly record struct FolderId(string Value)
 {
     public static FolderId New() => new(Guid.NewGuid().ToString("D"));

@@ -3,7 +3,6 @@ using System.Text.Json;
 
 namespace Odysseum.Server.Services.WebUi;
 
-/// <summary>Release discovery uses a static JSON feed, never the GitHub API.</summary>
 public sealed class WebUiReleases(HttpClient http, string feedUrl = WebUiReleases.DefaultFeed)
 {
     public const string DefaultFeed = "https://raw.githubusercontent.com/odysseumapp/odysseum-web/releases/releases.json";

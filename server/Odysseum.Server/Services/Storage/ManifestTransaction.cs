@@ -2,7 +2,6 @@ using System.Text.Json;
 
 namespace Odysseum.Server.Services.Storage;
 
-/// <summary>A rollback journal for manifest batches. Only the project lock owner may recover it.</summary>
 internal sealed class ManifestTransaction(ProjectFileStore files)
 {
     private const string Journal = ".odysseum/pending-manifests.json";
@@ -15,7 +14,6 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
         Entry[] entries;
         try { entries = JsonSerializer.Deserialize<Entry[]>(await files.ReadAsync(Journal, metadata: true)) ?? throw new JsonException(); }
         catch (JsonException) { throw new WorkspaceException(422, "The manifest recovery journal is invalid."); }
-        // Check every file before restoring any, so external edits are never silently overwritten.
         foreach (var entry in entries)
         {
             Validate(entry);
@@ -70,11 +68,9 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
             var journal = JsonSerializer.SerializeToUtf8Bytes(entries);
             if (journal.Length > ProjectFileStore.MaxFileBytes) throw new WorkspaceException(413, "Too many manifests in one update.");
             await files.WriteAsync(Journal, journal, overwrite: false, metadata: true);
-            // Windows replacement cannot keep a writable handle open on the destination.
             foreach (var handle in locks) handle.Dispose();
             locks.Clear();
             foreach (var (path, bytes) in changes) await files.WriteAsync(path, bytes, metadata: true);
-            // Removing the journal is the commit point. Leftover backup files are harmless.
             files.DeleteMetadata(Journal);
         }
         catch
@@ -96,7 +92,7 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
         foreach (var entry in entries)
         {
             try { if (entry.Backup is not null) files.DeleteMetadata(entry.Backup); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* An unused backup must not turn a committed save into a failure. */ }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {  }
         }
     }
 

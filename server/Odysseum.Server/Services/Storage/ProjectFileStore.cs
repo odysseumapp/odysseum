@@ -2,8 +2,6 @@ using Odysseum.Server.Services.Documents;
 
 namespace Odysseum.Server.Services.Storage;
 
-/// <summary>All file access for one project, including path validation, bounded reads, and atomic replacement.
-/// The owning ProjectServices serializes operations; this component has no independent project state or lock.</summary>
 internal sealed class ProjectFileStore(string root)
 {
     public const int MaxFileBytes = 4 * 1024 * 1024;
@@ -28,8 +26,6 @@ internal sealed class ProjectFileStore(string root)
         }
     }
 
-    /// <summary>Earlier releases kept metadata in .writer directories. They are renamed before the instance lock is taken,
-    /// so a project still open elsewhere fails here the same way a held lock does.</summary>
     private void MigrateLegacyMetadata()
     {
         foreach (var folder in EnumerateFolders().Prepend("").ToArray())
@@ -71,17 +67,15 @@ internal sealed class ProjectFileStore(string root)
         if (File.Exists(path)) throw new WorkspaceException(409, "A file already has that name.");
         var parent = Path.GetDirectoryName(path)!;
         if (!Directory.Exists(parent)) throw new WorkspaceException(404, "The parent folder no longer exists.");
-        Directory.CreateDirectory(path); // Idempotent when a client retries after losing its connection.
+        Directory.CreateDirectory(path);
     }
 
     public void RemoveEmptyFolder(string relative)
     {
         var path = ResolvePath(relative);
         if (!Directory.Exists(path)) return;
-        // The folder's own hidden document and metadata go with it; anything else makes it non-empty.
         if (Directory.EnumerateFileSystemEntries(path).Any(entry => Path.GetFileName(entry) is var name && name != ".odysseum" && name != $".{Path.GetFileName(path)}.md"))
             throw new WorkspaceException(409, "Only empty folders can be removed. Move their files and subfolders first.");
-        // Keep the folder manifest recoverable, including metadata for externally removed files.
         var destination = ResolvePath(".odysseum/removed-folders/" + Guid.NewGuid().ToString("N"), true);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         Directory.Move(path, destination);
@@ -140,7 +134,6 @@ internal sealed class ProjectFileStore(string root)
             && (allowMetadata || !segments.Where((x, i) => x.StartsWith('.') && !(i > 0 && i == segments.Length - 1 && x == $".{segments[i - 1]}.md")).Any());
     }
 
-    /// <summary>Whether a content path would be accepted here, for callers that must refuse a whole batch before writing any of it.</summary>
     public static bool IsSafePath(string? relative) => IsRelative(relative) && HasSafeSegments(relative!, allowMetadata: false);
 
     private string ResolvePath(string relative, bool allowMetadata = false)
@@ -175,7 +168,6 @@ internal sealed class ProjectFileStore(string root)
         var length = before.Length;
         var modified = before.LastWriteTimeUtc;
         if (length > MaxFileBytes) throw new WorkspaceException(413, "File exceeds the 4 MB limit.");
-        // External editors may replace files atomically; allow replacement of this open handle.
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var memory = new MemoryStream();
         var buffer = new byte[8192];

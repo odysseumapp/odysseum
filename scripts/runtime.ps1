@@ -20,7 +20,6 @@ function Test-NuxtNode([string]$NodePath) {
 }
 
 function Get-OdysseumNodeDirectory([string]$repoRoot, [switch]$Install) {
-    # Use a compatible installed Node, or keep Node 24 beside the project without changing the machine's installation.
     $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
     $nodeDirectory = if ($nodeCommand -and (Test-NuxtNode $nodeCommand.Source)) { Split-Path -Parent $nodeCommand.Source } else { '' }
     if (!$nodeDirectory) {
@@ -39,7 +38,6 @@ function Get-OdysseumNodeDirectory([string]$repoRoot, [switch]$Install) {
             if (!(Test-NuxtNode (Join-Path $nodeDirectory 'node.exe'))) { throw 'Could not prepare Node for Nuxt.' }
         }
     }
-
 
     return $nodeDirectory
 }

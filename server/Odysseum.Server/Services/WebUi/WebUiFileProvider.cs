@@ -4,7 +4,6 @@ using Microsoft.Extensions.Primitives;
 
 namespace Odysseum.Server.Services.WebUi;
 
-/// <summary>Resolves the active immutable release on each request, allowing updates without restarting the API.</summary>
 public sealed class WebUiFileProvider(WebUiInstallation installation) : IFileProvider, IDisposable
 {
     private readonly ConcurrentDictionary<string, PhysicalFileProvider> _providers = new();
@@ -15,7 +14,6 @@ public sealed class WebUiFileProvider(WebUiInstallation installation) : IFilePro
     {
         var current = Provider(installation.CurrentDirectory)?.GetFileInfo(subpath);
         if (current?.Exists == true) return current;
-        // Existing tabs may still request lazy chunks from the preceding release.
         if (subpath.StartsWith("/_nuxt/", StringComparison.Ordinal))
         {
             var previous = Provider(installation.PreviousDirectory)?.GetFileInfo(subpath);

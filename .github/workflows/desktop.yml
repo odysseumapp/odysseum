@@ -1,7 +1,5 @@
 name: Desktop
 
-# Builds the Electron desktop app with the self-contained server bundled inside it.
-# Manual runs and desktop pull requests upload installers as workflow artifacts; v* tags also attach them to a draft GitHub release.
 on:
   workflow_dispatch:
   pull_request:
@@ -50,7 +48,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The csproj bundles a webui.zip found at the repository root; the server installs it on first start.
       - name: Build web UI
         working-directory: odysseum-web
         run: |
@@ -72,7 +69,6 @@ jobs:
           npm ci
           npm run dist -- --${{ matrix.arch }}
 
-      # Launches the unpacked app that electron-builder leaves in dist/ and checks the bundled server starts and stops with it.
       - name: Smoke test
         working-directory: desktop
         run: |

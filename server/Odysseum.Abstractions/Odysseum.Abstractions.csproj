@@ -6,7 +6,6 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
-    <!-- Plugins and storage backends compile against this assembly. A public signature change is a breaking change. -->
     <Version>0.1.0</Version>
   </PropertyGroup>
 </Project>

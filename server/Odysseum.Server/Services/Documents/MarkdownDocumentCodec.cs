@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 
 namespace Odysseum.Server.Services.Documents;
 
-/// <summary>UTF-8 Markdown encoding and lossless separation of frontmatter/BOM from editable prose.</summary>
 internal static partial class MarkdownDocumentCodec
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);

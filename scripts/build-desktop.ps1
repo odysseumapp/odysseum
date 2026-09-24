@@ -7,7 +7,6 @@ $nodeDirectory = Get-OdysseumNodeDirectory $repoRoot -Install
 $npm = Join-Path $nodeDirectory 'npm.cmd'
 $serverProject = Join-Path $repoRoot 'server/Odysseum.Server/Odysseum.Server.csproj'
 $desktopRoot = Join-Path $repoRoot 'desktop'
-# The server project ships a webui.zip found at the repository root, so the UI travels inside the installer.
 $archive = Join-Path $repoRoot 'webui.zip'
 $publishDirectory = Join-Path $repoRoot '.cache/desktop-publish'
 $architecture = if ($Runtime -like '*arm64') { '--arm64' } else { '--x64' }
@@ -36,7 +35,6 @@ try {
     dotnet publish $serverProject -c Release -r $Runtime --self-contained -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o $publishDirectory --nologo
     if ($LASTEXITCODE -ne 0) { throw 'Server publish failed.' }
 
-    # electron-builder copies whatever sits in desktop/server into the packaged app's resources.
     $sidecar = Join-Path $desktopRoot 'server'
     if (Test-Path -LiteralPath $sidecar) { Remove-Item -LiteralPath $sidecar -Recurse -Force }
     New-Item -ItemType Directory -Path $sidecar | Out-Null

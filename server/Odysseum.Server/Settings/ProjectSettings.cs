@@ -16,7 +16,6 @@ public class ProjectSettings : IProjectSettings
 
     public ProjectSettings Clone() => new() { Title = Title, WordGoal = WordGoal, DefaultSceneWordGoal = DefaultSceneWordGoal };
 
-    /// <summary>A trimmed, validated copy of any implementation, or the first validation message.</summary>
     public static ProjectSettings From(IProjectSettings settings, out string? error)
     {
         var copy = new ProjectSettings

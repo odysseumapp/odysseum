@@ -7,13 +7,10 @@ using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;
 
 namespace Odysseum.Server.Services.Projects;
 
-/// <summary>Builds detached responses, search results, and manuscript exports from the current project state.
-/// The coordinator refreshes state and holds the operation lock while these synchronous queries run.</summary>
 internal sealed class ProjectQueries(ProjectState state)
 {
     public ProjectResponse GetProject() => new(state.Manifest.Id, state.Manifest.Settings.Clone(), state.Revision,
         Ordered().Select(Summary).ToArray(), state.Warning, GetFolders());
-    // Links are reported undirected, so the summary needs every document that points back at this one.
     private Dictionary<string, List<string>> Reverse() => Links.Reverse(state.Manifest, state.Documents.Keys);
 
     private FolderSummary[] GetFolders() => state.Manifest.FolderManifests
@@ -58,7 +55,6 @@ internal sealed class ProjectQueries(ProjectState state)
     {
         var m = state.Manifest.Documents[d.Id];
         var links = m.Links.Where(state.Documents.ContainsKey).Concat(reverse.GetValueOrDefault(d.Id) ?? []).Distinct().ToArray();
-        // A note reads from this side first, then from the other end, as a hand-written one-sided link does.
         var notes = new Dictionary<string, string>();
         foreach (var other in links)
             if ((m.LinkNotes.TryGetValue(other, out var note) || state.Manifest.Documents[other].LinkNotes.TryGetValue(d.Id, out note)) && note.Length > 0) notes[other] = note;

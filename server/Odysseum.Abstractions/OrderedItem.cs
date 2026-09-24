@@ -1,6 +1,5 @@
 namespace Odysseum.Abstractions;
 
-/// <summary>One entry in a folder's item order: either a document or a subfolder. Exactly one side is set.</summary>
 public readonly record struct OrderedItem
 {
     public DocumentId? Document { get; }

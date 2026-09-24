@@ -7,7 +7,6 @@ using static Odysseum.Server.Services.Storage.ContentRevision;
 
 namespace Odysseum.Server.Services.Projects;
 
-/// <summary>Reconciles files with manifest identities and metadata. Called under ProjectServices' operation lock.</summary>
 internal sealed class ProjectScanner(ProjectState state, ProjectFileStore files, ProjectManifestStore manifests)
 {
     public async Task ScanAsync()
@@ -35,7 +34,6 @@ internal sealed class ProjectScanner(ProjectState state, ProjectFileStore files,
             var id = embeddedId ?? knownPaths.FirstOrDefault(x => x.Value == relativePath).Key;
             if (id is null)
             {
-                // Only infer a legacy file rename when both ends are unambiguous.
                 var matches = candidate.Documents.Where(x => !livePaths.Contains(x.Value.Path)
                     && x.Value.LastKnownHash == hash && !next.ContainsKey(x.Key)).ToArray();
                 if (matches.Length == 1 && paths.Count(p => p != relativePath && !knownPaths.ContainsValue(p)) == 0)
@@ -47,7 +45,6 @@ internal sealed class ProjectScanner(ProjectState state, ProjectFileStore files,
             next[id] = new(id, relativePath, bytes, prefix, body, hash, files.LastModified(relativePath));
             if (!candidate.Documents.TryGetValue(id, out var metadata))
             {
-                // A folder's own document is titled after the folder and carries no word goal.
                 metadata = new DocumentMetadata
                 {
                     Title = IsFolderDocument(relativePath) ? Path.GetFileName(Path.GetDirectoryName(relativePath)!) : Path.GetFileNameWithoutExtension(relativePath),

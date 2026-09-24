@@ -3,14 +3,12 @@ using System.Text.Json.Serialization;
 
 namespace Odysseum.Server.Services.Storage.Models;
 
-/// <summary>Metadata for immediate children of a content folder. Paths are local names.</summary>
 public class FolderManifest
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public int Version { get; set; } = 1;
     public string? PinnedView { get; set; }
     public string[] ItemOrder { get; set; } = [];
-    /// <summary>The folder whose documents are the columns of this folder's grid; null picks a default.</summary>
     public string? GridFolder { get; set; }
     public Dictionary<string, DocumentMetadata> Documents { get; set; } = [];
     public Dictionary<string, FolderEntry> Folders { get; set; } = [];

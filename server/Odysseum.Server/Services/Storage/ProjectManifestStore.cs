@@ -6,7 +6,6 @@ using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services.Storage;
 
-/// <summary>Translates folder-owned manifests into the flat project view used by services and the API.</summary>
 internal sealed class ProjectManifestStore(ProjectFileStore files)
 {
     private const string ManifestPath = ".odysseum/project.json";
@@ -75,7 +74,6 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
         foreach (var (id, metadata) in candidate.Documents)
         {
             var parent = Parent(metadata.Path);
-            // A removed folder takes its metadata with it. Deleted files in surviving folders retain theirs.
             if (!owners.TryGetValue(parent, out var owner)) continue;
             var local = metadata.Clone();
             local.Path = Path.GetFileName(metadata.Path);
@@ -102,7 +100,6 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
         if (before.TryGetValue(ManifestPath, out var legacy) && Parse<ProjectManifest>(legacy, ManifestPath, root: true).Version == 1
             && !files.Exists(".odysseum/project.v1.json", metadata: true))
             await files.WriteAsync(".odysseum/project.v1.json", legacy, overwrite: false, metadata: true);
-        // Recheck the entire set after preparing the batch, including newly discovered folder manifests.
         if (Revision(await ReadFilesAsync()) != expectedRevision) throw Changed();
         await new ManifestTransaction(files).CommitAsync(changes, before);
         candidate.Version = 2;
@@ -146,7 +143,6 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
                 || manifest.ItemOrder.Distinct().Count() != manifest.ItemOrder.Length
                 || (manifest.GridFolder is not null && !Guid.TryParseExact(manifest.GridFolder, "D", out _)))
                 throw new JsonException();
-            // Removed-document metadata is retained by ID. A replacement may reuse its old filename.
             var localPaths = new HashSet<string>(StringComparer.Ordinal);
             foreach (var (id, folder) in manifest.Folders)
                 if (!Guid.TryParseExact(id, "D", out _) || folder is null || !double.IsFinite(folder.Order)
@@ -174,14 +170,12 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
         if (extra is null || !extra.Remove(key, out var value) || value.ValueKind != JsonValueKind.Array) return [];
         return value.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!).ToList();
     }
-    /// <summary>Character, location and thread lists from earlier releases become plain links on the next write.</summary>
     private static void MergeLegacyLinks(DocumentMetadata document)
     {
         foreach (var key in new[] { "characters", "locations", "threads" })
             foreach (var id in LegacyIds(document.Extra, key)) if (!document.Links.Contains(id)) document.Links.Add(id);
         if (document.Extra is { Count: 0 }) document.Extra = null;
     }
-    /// <summary>The Threads view of earlier releases becomes the grid; its stored rows and positions carried no meaning the grid keeps.</summary>
     private static void MergeLegacyLayout(FolderManifest manifest)
     {
         foreach (var key in new[] { "threads", "threadAxis", "positions" }) manifest.Extra?.Remove(key);
@@ -189,8 +183,6 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
         if (manifest.Extra is { Count: 0 }) manifest.Extra = null;
     }
 
-    /// <summary>Hidden names are refused except a folder's own document, <c>.Name.md</c>. The name need not match the
-    /// folder's current name: after an external rename the old entry is retained metadata, like any removed file's.</summary>
     private static bool SafePath(string? path, bool nested)
     {
         if (string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path) || path.Contains('\\') || path.Contains(':') || (!nested && path.Contains('/'))) return false;

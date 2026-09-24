@@ -4,10 +4,6 @@ using System.Text.Json.Serialization;
 
 namespace Odysseum.Server.Settings;
 
-/// <summary>
-/// Settings come from three layers: built-in defaults, then <c>server-settings.json</c> if present,
-/// then <c>ODYSSEUM_*</c> environment variables, which always win so container deployments stay declarative.
-/// </summary>
 public class SettingsProvider : ISettingsProvider
 {
     public const string SettingsFilename = "server-settings.json";

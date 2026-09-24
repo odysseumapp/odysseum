@@ -6,18 +6,11 @@ using Odysseum.Server.Services.Storage;
 
 namespace Odysseum.Server.Services.Templates;
 
-/// <summary>
-/// What a new project starts with: its goals, its folders, and which documents exist. What a document holds
-/// is not a project template's business. Nothing in it is an identifier; folders and documents are named by
-/// path, so the same template can seed any number of projects.
-/// </summary>
 public sealed class ProjectTemplate
 {
     public string Name { get; set; } = "";
     public TemplateSettings Settings { get; set; } = new();
-    /// <summary>Every folder, the project root included as the empty path.</summary>
     public List<TemplateFolder> Folders { get; set; } = [];
-    /// <summary>In manuscript order.</summary>
     public List<TemplateDocument> Documents { get; set; } = [];
 }
 
@@ -27,7 +20,6 @@ public sealed class TemplateSettings
     public int DefaultSceneWordGoal { get; set; } = 1000;
 }
 
-/// <summary><c>ItemOrder</c> keys are <c>folder:Name</c> or <c>document:File.md</c>; <c>GridFolder</c> is a folder path.</summary>
 public sealed class TemplateFolder
 {
     public string Path { get; set; } = "";
@@ -36,19 +28,13 @@ public sealed class TemplateFolder
     public string? GridFolder { get; set; }
 }
 
-/// <summary>A document the project starts with, empty unless <c>Content</c> says otherwise. It takes the template's default scene goal.</summary>
 public sealed class TemplateDocument
 {
     public string Path { get; set; } = "";
     public string Title { get; set; } = "";
-    /// <summary>Capturing a project never fills this; the shipped Default uses it for the stylesheet every project starts with.</summary>
     public string? Content { get; set; }
 }
 
-/// <summary>
-/// The saved project templates, one JSON file each in the templates directory. Like themes they belong to
-/// the workspace, not to a project. <c>Default</c> always exists: removing its file restores the shipped one.
-/// </summary>
 public sealed partial class TemplateStore(string root)
 {
     public const string DefaultName = "Default";
@@ -63,13 +49,11 @@ public sealed partial class TemplateStore(string root)
 
     public static bool IsDefault(string name) => string.Equals(name, DefaultName, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The stylesheet every project starts with: what normal text looks like, and one style to show the shape of the thing.</summary>
     public const string DefaultStylesheet = "```css\n/* Only .name blocks count. .normal is what untagged text looks like;\n"
         + "   every other .name is a style you can pick from the toolbar,\n"
         + "   for a whole block or for selected text. */\n"
         + ".normal {\n  font-family: Georgia, serif;\n}\n\n.letter {\n  font-style: italic;\n}\n```\n";
 
-    /// <summary>What every project started with before templates, plus a first scene to write in and the Default stylesheet.</summary>
     public static ProjectTemplate Default() => new()
     {
         Name = DefaultName,
@@ -87,7 +71,6 @@ public sealed partial class TemplateStore(string root)
         ],
     };
 
-    /// <summary>Writes the shipped Default beside the saved templates so it can be read and edited like any other.</summary>
     public void EnsureDefault()
     {
         if (!File.Exists(PathFor(DefaultName))) Write(Default());
@@ -100,7 +83,6 @@ public sealed partial class TemplateStore(string root)
         {
             foreach (var file in Directory.EnumerateFiles(Root, "*.json").OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
             {
-                // A file someone hand-edited into nonsense is skipped rather than breaking the whole list.
                 if (Read(file, Path.GetFileNameWithoutExtension(file)) is { } template) templates.Add(template);
             }
         }
@@ -148,7 +130,6 @@ public sealed partial class TemplateStore(string root)
             if (new FileInfo(path).Length > MaxFileBytes) return null;
             var template = JsonSerializer.Deserialize<ProjectTemplate>(File.ReadAllBytes(path), Json);
             if (template is null) return null;
-            // The file name is the template's identity; a mismatched name inside it is ignored.
             template.Name = fallbackName;
             Validate(template);
             return template;
@@ -156,7 +137,6 @@ public sealed partial class TemplateStore(string root)
         catch (Exception ex) when (ex is JsonException or WorkspaceException or IOException) { return null; }
     }
 
-    /// <summary>The name is the file name, so it has to survive a round trip through the filesystem unchanged.</summary>
     public static string ValidName(string? name)
     {
         name = name?.Trim() ?? "";
@@ -167,7 +147,6 @@ public sealed partial class TemplateStore(string root)
         return name;
     }
 
-    /// <summary>Refuses anything that could not be written into a project, so applying a template never stops halfway.</summary>
     private static void Validate(ProjectTemplate template)
     {
         static WorkspaceException Invalid(string message) => new(400, message);
