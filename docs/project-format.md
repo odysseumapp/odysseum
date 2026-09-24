@@ -62,13 +62,14 @@ The root manifest contains project settings and indexes only its immediate files
   "id": "fa1367f8-b351-47fc-82f2-0f8420d1ea31",
   "settings": { "title": "My Novel", "wordGoal": 60000, "defaultSceneWordGoal": 1000 },
   "documents": {},
+  "itemOrder": ["0ad487f0-00b8-42b3-9c58-c27cfa20bb6d"],
   "folders": {
-    "0ad487f0-00b8-42b3-9c58-c27cfa20bb6d": { "path": "Manuscript", "order": 0 }
+    "0ad487f0-00b8-42b3-9c58-c27cfa20bb6d": { "path": "Manuscript" }
   }
 }
 ```
 
-Each folder manifest has its own stable UUID, immediate child folder references, and metadata for its immediate documents. The UUID in a parent's `folders` dictionary matches the child's manifest ID. Paths are local names, never project-relative paths. For example, `Manuscript/Chapter 01/.odysseum/folder.json`:
+Each folder manifest has its own stable UUID, immediate child folder references, metadata for its immediate documents, and `itemOrder`, the order of its immediate children. The UUID in a parent's `folders` dictionary matches the child's manifest ID. Paths are local names, never project-relative paths. For example, `Manuscript/Chapter 01/.odysseum/folder.json`:
 
 ```json
 {
@@ -83,7 +84,6 @@ Each folder manifest has its own stable UUID, immediate child folder references,
       "notes": "Remember the lighthouse.",
       "status": "draft",
       "wordGoal": 1000,
-      "order": 0,
       "links": [],
       "linkNotes": {},
       "lastKnownHash": "sha256 of the complete file bytes"
@@ -104,7 +104,9 @@ Kind follows the top-level folder (case-insensitive): `Characters/` is character
 
 Each folder's Grid view needs no setup: its rows are the folder's documents in order, grouped by subfolder, and its columns are every document of one other folder — Threads by default (Manuscript when you are in Threads). A mark sits where a row and a column are linked. The only saved choice is `gridFolder`, the UUID of the folder supplying the columns; `null` means the default, and a folder that no longer exists is rejected when the layout is saved. A pinned `threads` view from earlier releases becomes `grid`; its `threads`, `threadAxis` and `positions` keys are dropped on the next write.
 
-`status` is `draft`, `revised`, or `done`. Document `order` retains the existing project-wide sequence used by the API, outline, and export. Child folder entries have their own order values; the current API does not expose a separate folder-reordering operation. Reordering documents changes metadata without renaming files. `lastKnownHash` helps change detection and conservative legacy rename matching.
+`status` is `draft`, `revised`, or `done`. `lastKnownHash` helps change detection and conservative legacy rename matching.
+
+There is one ordering. `itemOrder` lists the UUIDs of the folder's immediate children, documents and subfolders alike, in the order they appear; the folder's own hidden document is never listed. Children missing from the list come after the listed ones: subfolders first (at the root in the default order, otherwise by name), then documents by file name. The manuscript order the API, outline, and export use is the walk from the root: each folder's hidden document, then its children in order, descending into subfolders. Reordering changes `itemOrder` without renaming files. Manifests written by earlier releases carried a per-document `order` number, a per-subfolder `order` number, and `folder:Name` keys in `itemOrder`; opening the project translates the keys to UUIDs, appends unlisted children in their old order, and drops the numbers.
 
 Unknown root, folder, child folder, and document properties round-trip. Invalid JSON, unsafe local paths, and unsupported versions block saves instead of being replaced. Removed-file entries remain in surviving folders so restored documents can recover metadata. Removing a folder removes its metadata with it; back up the complete folder to preserve that information.
 
