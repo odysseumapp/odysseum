@@ -9,7 +9,6 @@ public interface IFolder
     IProject Project { get; }
     IFolder? Parent { get; }
     string Name { get; }
-    double Order { get; }
     FolderView? PinnedView { get; }
     IFolder? GridFolder { get; }
     IReadOnlyList<IFolder> Folders { get; }

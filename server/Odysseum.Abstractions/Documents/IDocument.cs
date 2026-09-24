@@ -14,7 +14,6 @@ public interface IDocument
     string Notes { get; }
     DocumentStatus Status { get; }
     int WordGoal { get; }
-    double Order { get; }
     IReadOnlyList<IDocument> Links { get; }
     string? LinkNote(IDocument other);
     string Body { get; }
