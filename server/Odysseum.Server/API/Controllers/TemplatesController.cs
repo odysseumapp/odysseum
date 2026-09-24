@@ -1,13 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services;
-using Odysseum.Server.Services.Templates;
+using Odysseum.Server.Repositories;
 
 namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api/templates")]
-public class TemplatesController(TemplateStore templates, ProjectLibrary library) : ControllerBase
+public class TemplatesController(TemplateRepository templates, ProjectLibrary library) : ControllerBase
 {
     /// <summary>Every project template a new project can start from. <c>Default</c> is always among them.</summary>
     [HttpGet]
@@ -22,7 +22,7 @@ public class TemplatesController(TemplateStore templates, ProjectLibrary library
     public async Task<IResult> Save(string name, [FromBody] SaveTemplateRequest request)
     {
         var services = await library.OpenServicesAsync(request.Project);
-        return ApiResults.Success(Describe(templates.Save(await services.CaptureTemplateAsync(TemplateStore.ValidName(name)))));
+        return ApiResults.Success(Describe(templates.Save(await services.CaptureTemplateAsync(TemplateRepository.ValidName(name)))));
     }
 
     /// <summary>Forget a project template. Deleting <c>Default</c> restores the one Odysseum ships with.</summary>

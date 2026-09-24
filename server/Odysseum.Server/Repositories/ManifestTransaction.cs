@@ -1,7 +1,8 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text.Json;
 
-namespace Odysseum.Server.Services.Storage;
+namespace Odysseum.Server.Repositories;
 
 internal sealed class ManifestTransaction(IFileManager files)
 {
@@ -14,7 +15,7 @@ internal sealed class ManifestTransaction(IFileManager files)
         if (!Pending) return;
         Entry[] entries;
         try { entries = JsonSerializer.Deserialize<Entry[]>(await files.ReadAsync(Journal, metadata: true)) ?? throw new JsonException(); }
-        catch (JsonException) { throw new WorkspaceException(422, "The manifest recovery journal is invalid."); }
+        catch (JsonException) { throw new WorkspaceException(WorkspaceError.Corrupt, "The manifest recovery journal is invalid."); }
         foreach (var entry in entries)
         {
             Validate(entry);
@@ -22,7 +23,7 @@ internal sealed class ManifestTransaction(IFileManager files)
                 ? ContentRevision.Hash(await files.ReadAsync(entry.Path, metadata: true)) : null;
             var before = entry.Backup is null ? null : ContentRevision.Hash(await files.ReadAsync(entry.Backup, metadata: true));
             if (current != before && current != entry.After)
-                throw new WorkspaceException(409, "A manifest changed during recovery. Preserve the pending-manifests journal and resolve the external edit before reopening.");
+                throw new WorkspaceException(WorkspaceError.Conflict, "A manifest changed during recovery. Preserve the pending-manifests journal and resolve the external edit before reopening.");
         }
         foreach (var entry in entries.Reverse())
         {
@@ -52,10 +53,10 @@ internal sealed class ManifestTransaction(IFileManager files)
             {
                 var current = files.Exists(path, metadata: true) ? await files.ReadAsync(path, metadata: true) : null;
                 if (current is null || !bytes.AsSpan().SequenceEqual(current))
-                    throw new WorkspaceException(409, "Project metadata changed on disk. Refresh before saving again.");
+                    throw new WorkspaceException(WorkspaceError.Conflict, "Project metadata changed on disk. Refresh before saving again.");
             }
             foreach (var path in changes.Keys.Where(path => !before.ContainsKey(path)))
-                if (files.Exists(path, metadata: true)) throw new WorkspaceException(409, "A folder manifest appeared during saving. Refresh and try again.");
+                if (files.Exists(path, metadata: true)) throw new WorkspaceException(WorkspaceError.Conflict, "A folder manifest appeared during saving. Refresh and try again.");
             foreach (var (path, bytes) in changes)
             {
                 string? backup = null;
@@ -67,7 +68,7 @@ internal sealed class ManifestTransaction(IFileManager files)
                 entries.Add(new(path, backup, ContentRevision.Hash(bytes)));
             }
             var journal = JsonSerializer.SerializeToUtf8Bytes(entries);
-            if (journal.Length > FileManager.MaxFileBytes) throw new WorkspaceException(413, "Too many manifests in one update.");
+            if (journal.Length > FileManager.MaxFileBytes) throw new WorkspaceException(WorkspaceError.TooLarge, "Too many manifests in one update.");
             await files.WriteAsync(Journal, journal, overwrite: false, metadata: true);
             foreach (var handle in locks) handle.Dispose();
             locks.Clear();
@@ -104,6 +105,6 @@ internal sealed class ManifestTransaction(IFileManager files)
                 || entry.Path.Split('/')[..^2].Any(part => part.StartsWith('.')))
             || entry.Backup is not null && (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(entry.Backup), "N", out var id)
                 || entry.Backup != $".odysseum/manifest-transaction/{id:N}.bak"))
-            throw new WorkspaceException(422, "The manifest recovery journal is invalid.");
+            throw new WorkspaceException(WorkspaceError.Corrupt, "The manifest recovery journal is invalid.");
     }
 }

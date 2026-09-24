@@ -1,3 +1,4 @@
+using Odysseum.Abstractions.Exceptions;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -11,7 +12,7 @@ internal static partial class MarkdownDocumentCodec
     {
         var bytes = Utf8.GetBytes(prefix + body);
         if (bytes.Length > Repositories.Files.FileManager.MaxFileBytes)
-            throw new WorkspaceException(413, "Documents must be smaller than 4 MB.");
+            throw new WorkspaceException(WorkspaceError.TooLarge, "Documents must be smaller than 4 MB.");
         return bytes;
     }
 

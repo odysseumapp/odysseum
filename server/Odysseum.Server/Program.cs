@@ -6,8 +6,7 @@ using Odysseum.Server.API.Models;
 using Odysseum.Server.Bootstrap;
 using Odysseum.Server.Services;
 using Odysseum.Server.Settings;
-using Odysseum.Server.Services.Templates;
-using Odysseum.Server.Services.Themes;
+using Odysseum.Server.Repositories;
 using Odysseum.Server.Services.WebUi;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -46,11 +45,11 @@ var bundledUi = Path.Combine(AppContext.BaseDirectory, "webui.zip");
 if (webUi.CurrentDirectory is null && File.Exists(bundledUi)) await webUi.InstallAsync(bundledUi);
 builder.Services.AddSingleton(webUi);
 builder.Services.AddSingleton<WebUiFileProvider>();
-builder.Services.AddSingleton(new ThemeStore(settings.Themes!));
-var templates = new TemplateStore(settings.Templates!);
+builder.Services.AddSingleton(new ThemeRepository(settings.Themes!));
+var templates = new TemplateRepository(settings.Templates!);
 try { templates.EnsureDefault(); }
 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-{ startupLoggers.CreateLogger<TemplateStore>().LogWarning(ex, "Could not write the Default project template to {Path}; the built-in one is used", templates.Root); }
+{ startupLoggers.CreateLogger<TemplateRepository>().LogWarning(ex, "Could not write the Default project template to {Path}; the built-in one is used", templates.Root); }
 builder.Services.AddSingleton(templates);
 
 settingsProvider.DebugSettingsToLog();

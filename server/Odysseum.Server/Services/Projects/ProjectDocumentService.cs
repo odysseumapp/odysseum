@@ -1,14 +1,15 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using Odysseum.Server.API.Models;
-using Odysseum.Server.Services.Storage;
-using Odysseum.Server.Services.Storage.Models;
+using Odysseum.Server.Repositories;
+using Odysseum.Server.Repositories.Manifests;
 using static Odysseum.Server.Services.Documents.DocumentRules;
 using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;
-using static Odysseum.Server.Services.Storage.ContentRevision;
+using static Odysseum.Server.Repositories.ContentRevision;
 
 namespace Odysseum.Server.Services.Projects;
 
-internal sealed class ProjectDocumentService(ProjectState state, IFileManager files, DocumentHistoryStore history)
+internal sealed class ProjectDocumentService(ProjectState state, IFileManager files, DocumentVersionRepository history)
 {
     public async Task<string> SaveAsync(string id, SaveDocumentRequest request)
     {
@@ -71,8 +72,8 @@ internal sealed class ProjectDocumentService(ProjectState state, IFileManager fi
         var document = state.Find(id);
         Check(document.Revision, request.Revision);
         var relative = request.Path.Replace('\\', '/');
-        if (!IsDocument(relative)) throw new WorkspaceException(400, "Use a .md, .markdown, or .txt file name.");
-        if (files.Exists(relative) && relative != document.Path) throw new WorkspaceException(409, "A file already exists at that path.");
+        if (!IsDocument(relative)) throw new WorkspaceException(WorkspaceError.Invalid, "Use a .md, .markdown, or .txt file name.");
+        if (files.Exists(relative) && relative != document.Path) throw new WorkspaceException(WorkspaceError.Conflict, "A file already exists at that path.");
         if (relative != document.Path)
         {
             Check(Hash(await files.ReadAsync(document.Path)), request.Revision);

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Odysseum.Server.Services.Storage.Models;
+namespace Odysseum.Server.Repositories.Manifests;
 
 public class FolderManifest
 {

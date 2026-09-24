@@ -1,4 +1,4 @@
-using Odysseum.Server.Services.Storage.Models;
+using Odysseum.Server.Repositories.Manifests;
 
 namespace Odysseum.Server.Services.Projects;
 

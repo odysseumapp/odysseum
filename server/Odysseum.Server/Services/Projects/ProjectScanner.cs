@@ -1,14 +1,15 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text;
-using Odysseum.Server.Services.Storage;
-using Odysseum.Server.Services.Storage.Models;
+using Odysseum.Server.Repositories;
+using Odysseum.Server.Repositories.Manifests;
 using static Odysseum.Server.Services.Documents.DocumentRules;
 using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;
-using static Odysseum.Server.Services.Storage.ContentRevision;
+using static Odysseum.Server.Repositories.ContentRevision;
 
 namespace Odysseum.Server.Services.Projects;
 
-internal sealed class ProjectScanner(ProjectState state, IFileManager files, ProjectManifestStore manifests)
+internal sealed class ProjectScanner(ProjectState state, IFileManager files, ProjectManifestRepository manifests)
 {
     public async Task ScanAsync()
     {
@@ -25,7 +26,7 @@ internal sealed class ProjectScanner(ProjectState state, IFileManager files, Pro
             try { bytes = await files.ReadAsync(relativePath); }
             catch (FileNotFoundException) { continue; }
             catch (DirectoryNotFoundException) { continue; }
-            catch (IOException) { throw new WorkspaceException(503, "A document is still being written. Odysseum will retry shortly."); }
+            catch (IOException) { throw new WorkspaceException(WorkspaceError.Unavailable, "A document is still being written. Odysseum will retry shortly."); }
             catch (WorkspaceException ex) { warnings.Add($"{relativePath}: {ex.Message}"); continue; }
             string text;
             try { text = Decode(bytes); }
@@ -42,7 +43,7 @@ internal sealed class ProjectScanner(ProjectState state, IFileManager files, Pro
             }
             id ??= Guid.NewGuid().ToString();
             if (next.ContainsKey(id))
-                throw new WorkspaceException(409, $"Two files have the same writer_id. Give the copy a new ID: {relativePath}");
+                throw new WorkspaceException(WorkspaceError.Conflict, $"Two files have the same writer_id. Give the copy a new ID: {relativePath}");
             next[id] = new(id, relativePath, bytes, prefix, body, hash, files.LastModified(relativePath));
             if (!candidate.Documents.TryGetValue(id, out var metadata))
             {

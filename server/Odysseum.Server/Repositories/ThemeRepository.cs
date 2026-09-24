@@ -1,7 +1,8 @@
+using Odysseum.Abstractions.Exceptions;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace Odysseum.Server.Services.Themes;
+namespace Odysseum.Server.Repositories;
 
 public sealed class Theme
 {
@@ -9,7 +10,7 @@ public sealed class Theme
     public Dictionary<string, string> Colors { get; set; } = [];
 }
 
-public sealed partial class ThemeStore(string root)
+public sealed partial class ThemeRepository(string root) : IThemeRepository
 {
     public static readonly string[] Roles = ["primary", "secondary", "success", "info", "warning", "error", "neutral"];
     public static readonly string[] Palettes =
@@ -35,7 +36,7 @@ public sealed partial class ThemeStore(string root)
         return themes;
     }
 
-    public Theme Get(string name) => Read(PathFor(ValidName(name)), name) ?? throw new WorkspaceException(404, $"There is no theme called '{name}'.");
+    public Theme Get(string name) => Read(PathFor(ValidName(name)), name) ?? throw new WorkspaceException(WorkspaceError.NotFound, $"There is no theme called '{name}'.");
 
     public Theme Save(string name, Dictionary<string, string>? colors)
     {
@@ -43,7 +44,7 @@ public sealed partial class ThemeStore(string root)
         Directory.CreateDirectory(Root);
         var path = PathFor(theme.Name);
         if (!File.Exists(path) && Directory.EnumerateFiles(Root, "*.json").Count() >= MaxThemes)
-            throw new WorkspaceException(409, $"This workspace already holds {MaxThemes} themes. Delete one before saving another.");
+            throw new WorkspaceException(WorkspaceError.Conflict, $"This workspace already holds {MaxThemes} themes. Delete one before saving another.");
         File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(theme, Json));
         return theme;
     }
@@ -51,7 +52,7 @@ public sealed partial class ThemeStore(string root)
     public void Delete(string name)
     {
         var path = PathFor(ValidName(name));
-        if (!File.Exists(path)) throw new WorkspaceException(404, $"There is no theme called '{name}'.");
+        if (!File.Exists(path)) throw new WorkspaceException(WorkspaceError.NotFound, $"There is no theme called '{name}'.");
         File.Delete(path);
     }
 
@@ -75,10 +76,10 @@ public sealed partial class ThemeStore(string root)
     public static string ValidName(string? name)
     {
         name = name?.Trim() ?? "";
-        if (name.Length is 0 or > 60) throw new WorkspaceException(400, "Use a theme name between 1 and 60 characters.");
+        if (name.Length is 0 or > 60) throw new WorkspaceException(WorkspaceError.Invalid, "Use a theme name between 1 and 60 characters.");
         if (name.StartsWith('.') || name.EndsWith('.') || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
             || name.Contains('/') || name.Contains('\\') || ReservedName().IsMatch(name))
-            throw new WorkspaceException(400, "A theme name cannot contain \\ / : * ? \" < > | or start with a dot.");
+            throw new WorkspaceException(WorkspaceError.Invalid, "A theme name cannot contain \\ / : * ? \" < > | or start with a dot.");
         return name;
     }
 
@@ -89,9 +90,9 @@ public sealed partial class ThemeStore(string root)
         foreach (var role in Roles)
         {
             if (!colors.TryGetValue(role, out var palette) || palette is null)
-                throw new WorkspaceException(400, $"The theme is missing a colour for '{role}'.");
+                throw new WorkspaceException(WorkspaceError.Invalid, $"The theme is missing a colour for '{role}'.");
             if (!Palettes.Contains(palette, StringComparer.Ordinal))
-                throw new WorkspaceException(400, $"'{palette}' is not a colour this theme can use.");
+                throw new WorkspaceException(WorkspaceError.Invalid, $"'{palette}' is not a colour this theme can use.");
             result[role] = palette;
         }
         return result;

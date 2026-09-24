@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Odysseum.Server.API.Enums;
 
-namespace Odysseum.Server.Services.Storage.Models;
+namespace Odysseum.Server.Repositories.Manifests;
 
 public sealed class DocumentMetadata
 {

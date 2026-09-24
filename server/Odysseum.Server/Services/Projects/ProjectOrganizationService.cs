@@ -1,7 +1,8 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Settings;
 using static Odysseum.Server.Services.Documents.DocumentRules;
-using static Odysseum.Server.Services.Storage.ContentRevision;
+using static Odysseum.Server.Repositories.ContentRevision;
 
 namespace Odysseum.Server.Services.Projects;
 
@@ -14,9 +15,9 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         var candidate = state.Manifest.Clone();
         var metadata = candidate.Documents[id];
         var title = ValidateTitle(request.Title);
-        if (!Enum.IsDefined(request.Status)) throw new WorkspaceException(400, "Unknown document status.");
-        if (request.WordGoal is < 0 or > 10000000) throw new WorkspaceException(400, "Invalid word goal.");
-        if (request.Synopsis.Length > 20000 || request.Notes.Length > 100000) throw new WorkspaceException(400, "Notes are too long.");
+        if (!Enum.IsDefined(request.Status)) throw new WorkspaceException(WorkspaceError.Invalid, "Unknown document status.");
+        if (request.WordGoal is < 0 or > 10000000) throw new WorkspaceException(WorkspaceError.Invalid, "Invalid word goal.");
+        if (request.Synopsis.Length > 20000 || request.Notes.Length > 100000) throw new WorkspaceException(WorkspaceError.Invalid, "Notes are too long.");
         metadata.Title = title;
         metadata.Synopsis = request.Synopsis;
         metadata.Notes = request.Notes;
@@ -38,7 +39,7 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         if (request.LinkNotes is not null)
         {
             var current = Links.Of(candidate, id);
-            if (request.LinkNotes.Values.Any(note => note is null || note.Length > 2000)) throw new WorkspaceException(400, "A link note is too long.");
+            if (request.LinkNotes.Values.Any(note => note is null || note.Length > 2000)) throw new WorkspaceException(WorkspaceError.Invalid, "A link note is too long.");
             foreach (var other in current)
             {
                 var note = request.LinkNotes.GetValueOrDefault(other)?.Trim() ?? "";
@@ -61,10 +62,10 @@ internal sealed class ProjectOrganizationService(ProjectState state)
 
     private List<string> ValidateLinks(string[] ids, string self)
     {
-        if (ids.Length > 200) throw new WorkspaceException(400, "Too many links attached.");
+        if (ids.Length > 200) throw new WorkspaceException(WorkspaceError.Invalid, "Too many links attached.");
         var distinct = ids.Distinct().ToList();
         if (distinct.Any(id => id is null || id == self || !state.Documents.ContainsKey(id)))
-            throw new WorkspaceException(400, "One of the linked documents no longer exists.");
+            throw new WorkspaceException(WorkspaceError.Invalid, "One of the linked documents no longer exists.");
         return distinct;
     }
 
@@ -73,7 +74,7 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         Check(state.Revision, request.Revision);
         var required = state.Documents.Values.Where(d => !IsFolderDocument(d.Path)).Select(d => d.Id);
         if (request.Ids.Distinct().Count() != request.Ids.Length || request.Ids.Any(id => !state.Documents.ContainsKey(id))
-            || required.Any(id => !request.Ids.Contains(id))) throw new WorkspaceException(400, "The document list changed. Refresh and try again.");
+            || required.Any(id => !request.Ids.Contains(id))) throw new WorkspaceException(WorkspaceError.Invalid, "The document list changed. Refresh and try again.");
         var candidate = state.Manifest.Clone();
         var order = 0;
         foreach (var id in request.Ids) candidate.Documents[id].Order = order++;

@@ -1,10 +1,11 @@
+using Odysseum.Abstractions.Exceptions;
 using System.Text;
 using System.Text.Json.Nodes;
 using Odysseum.Server.API.Enums;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services;
 using Odysseum.Server.Services.Monitoring;
-using Odysseum.Server.Services.Templates;
+using Odysseum.Server.Repositories;
 using Odysseum.Server.Settings;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -102,7 +103,7 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         async Task<bool> Save(string text)
         {
             try { await store.SaveAsync(doc.Document.Id, new(text, doc.Document.Revision)); return true; }
-            catch (WorkspaceException ex) when (ex.Status == 409) { return false; }
+            catch (WorkspaceException ex) when (ex.Error == Error(409)) { return false; }
         }
         var results = await Task.WhenAll(Save("First tab"), Save("Second tab"));
         Require(results.Count(x => x) == 1, "Expected one success and one conflict.");
@@ -114,7 +115,7 @@ var checks = new List<(string Name, Func<string, ProjectServices, Task> Run)>
         async Task<bool> Attempt(Func<Task> change)
         {
             try { await change(); return true; }
-            catch (WorkspaceException ex) when (ex.Status == 409) { return false; }
+            catch (WorkspaceException ex) when (ex.Error == Error(409)) { return false; }
         }
         var results = await Task.WhenAll(
             Attempt(() => store.UpdateSettingsAsync(new ProjectSettings { Title = "Updated project", WordGoal = 12345 }, before.Revision)),
@@ -613,14 +614,14 @@ var libraryChecks = new List<(string Name, Func<string, ProjectLibrary, Task> Ru
         var project = await services.GetProjectAsync();
         Require(Directory.Exists(Path.Combine(root, created.Slug, "Manuscript", "Chapter 01")) && project.Folders.Any(f => f.Path == "Manuscript/Chapter 01"), "Chapter 01 was not seeded.");
         Require(project.Folders.Single(f => f.Path == "").ItemOrder.SequenceEqual(ProjectLibrary.DefaultFolders.Select(name => "folder:" + name)), "Default folders were not ordered.");
-        var scene = project.Documents.Single(Visible);
+        var scene = project.Documents.Single(Scene);
         Require(scene.Path == "Manuscript/Chapter 01/Scene 01.md" && scene.Title == "Scene 01" && scene.WordGoal == 1000, "Scene 01 was not seeded.");
         await Expect(403, () => services.RemoveFolderAsync(new("Threads", project.Revision)));
         await Expect(409, () => services.RemoveFolderAsync(new("Manuscript/Chapter 01", project.Revision)));
     }),
     ("Project templates capture a project by path and seed new projects with fresh ids", async (root, _) =>
     {
-        var templates = new TemplateStore(Path.Combine(root, ".templates"));
+        var templates = new TemplateRepository(Path.Combine(root, ".templates"));
         templates.EnsureDefault();
         Require(File.Exists(Path.Combine(root, ".templates", "Default.json")) && templates.List().Single().Name == "Default", "The Default template was not written.");
         await using var library = new ProjectLibrary(Path.Combine(root, "workspace"), new ProjectFactory(NullLoggerFactory.Instance, 300), templates);
@@ -636,7 +637,7 @@ var libraryChecks = new List<(string Name, Func<string, ProjectLibrary, Task> Ru
         await source.SaveFolderLayoutAsync(new("Manuscript/Chapter 02", "board", [scene.Document.Id], characters.Id, project.Revision));
 
         var saved = templates.Save(await source.CaptureTemplateAsync("Novel"));
-        Require(saved.Documents.Select(d => d.Path).SequenceEqual(["Manuscript/Chapter 01/Scene 01.md", "Manuscript/Chapter 02/Opening.md", "Characters/Mara.md"]),
+        Require(saved.Documents.Select(d => d.Path).SequenceEqual(["Manuscript/Chapter 01/Scene 01.md", "Styles/Default.md", "Manuscript/Chapter 02/Opening.md", "Characters/Mara.md"]),
             "The template should list documents in order and leave out folders' own documents.");
         var json = File.ReadAllText(Path.Combine(root, ".templates", "Novel.json"));
         Require(!json.Contains(scene.Document.Id) && !json.Contains("Once.") && !json.Contains("It begins."), "A project template carries neither ids nor what documents hold.");
@@ -690,7 +691,7 @@ var libraryChecks = new List<(string Name, Func<string, ProjectLibrary, Task> Ru
         Require(ReferenceEquals(one, (await library.OpenAsync("One")).Services), "A project should open once per process.");
         await one.CreateAsync(new("Only here", "Manuscript", "Text"));
         var two = (await library.OpenAsync("Two")).Services;
-        Require((await two.GetProjectAsync()).Documents.Count(Visible) == 1 && (await one.GetProjectAsync()).Documents.Count(Visible) == 2, "Documents leaked between projects.");
+        Require((await two.GetProjectAsync()).Documents.Count(Scene) == 1 && (await one.GetProjectAsync()).Documents.Count(Scene) == 2, "Documents leaked between projects.");
     }),
     ("Listing uses legacy manifest settings without writing and survives invalid metadata", async (root, library) =>
     {
@@ -766,6 +767,7 @@ foreach (var (name, check) in libraryChecks)
 Console.WriteLine($"\n{passed} storage checks passed. Fixtures: {testRoot}");
 
 static bool Visible(DocumentSummary document) => document.Path.Split('/') is var parts && !(parts.Length >= 2 && parts[^1] == $".{parts[^2]}.md");
+static bool Scene(DocumentSummary document) => Visible(document) && document.Kind == DocumentKind.Scene;
 static void Require(bool condition, string message)
 {
     if (!condition) throw new Exception(message);
@@ -773,15 +775,22 @@ static void Require(bool condition, string message)
 static void ExpectSync(int status, Action action)
 {
     try { action(); }
-    catch (WorkspaceException ex) when (ex.Status == status) { return; }
+    catch (WorkspaceException ex) when (ex.Error == Error(status)) { return; }
     throw new Exception($"Expected HTTP {status} rejection.");
 }
 static async Task Expect(int status, Func<Task> action)
 {
     try { await action(); }
-    catch (WorkspaceException ex) when (ex.Status == status) { return; }
+    catch (WorkspaceException ex) when (ex.Error == Error(status)) { return; }
     throw new Exception($"Expected HTTP {status} rejection.");
 }
+
+static WorkspaceError Error(int status) => status switch
+{
+    400 => WorkspaceError.Invalid, 403 => WorkspaceError.Forbidden, 404 => WorkspaceError.NotFound, 409 => WorkspaceError.Conflict,
+    413 => WorkspaceError.TooLarge, 422 => WorkspaceError.Corrupt, 503 => WorkspaceError.Unavailable,
+    _ => throw new ArgumentOutOfRangeException(nameof(status)),
+};
 
 sealed class AllowingSettings : ISettingsProvider
 {

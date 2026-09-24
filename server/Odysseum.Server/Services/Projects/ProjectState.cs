@@ -1,6 +1,7 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Services.Monitoring;
-using Odysseum.Server.Services.Storage;
-using Odysseum.Server.Services.Storage.Models;
+using Odysseum.Server.Repositories;
+using Odysseum.Server.Repositories.Manifests;
 using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services.Projects;
@@ -8,7 +9,7 @@ namespace Odysseum.Server.Services.Projects;
 internal sealed class ProjectState
 {
     private readonly string _root;
-    private readonly ProjectManifestStore _manifests;
+    private readonly ProjectManifestRepository _manifests;
     private readonly ProjectEvents _events;
     public ProjectManifest Manifest { get; private set; }
     public string FolderName => Path.GetFileName(_root);
@@ -16,7 +17,7 @@ internal sealed class ProjectState
     public string Revision { get; private set; } = "";
     public string? Warning { get; private set; }
 
-    public ProjectState(string root, ProjectManifestStore manifests, ProjectEvents events)
+    public ProjectState(string root, ProjectManifestRepository manifests, ProjectEvents events)
     {
         _root = root;
         _manifests = manifests;
@@ -27,7 +28,7 @@ internal sealed class ProjectState
     public ProjectManifest NewManifest() => new() { Settings = new ProjectSettings { Title = Path.GetFileName(_root) } };
 
     public DiskDocument Find(string id) => Documents.TryGetValue(id, out var document) ? document
-        : throw new WorkspaceException(404, "This document was removed or moved outside the workspace. Your browser draft is still available.");
+        : throw new WorkspaceException(WorkspaceError.NotFound, "This document was removed or moved outside the workspace. Your browser draft is still available.");
 
     public async Task CommitManifestAsync(ProjectManifest candidate, string expectedRevision)
     {

@@ -1,11 +1,13 @@
+using Odysseum.Server.Services;
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Odysseum.Server.Services.Documents;
-using Odysseum.Server.Services.Storage;
+using Odysseum.Server.Repositories;
 
-namespace Odysseum.Server.Services.Templates;
+namespace Odysseum.Server.Repositories;
 
 public sealed class ProjectTemplate
 {
@@ -36,7 +38,7 @@ public sealed class TemplateDocument
     public string? Content { get; set; }
 }
 
-public sealed partial class TemplateStore(string root)
+public sealed partial class TemplateRepository(string root) : ITemplateRepository
 {
     public const string DefaultName = "Default";
     private const int MaxTemplates = 100;
@@ -92,7 +94,7 @@ public sealed partial class TemplateStore(string root)
     }
 
     public ProjectTemplate Get(string name) => Read(PathFor(ValidName(name)), name)
-        ?? (IsDefault(name) ? Default() : throw new WorkspaceException(404, $"There is no project template called '{name}'."));
+        ?? (IsDefault(name) ? Default() : throw new WorkspaceException(WorkspaceError.NotFound, $"There is no project template called '{name}'."));
 
     public ProjectTemplate Save(ProjectTemplate template)
     {
@@ -100,7 +102,7 @@ public sealed partial class TemplateStore(string root)
         Validate(template);
         Directory.CreateDirectory(Root);
         if (!File.Exists(PathFor(template.Name)) && Directory.EnumerateFiles(Root, "*.json").Count() >= MaxTemplates)
-            throw new WorkspaceException(409, $"This workspace already holds {MaxTemplates} project templates. Delete one before saving another.");
+            throw new WorkspaceException(WorkspaceError.Conflict, $"This workspace already holds {MaxTemplates} project templates. Delete one before saving another.");
         Write(template);
         return template;
     }
@@ -109,7 +111,7 @@ public sealed partial class TemplateStore(string root)
     {
         var path = PathFor(ValidName(name));
         if (IsDefault(name)) { File.Delete(path); EnsureDefault(); return; }
-        if (!File.Exists(path)) throw new WorkspaceException(404, $"There is no project template called '{name}'.");
+        if (!File.Exists(path)) throw new WorkspaceException(WorkspaceError.NotFound, $"There is no project template called '{name}'.");
         File.Delete(path);
     }
 
@@ -118,7 +120,7 @@ public sealed partial class TemplateStore(string root)
     private void Write(ProjectTemplate template)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(template, Json);
-        if (bytes.Length > MaxFileBytes) throw new WorkspaceException(413, "This project is too large to keep as a template.");
+        if (bytes.Length > MaxFileBytes) throw new WorkspaceException(WorkspaceError.TooLarge, "This project is too large to keep as a template.");
         Directory.CreateDirectory(Root);
         File.WriteAllBytes(PathFor(template.Name), bytes);
     }
@@ -141,16 +143,16 @@ public sealed partial class TemplateStore(string root)
     public static string ValidName(string? name)
     {
         name = name?.Trim() ?? "";
-        if (name.Length is 0 or > 60) throw new WorkspaceException(400, "Use a template name between 1 and 60 characters.");
+        if (name.Length is 0 or > 60) throw new WorkspaceException(WorkspaceError.Invalid, "Use a template name between 1 and 60 characters.");
         if (name.StartsWith('.') || name.EndsWith('.') || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
             || name.Contains('/') || name.Contains('\\') || ReservedName().IsMatch(name))
-            throw new WorkspaceException(400, "A template name cannot contain \\ / : * ? \" < > | or start with a dot.");
+            throw new WorkspaceException(WorkspaceError.Invalid, "A template name cannot contain \\ / : * ? \" < > | or start with a dot.");
         return name;
     }
 
     private static void Validate(ProjectTemplate template)
     {
-        static WorkspaceException Invalid(string message) => new(400, message);
+        static WorkspaceException Invalid(string message) => new(WorkspaceError.Invalid, message);
         template.Settings ??= new();
         template.Folders ??= [];
         template.Documents ??= [];

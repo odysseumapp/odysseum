@@ -1,4 +1,4 @@
-using Odysseum.Server.Services;
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Services.Documents;
 
 namespace Odysseum.Server.Repositories.Files;
@@ -23,7 +23,7 @@ public sealed class FileManager(string root) : IFileManager
         }
         catch (IOException)
         {
-            throw new WorkspaceException(503, "Another Odysseum instance is already using this project.");
+            throw new WorkspaceException(WorkspaceError.Unavailable, "Another Odysseum instance is already using this project.");
         }
     }
 
@@ -40,8 +40,8 @@ public sealed class FileManager(string root) : IFileManager
     }
 
     public bool Exists(string relative, bool metadata = false) => File.Exists(ResolvePath(relative, metadata));
-    public bool FolderExists(string relative) => Directory.Exists(ResolvePath(relative));
-    public DateTime LastModified(string relative, bool metadata = false) => File.GetLastWriteTimeUtc(ResolvePath(relative, metadata));
+    public bool FolderExists(string relative) => Directory.Exists(RootOr(relative));
+    public DateTime LastModified(string relative, bool metadata = false) => File.GetLastWriteTimeUtc(RootOr(relative, metadata));
     public Task<byte[]> ReadAsync(string relative, bool metadata = false) => ReadBytesAsync(ResolvePath(relative, metadata));
 
     public Task WriteAsync(string relative, byte[] bytes, bool overwrite = true, bool metadata = false)
@@ -70,7 +70,7 @@ public sealed class FileManager(string root) : IFileManager
 
     public IEnumerable<string> EnumerateFiles(string relative, string pattern, bool metadata = false)
     {
-        var directory = ResolvePath(relative, metadata);
+        var directory = RootOr(relative, metadata);
         if (!Directory.Exists(directory)) yield break;
         foreach (var path in Directory.EnumerateFiles(directory, pattern))
         {
@@ -82,9 +82,9 @@ public sealed class FileManager(string root) : IFileManager
     public void CreateFolder(string relative)
     {
         var path = ResolvePath(relative);
-        if (File.Exists(path)) throw new WorkspaceException(409, "A file already has that name.");
+        if (File.Exists(path)) throw new WorkspaceException(WorkspaceError.Conflict, "A file already has that name.");
         var parent = Path.GetDirectoryName(path)!;
-        if (!Directory.Exists(parent)) throw new WorkspaceException(404, "The parent folder no longer exists.");
+        if (!Directory.Exists(parent)) throw new WorkspaceException(WorkspaceError.NotFound, "The parent folder no longer exists.");
         Directory.CreateDirectory(path);
     }
 
@@ -93,7 +93,7 @@ public sealed class FileManager(string root) : IFileManager
         var path = ResolvePath(relative);
         if (!Directory.Exists(path)) return;
         if (Directory.EnumerateFileSystemEntries(path).Any(entry => Path.GetFileName(entry) is var name && name != ".odysseum" && name != $".{Path.GetFileName(path)}.md"))
-            throw new WorkspaceException(409, "Only empty folders can be removed. Move their files and subfolders first.");
+            throw new WorkspaceException(WorkspaceError.Conflict, "Only empty folders can be removed. Move their files and subfolders first.");
         var destination = ResolvePath(".odysseum/removed-folders/" + Guid.NewGuid().ToString("N"), true);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         Directory.Move(path, destination);
@@ -141,12 +141,13 @@ public sealed class FileManager(string root) : IFileManager
 
     public static bool IsSafePath(string? relative) => IsRelative(relative) && HasSafeSegments(relative!, allowMetadata: false);
 
+    private string RootOr(string relative, bool allowMetadata = false) => relative == "" ? Root : ResolvePath(relative, allowMetadata);
+
     private string ResolvePath(string relative, bool allowMetadata = false)
     {
         AssertNoLinks(Root);
-        if (relative == "") return Root;
-        if (!IsRelative(relative)) throw new WorkspaceException(400, "Use a relative path inside the workspace.");
-        if (!HasSafeSegments(relative, allowMetadata)) throw new WorkspaceException(400, "That path is not allowed.");
+        if (!IsRelative(relative)) throw new WorkspaceException(WorkspaceError.Invalid, "Use a relative path inside the workspace.");
+        if (!HasSafeSegments(relative, allowMetadata)) throw new WorkspaceException(WorkspaceError.Invalid, "That path is not allowed.");
         var current = Root;
         foreach (var segment in relative.Split('/'))
         {
@@ -161,7 +162,7 @@ public sealed class FileManager(string root) : IFileManager
         try
         {
             if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-                throw new WorkspaceException(400, "Symbolic links and junctions are not supported inside a workspace.");
+                throw new WorkspaceException(WorkspaceError.Invalid, "Symbolic links and junctions are not supported inside a workspace.");
         }
         catch (FileNotFoundException) { }
         catch (DirectoryNotFoundException) { }
@@ -172,14 +173,14 @@ public sealed class FileManager(string root) : IFileManager
         var before = new FileInfo(path);
         var length = before.Length;
         var modified = before.LastWriteTimeUtc;
-        if (length > MaxFileBytes) throw new WorkspaceException(413, "File exceeds the 4 MB limit.");
+        if (length > MaxFileBytes) throw new WorkspaceException(WorkspaceError.TooLarge, "File exceeds the 4 MB limit.");
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var memory = new MemoryStream();
         var buffer = new byte[8192];
         int read;
         while ((read = await stream.ReadAsync(buffer)) > 0)
         {
-            if (memory.Length + read > MaxFileBytes) throw new WorkspaceException(413, "File exceeds the 4 MB limit.");
+            if (memory.Length + read > MaxFileBytes) throw new WorkspaceException(WorkspaceError.TooLarge, "File exceeds the 4 MB limit.");
             memory.Write(buffer, 0, read);
         }
         var after = new FileInfo(path);

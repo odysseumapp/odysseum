@@ -1,6 +1,7 @@
+using Odysseum.Abstractions.Exceptions;
 using System.Security.Cryptography;
 
-namespace Odysseum.Server.Services.Storage;
+namespace Odysseum.Server.Repositories;
 
 internal static class ContentRevision
 {
@@ -9,6 +10,6 @@ internal static class ContentRevision
     public static void Check(string actual, string expected)
     {
         if (string.IsNullOrEmpty(expected) || actual != expected)
-            throw new WorkspaceException(409, "This document or its metadata changed elsewhere. Compare the versions before saving.");
+            throw new WorkspaceException(WorkspaceError.Conflict, "This document or its metadata changed elsewhere. Compare the versions before saving.");
     }
 }

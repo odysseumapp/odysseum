@@ -1,16 +1,16 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Collections.Concurrent;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Documents;
-using Odysseum.Server.Services.Storage;
-using Odysseum.Server.Services.Templates;
+using Odysseum.Server.Repositories;
 using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
 
-public sealed class ProjectLibrary(string root, ProjectFactory factory, TemplateStore? templates = null) : IAsyncDisposable
+public sealed class ProjectLibrary(string root, ProjectFactory factory, TemplateRepository? templates = null) : IAsyncDisposable
 {
     public static readonly string[] DefaultFolders = ["Manuscript", "Characters", "Locations", "Threads", "Notes", "Styles"];
     public static bool IsDefaultFolder(string path) => DefaultFolders.Contains(path, StringComparer.OrdinalIgnoreCase);
@@ -41,7 +41,7 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         {
             if (_open.TryRemove(slug, out var stale) && stale.IsValueCreated && stale.Value.IsCompletedSuccessfully)
                 await stale.Value.Result.DisposeAsync();
-            throw new WorkspaceException(404, "That project no longer exists in the workspace.");
+            throw new WorkspaceException(WorkspaceError.NotFound, "That project no longer exists in the workspace.");
         }
         var lazy = _open.GetOrAdd(slug, key => new Lazy<Task<ProjectHandle>>(() => factory.OpenAsync(key, path)));
         try { return await lazy.Value; }
@@ -56,9 +56,9 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
     {
         var title = DocumentRules.ValidateTitle(request.Title);
         var stem = DocumentRules.FileName(title);
-        var template = templates?.Get(string.IsNullOrWhiteSpace(request.Template) ? TemplateStore.DefaultName : request.Template)
-            ?? (string.IsNullOrWhiteSpace(request.Template) || TemplateStore.IsDefault(request.Template) ? TemplateStore.Default()
-                : throw new WorkspaceException(404, $"There is no project template called '{request.Template}'."));
+        var template = templates?.Get(string.IsNullOrWhiteSpace(request.Template) ? TemplateRepository.DefaultName : request.Template)
+            ?? (string.IsNullOrWhiteSpace(request.Template) || TemplateRepository.IsDefault(request.Template) ? TemplateRepository.Default()
+                : throw new WorkspaceException(WorkspaceError.NotFound, $"There is no project template called '{request.Template}'."));
         string slug;
         await _createGate.WaitAsync();
         try
@@ -86,7 +86,7 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         if (string.IsNullOrWhiteSpace(slug) || slug.Length > 200 || slug is "." or ".." || slug.StartsWith('.')
             || slug.EndsWith('.') || slug.EndsWith(' ') || slug.Contains('/') || slug.Contains('\\')
             || slug.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-            throw new WorkspaceException(400, "That project name is not allowed.");
+            throw new WorkspaceException(WorkspaceError.Invalid, "That project name is not allowed.");
         return slug;
     }
 
@@ -96,7 +96,7 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         var id = "";
         try
         {
-            var (manifest, _) = await new ProjectManifestStore(new FileManager(directory)).ReadAsync();
+            var (manifest, _) = await new ProjectManifestRepository(new FileManager(directory)).ReadAsync();
             if (manifest is not null)
             {
                 title = manifest.Settings.Title;

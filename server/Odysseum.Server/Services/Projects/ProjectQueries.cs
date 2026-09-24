@@ -1,6 +1,6 @@
 using Odysseum.Server.API.Enums;
 using Odysseum.Server.API.Models;
-using Odysseum.Server.Services.Storage.Models;
+using Odysseum.Server.Repositories.Manifests;
 using Odysseum.Server.Settings;
 using static Odysseum.Server.Services.Documents.DocumentRules;
 using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;

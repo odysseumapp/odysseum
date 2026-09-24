@@ -1,10 +1,9 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Monitoring;
 using Odysseum.Server.Services.Projects;
-using Odysseum.Server.Services.Storage;
-using Odysseum.Server.Services.Templates;
-using Odysseum.Server.Services.Versioning;
+using Odysseum.Server.Repositories;
 using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
@@ -13,7 +12,7 @@ public sealed class ProjectServices : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly IFileManager _files;
-    private readonly DocumentHistoryStore _history;
+    private readonly DocumentVersionRepository _history;
     private readonly ProjectState _state;
     private readonly ProjectScanner _scanner;
     private readonly ProjectDocumentService _documents;
@@ -22,14 +21,14 @@ public sealed class ProjectServices : IDisposable
     private readonly ProjectQueries _queries;
     private readonly ProjectTemplateService _templates;
     private FileStream? _instanceLock;
-    private ProjectVersionStore? _versions;
+    private ProjectVersionRepository? _versions;
     public string Root => _files.Root;
 
     public ProjectServices(string root, ProjectEvents events, ISettingsProvider? settings = null)
     {
         _files = new FileManager(root);
-        var manifests = new ProjectManifestStore(_files);
-        _history = new DocumentHistoryStore(_files);
+        var manifests = new ProjectManifestRepository(_files);
+        _history = new DocumentVersionRepository(_files);
         _state = new ProjectState(Root, manifests, events);
         _scanner = new ProjectScanner(_state, _files, manifests);
         _documents = new ProjectDocumentService(_state, _files, _history);
@@ -43,7 +42,7 @@ public sealed class ProjectServices : IDisposable
     {
         _instanceLock = _files.AcquireInstanceLock();
         await new ManifestTransaction(_files).RecoverAsync();
-        _versions = new ProjectVersionStore(Root);
+        _versions = new ProjectVersionRepository(Root);
         await RescanAsync();
         if (_state.Documents.Count > 0) Versions.Save(null);
         return true;
@@ -65,7 +64,7 @@ public sealed class ProjectServices : IDisposable
 
     public Task<DocumentContent> SaveAsync(string id, SaveDocumentRequest request)
     {
-        if (request.Content is null) throw new WorkspaceException(400, "Document content is required.");
+        if (request.Content is null) throw new WorkspaceException(WorkspaceError.Invalid, "Document content is required.");
         return WriteDocumentAsync(() => _documents.SaveAsync(id, request));
     }
 
@@ -74,14 +73,14 @@ public sealed class ProjectServices : IDisposable
 
     public Task<ProjectResponse> UpdateMetadataAsync(string id, MetadataRequest request)
     {
-        if (request.Synopsis is null || request.Notes is null) throw new WorkspaceException(400, "Synopsis and notes must be strings.");
+        if (request.Synopsis is null || request.Notes is null) throw new WorkspaceException(WorkspaceError.Invalid, "Synopsis and notes must be strings.");
         return ChangeProjectAsync(() => _organization.UpdateMetadataAsync(id, request));
     }
 
     public Task<ProjectResponse> UpdateSettingsAsync(IProjectSettings settings, string revision)
     {
         var validated = ProjectSettings.From(settings, out var error);
-        if (error is not null) throw new WorkspaceException(400, error);
+        if (error is not null) throw new WorkspaceException(WorkspaceError.Invalid, error);
         return ChangeProjectAsync(() => _organization.UpdateSettingsAsync(validated, revision));
     }
 
@@ -96,7 +95,7 @@ public sealed class ProjectServices : IDisposable
     public Task<ProjectResponse> ApplyTemplateAsync(ProjectTemplate template, IProjectSettings settings)
     {
         var validated = ProjectSettings.From(settings, out var error);
-        if (error is not null) throw new WorkspaceException(400, error);
+        if (error is not null) throw new WorkspaceException(WorkspaceError.Invalid, error);
         return ExecuteAsync(async () =>
         {
             var ids = await _templates.WriteFilesAsync(template);
@@ -131,7 +130,7 @@ public sealed class ProjectServices : IDisposable
     public Task<VersionInfo> SaveVersionAsync(string name)
     {
         name = name?.Trim() ?? "";
-        if (name.Length is 0 or > 200 || name.Contains('\n')) throw new WorkspaceException(400, "A version name is one line of up to 200 characters.");
+        if (name.Length is 0 or > 200 || name.Contains('\n')) throw new WorkspaceException(WorkspaceError.Invalid, "A version name is one line of up to 200 characters.");
         return ExecuteAsync(() => Task.FromResult(Versions.Save(name)!));
     }
 
@@ -144,7 +143,7 @@ public sealed class ProjectServices : IDisposable
         return _queries.GetProject();
     });
 
-    private ProjectVersionStore Versions => _versions ?? throw new InvalidOperationException("The project has not been initialized.");
+    private ProjectVersionRepository Versions => _versions ?? throw new InvalidOperationException("The project has not been initialized.");
 
     private Task<T> ReadAsync<T>(Func<T> query) => ExecuteAsync(() => Task.FromResult(query()));
 

@@ -1,6 +1,5 @@
 using Odysseum.Server.Repositories.Files;
-using Odysseum.Server.Services.Storage;
-using Odysseum.Server.Services.Templates;
+using Odysseum.Server.Repositories;
 using Odysseum.Server.Settings;
 using static Odysseum.Server.Services.Documents.DocumentRules;
 using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;

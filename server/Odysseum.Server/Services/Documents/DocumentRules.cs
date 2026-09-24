@@ -1,3 +1,4 @@
+using Odysseum.Abstractions.Exceptions;
 using System.Text.RegularExpressions;
 using Odysseum.Server.API.Enums;
 
@@ -7,9 +8,9 @@ internal static partial class DocumentRules
 {
     public static string ValidateTitle(string title)
     {
-        if (string.IsNullOrWhiteSpace(title)) throw new WorkspaceException(400, "A title is required.");
+        if (string.IsNullOrWhiteSpace(title)) throw new WorkspaceException(WorkspaceError.Invalid, "A title is required.");
         title = title.Trim();
-        if (title.Length is 0 or > 200) throw new WorkspaceException(400, "Use a title between 1 and 200 characters.");
+        if (title.Length is 0 or > 200) throw new WorkspaceException(WorkspaceError.Invalid, "Use a title between 1 and 200 characters.");
         return title;
     }
     public static string FileName(string title)

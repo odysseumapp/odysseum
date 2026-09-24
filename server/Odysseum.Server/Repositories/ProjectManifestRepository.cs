@@ -1,13 +1,14 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Odysseum.Server.Services.Storage.Models;
+using Odysseum.Server.Repositories.Manifests;
 using Odysseum.Server.Settings;
 
-namespace Odysseum.Server.Services.Storage;
+namespace Odysseum.Server.Repositories;
 
-internal sealed class ProjectManifestStore(IFileManager files)
+public sealed class ProjectManifestRepository(IFileManager files) : IProjectManifestRepository
 {
     private const string ManifestPath = ".odysseum/project.json";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -18,7 +19,7 @@ internal sealed class ProjectManifestStore(IFileManager files)
     private async Task<Dictionary<string, byte[]>> ReadFilesAsync()
     {
         if (new ManifestTransaction(files).Pending)
-            throw new WorkspaceException(503, "A manifest update needs recovery. Reopen the project before saving.");
+            throw new WorkspaceException(WorkspaceError.Unavailable, "A manifest update needs recovery. Reopen the project before saving.");
         var result = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         if (files.Exists(ManifestPath, metadata: true)) result[ManifestPath] = await files.ReadAsync(ManifestPath, metadata: true);
         foreach (var folder in files.EnumerateFolders())
@@ -48,14 +49,14 @@ internal sealed class ProjectManifestStore(IFileManager files)
         {
             var folder = path[..^"/.odysseum/folder.json".Length];
             var local = Parse<FolderManifest>(content, path);
-            if (!folderIds.Add(local.Id)) throw new WorkspaceException(409, $"Two folders have the same manifest ID: {folder}");
+            if (!folderIds.Add(local.Id)) throw new WorkspaceException(WorkspaceError.Conflict, $"Two folders have the same manifest ID: {folder}");
             manifest.FolderManifests[folder] = local;
             foreach (var (id, metadata) in local.Documents)
             {
                 var document = metadata.Clone();
                 document.Path = folder + "/" + metadata.Path;
                 if (!manifest.Documents.TryAdd(id, document))
-                    throw new WorkspaceException(409, $"Two folder manifests track the same document: {document.Path}");
+                    throw new WorkspaceException(WorkspaceError.Conflict, $"Two folder manifests track the same document: {document.Path}");
             }
         }
         return (manifest, Revision(contents));
@@ -112,7 +113,7 @@ internal sealed class ProjectManifestStore(IFileManager files)
     private static byte[] Serialize<T>(T value)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(value, Json);
-        if (bytes.Length > FileManager.MaxFileBytes) throw new WorkspaceException(413, "Folder metadata exceeds the 4 MB limit.");
+        if (bytes.Length > FileManager.MaxFileBytes) throw new WorkspaceException(WorkspaceError.TooLarge, "Folder metadata exceeds the 4 MB limit.");
         return bytes;
     }
 
@@ -196,6 +197,6 @@ internal sealed class ProjectManifestStore(IFileManager files)
         }
         return true;
     }
-    private static WorkspaceException Invalid(string path) => new(422, $"The metadata is invalid or uses an unsupported version. Fix {path} before saving.");
-    private static WorkspaceException Changed() => new(409, "Project metadata changed on disk. Refresh before saving again.");
+    private static WorkspaceException Invalid(string path) => new(WorkspaceError.Corrupt, $"The metadata is invalid or uses an unsupported version. Fix {path} before saving.");
+    private static WorkspaceException Changed() => new(WorkspaceError.Conflict, "Project metadata changed on disk. Refresh before saving again.");
 }

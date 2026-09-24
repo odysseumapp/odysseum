@@ -1,3 +1,4 @@
+using Odysseum.Abstractions.Exceptions;
 using System.Threading.Channels;
 
 namespace Odysseum.Server.Services.Monitoring;

@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using Odysseum.Server.Settings;
 
-namespace Odysseum.Server.Services.Storage.Models;
+namespace Odysseum.Server.Repositories.Manifests;
 
 public sealed class ProjectManifest : FolderManifest
 {

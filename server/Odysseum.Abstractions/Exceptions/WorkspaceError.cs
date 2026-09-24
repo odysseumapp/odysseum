@@ -8,4 +8,5 @@ public enum WorkspaceError
     TooLarge,
     Corrupt,
     Unavailable,
+    Forbidden,
 }

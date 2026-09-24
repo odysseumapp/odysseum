@@ -1,11 +1,12 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text.RegularExpressions;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Documents;
 
-namespace Odysseum.Server.Services.Storage;
+namespace Odysseum.Server.Repositories;
 
-internal sealed partial class DocumentHistoryStore(IFileManager files)
+public sealed partial class DocumentVersionRepository(IFileManager files) : IDocumentVersionRepository
 {
     public async Task SaveAsync(string id, byte[] bytes)
     {
@@ -30,7 +31,7 @@ internal sealed partial class DocumentHistoryStore(IFileManager files)
 
     public async Task<string> ReadAsync(string id, string snapshot)
     {
-        if (!SnapshotName().IsMatch(snapshot)) throw new WorkspaceException(400, "Invalid snapshot.");
+        if (!SnapshotName().IsMatch(snapshot)) throw new WorkspaceException(WorkspaceError.Invalid, "Invalid snapshot.");
         var text = MarkdownDocumentCodec.Decode(await files.ReadAsync($".odysseum/history/{id}/{snapshot}.md", metadata: true));
         return MarkdownDocumentCodec.Split(text).Body;
     }

@@ -1,10 +1,11 @@
+using Odysseum.Abstractions.Exceptions;
 using System.Text.RegularExpressions;
 using LibGit2Sharp;
 using Odysseum.Server.API.Models;
 
-namespace Odysseum.Server.Services.Versioning;
+namespace Odysseum.Server.Repositories;
 
-internal sealed partial class ProjectVersionStore : IDisposable
+public sealed partial class ProjectVersionRepository : IProjectVersionRepository
 {
     private const string AutomaticMessage = "Automatic version";
     private const string BeforeRestoreMessage = "Before restoring";
@@ -16,12 +17,12 @@ internal sealed partial class ProjectVersionStore : IDisposable
     ];
     private readonly Repository _repository;
 
-    static ProjectVersionStore()
+    static ProjectVersionRepository()
     {
         GlobalSettings.SetOwnerValidation(false);
     }
 
-    public ProjectVersionStore(string root)
+    public ProjectVersionRepository(string root)
     {
         if (!Directory.Exists(Path.Combine(root, ".git"))) Repository.Init(root);
         _repository = new Repository(root);
@@ -50,7 +51,7 @@ internal sealed partial class ProjectVersionStore : IDisposable
     public VersionInfo Restore(string id) => Guarded(() =>
     {
         var commit = VersionId().IsMatch(id) ? _repository.Lookup<Commit>(id) : null;
-        if (commit is null) throw new WorkspaceException(404, "That version no longer exists.");
+        if (commit is null) throw new WorkspaceException(WorkspaceError.NotFound, "That version no longer exists.");
         SaveIfChanged(null, BeforeRestoreMessage);
         _repository.Checkout(commit.Tree, null, new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force });
         var source = Describe(commit);
@@ -62,7 +63,7 @@ internal sealed partial class ProjectVersionStore : IDisposable
     private static T Guarded<T>(Func<T> action)
     {
         try { return action(); }
-        catch (LibGit2SharpException ex) { throw new WorkspaceException(503, "The project's versions could not be read or written: " + ex.Message); }
+        catch (LibGit2SharpException ex) { throw new WorkspaceException(WorkspaceError.Unavailable, "The project's versions could not be read or written: " + ex.Message); }
     }
 
     private VersionInfo Commit(string message, bool allowEmpty)
