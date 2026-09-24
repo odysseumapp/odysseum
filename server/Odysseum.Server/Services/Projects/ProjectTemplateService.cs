@@ -31,7 +31,7 @@ internal sealed class ProjectTemplateService(ProjectState state, IFileManager fi
                     : manifest.FolderManifests.FirstOrDefault(pair => pair.Value.Id == folder.GridFolder).Key,
             });
         }
-        foreach (var document in state.Documents.Values.Where(x => !IsFolderDocument(x.Path)).OrderBy(x => manifest.Documents[x.Id].Order).ThenBy(x => x.Path, StringComparer.Ordinal))
+        foreach (var document in state.Documents.Values.Where(x => !IsFolderDocument(x.Path)).OrderBy(x => x.Path, StringComparer.Ordinal))
             template.Documents.Add(new() { Path = document.Path, Title = manifest.Documents[document.Id].Title });
         return template;
     }
@@ -58,17 +58,12 @@ internal sealed class ProjectTemplateService(ProjectState state, IFileManager fi
     {
         var candidate = state.Manifest.Clone();
         candidate.Settings = settings;
-        var order = 0;
         foreach (var document in template.Documents)
         {
             if (!ids.TryGetValue(document.Path, out var id) || !candidate.Documents.TryGetValue(id, out var metadata)) continue;
             metadata.Title = document.Title;
             metadata.WordGoal = IsFolderDocument(document.Path) ? 0 : settings.DefaultSceneWordGoal;
-            metadata.Order = order++;
         }
-        var placed = ids.Values.ToHashSet(StringComparer.Ordinal);
-        foreach (var metadata in candidate.Documents.Where(pair => !placed.Contains(pair.Key)).OrderBy(pair => pair.Value.Order).Select(pair => pair.Value))
-            metadata.Order = order++;
 
         foreach (var folder in template.Folders)
         {

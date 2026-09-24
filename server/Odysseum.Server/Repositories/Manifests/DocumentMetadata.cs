@@ -12,7 +12,7 @@ public sealed class DocumentMetadata
     public string Notes { get; set; } = "";
     public DocumentStatus Status { get; set; } = DocumentStatus.Draft;
     public int WordGoal { get; set; } = 1000;
-    public double Order { get; set; }
+    [JsonIgnore] internal double? LegacyOrder { get; set; }
     public string LastKnownHash { get; set; } = "";
     public List<string> Links { get; set; } = [];
     public Dictionary<string, string> LinkNotes { get; set; } = [];
@@ -21,7 +21,7 @@ public sealed class DocumentMetadata
     internal DocumentMetadata Clone() => new()
     {
         Path = Path, Title = Title, Synopsis = Synopsis, Notes = Notes, Status = Status,
-        WordGoal = WordGoal, Order = Order, LastKnownHash = LastKnownHash,
+        WordGoal = WordGoal, LegacyOrder = LegacyOrder, LastKnownHash = LastKnownHash,
         Links = [.. Links], LinkNotes = new(LinkNotes), Extra = Extra is null ? null : new(Extra),
     };
 }

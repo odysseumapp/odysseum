@@ -12,4 +12,6 @@ public interface IOrderService
     Task<IReadOnlyList<IFolder>> FoldersAsync(IFolder folder);
     Task<IReadOnlyList<IDocument>> DocumentsAsync(IProject project);
     Task ArrangeChildrenAsync(IFolder folder, IReadOnlyList<string> orderedIds, string expectedRevision);
+    Task ArrangeAsync(IProject project, IReadOnlyDictionary<string, IReadOnlyList<string>> childrenByFolder, string expectedRevision);
+    Task ArrangeDocumentsAsync(IProject project, IReadOnlyList<string> orderedIds, string expectedRevision);
 }

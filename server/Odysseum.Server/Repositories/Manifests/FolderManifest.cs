@@ -27,7 +27,7 @@ public class FolderManifest
 public sealed class FolderEntry
 {
     public string Path { get; set; } = "";
-    public double Order { get; set; }
+    [JsonIgnore] internal double? LegacyOrder { get; set; }
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
-    internal FolderEntry Clone() => new() { Path = Path, Order = Order, Extra = Extra is null ? null : new(Extra) };
+    internal FolderEntry Clone() => new() { Path = Path, LegacyOrder = LegacyOrder, Extra = Extra is null ? null : new(Extra) };
 }

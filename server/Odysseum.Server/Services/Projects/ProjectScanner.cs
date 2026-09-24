@@ -51,7 +51,6 @@ internal sealed class ProjectScanner(ProjectState state, IFileManager files, Pro
                 {
                     Title = IsFolderDocument(relativePath) ? Path.GetFileName(Path.GetDirectoryName(relativePath)!) : Path.GetFileNameWithoutExtension(relativePath),
                     WordGoal = IsFolderDocument(relativePath) ? 0 : candidate.Settings.DefaultSceneWordGoal,
-                    Order = candidate.Documents.Count == 0 ? 0 : candidate.Documents.Values.Max(x => x.Order) + 1
                 };
                 candidate.Documents[id] = metadata;
             }

@@ -76,10 +76,6 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         if (request.Ids.Distinct().Count() != request.Ids.Length || request.Ids.Any(id => !state.Documents.ContainsKey(id))
             || required.Any(id => !request.Ids.Contains(id))) throw new WorkspaceException(WorkspaceError.Invalid, "The document list changed. Refresh and try again.");
         var candidate = state.Manifest.Clone();
-        var order = 0;
-        foreach (var id in request.Ids) candidate.Documents[id].Order = order++;
-        foreach (var id in state.Documents.Keys.Where(id => !request.Ids.Contains(id)).OrderBy(id => candidate.Documents[id].Order))
-            candidate.Documents[id].Order = order++;
         await state.CommitManifestAsync(candidate, state.Revision);
         state.PublishChanges();
     }

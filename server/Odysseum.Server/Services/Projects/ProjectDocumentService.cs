@@ -44,7 +44,6 @@ internal sealed class ProjectDocumentService(ProjectState state, IFileManager fi
         candidate.Documents[id] = new DocumentMetadata
         {
             Path = relative, Title = title, WordGoal = state.Manifest.Settings.DefaultSceneWordGoal,
-            Order = state.Manifest.Documents.Count == 0 ? 0 : state.Manifest.Documents.Values.Max(x => x.Order) + 1
         };
         await state.CommitManifestAsync(candidate, state.Revision);
         return id;
@@ -55,13 +54,12 @@ internal sealed class ProjectDocumentService(ProjectState state, IFileManager fi
         var missing = files.EnumerateFolders().Where(folder => !files.Exists(FolderDocumentPath(folder))).ToArray();
         if (missing.Length == 0) return false;
         var candidate = state.Manifest.Clone();
-        var order = candidate.Documents.Count == 0 ? 0 : candidate.Documents.Values.Max(x => x.Order) + 1;
         foreach (var folder in missing)
         {
             var id = Guid.NewGuid().ToString();
             var relative = FolderDocumentPath(folder);
             await files.WriteAsync(relative, Encode($"---\nwriter_id: {id}\n---\n\n", ""), overwrite: false);
-            candidate.Documents[id] = new DocumentMetadata { Path = relative, Title = Path.GetFileName(folder), WordGoal = 0, Order = order++ };
+            candidate.Documents[id] = new DocumentMetadata { Path = relative, Title = Path.GetFileName(folder), WordGoal = 0 };
         }
         await state.CommitManifestAsync(candidate, state.Revision);
         return true;

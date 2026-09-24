@@ -88,8 +88,8 @@ public sealed class DocumentRepository(OpenProject project) : IRepository<Docume
         {
             Path = relative, Title = title,
             WordGoal = IsFolderDocument(relative) ? 0 : candidate.Settings.DefaultSceneWordGoal,
-            Order = candidate.Documents.Count == 0 ? 0 : candidate.Documents.Values.Max(x => x.Order) + 1,
         };
+        OrderService.Append(Owner(candidate, folder), id);
         await project.CommitAsync(candidate, project.Current.Revision);
         await project.RescanAsync();
         return Find(id);
@@ -107,6 +107,11 @@ public sealed class DocumentRepository(OpenProject project) : IRepository<Docume
         project.Files.Move(current.Path, relative);
         var candidate = project.Current.Manifest.Clone();
         candidate.Documents[current.Id].Path = relative;
+        if (destination.Id != current.Location.Id)
+        {
+            OrderService.Remove(Owner(candidate, current.Location), current.Id);
+            OrderService.Append(Owner(candidate, destination), current.Id);
+        }
         await project.CommitAsync(candidate, project.Current.Revision);
         await project.RescanAsync();
         return Find(current.Id);
@@ -119,13 +124,12 @@ public sealed class DocumentRepository(OpenProject project) : IRepository<Docume
         var missing = project.Files.EnumerateFolders().Where(folder => !project.Files.Exists(FolderDocumentPath(folder))).ToArray();
         if (missing.Length == 0) return false;
         var candidate = project.Current.Manifest.Clone();
-        var order = candidate.Documents.Count == 0 ? 0 : candidate.Documents.Values.Max(x => x.Order) + 1;
         foreach (var folder in missing)
         {
             var id = Guid.NewGuid().ToString();
             var relative = FolderDocumentPath(folder);
             await project.Files.WriteAsync(relative, Encode($"---\nwriter_id: {id}\n---\n\n", ""), overwrite: false);
-            candidate.Documents[id] = new DocumentMetadata { Path = relative, Title = Path.GetFileName(folder), WordGoal = 0, Order = order++ };
+            candidate.Documents[id] = new DocumentMetadata { Path = relative, Title = Path.GetFileName(folder), WordGoal = 0 };
         }
         await project.CommitAsync(candidate, project.Current.Revision);
         return true;
@@ -172,7 +176,6 @@ public sealed class DocumentRepository(OpenProject project) : IRepository<Docume
                 {
                     Title = IsFolderDocument(relativePath) ? Path.GetFileName(Path.GetDirectoryName(relativePath)!) : Path.GetFileNameWithoutExtension(relativePath),
                     WordGoal = IsFolderDocument(relativePath) ? 0 : candidate.Settings.DefaultSceneWordGoal,
-                    Order = candidate.Documents.Count == 0 ? 0 : candidate.Documents.Values.Max(x => x.Order) + 1,
                 };
                 candidate.Documents[id] = metadata;
             }
@@ -182,6 +185,9 @@ public sealed class DocumentRepository(OpenProject project) : IRepository<Docume
         var revision = await project.Manifests.WriteAsync(candidate, persisted.Revision);
         return new Project(project, candidate, revision, next, warnings.Count > 0 ? string.Join(" ", warnings) : null);
     }
+
+    private static FolderManifest Owner(ProjectManifest candidate, Folder folder) => folder.IsRoot ? candidate
+        : candidate.FolderManifests.GetValueOrDefault(folder.Path) ?? throw new WorkspaceException(WorkspaceError.NotFound, "The folder no longer exists.");
 
     private Document Find(string id) => project.Current.Document(id)
         ?? throw new WorkspaceException(WorkspaceError.NotFound, "This document was removed or moved outside the workspace. Your browser draft is still available.");

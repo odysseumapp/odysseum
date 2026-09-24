@@ -86,13 +86,13 @@ public sealed class ProjectManifestRepository(IFileManager files) : IProjectMani
             var children = folders.Where(p => Parent(p.Key) == parent).ToArray();
             var previous = owner.Folders;
             owner.Folders = [];
-            var nextOrder = previous.Count == 0 ? 0 : previous.Values.Max(x => x.Order) + 1;
             foreach (var (path, child) in children)
             {
-                var entry = previous.TryGetValue(child.Id, out var existing) ? existing.Clone() : new FolderEntry { Order = nextOrder++ };
+                var entry = previous.TryGetValue(child.Id, out var existing) ? existing.Clone() : new FolderEntry();
                 entry.Path = Path.GetFileName(path);
                 owner.Folders[child.Id] = entry;
             }
+            MigrateItemOrder(owner);
         }
         var after = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         foreach (var (folder, manifest) in folders) after[FolderPath(folder)] = Serialize(manifest);
@@ -107,6 +107,8 @@ public sealed class ProjectManifestRepository(IFileManager files) : IProjectMani
         candidate.Version = 2;
         candidate.Folders = root.Folders;
         candidate.FolderManifests = folders;
+        foreach (var document in candidate.Documents.Values.Concat(folders.Values.SelectMany(f => f.Documents.Values))) document.LegacyOrder = null;
+        foreach (var entry in candidate.Folders.Values.Concat(folders.Values.SelectMany(f => f.Folders.Values))) entry.LegacyOrder = null;
         return Revision(after);
     }
 
@@ -127,11 +129,12 @@ public sealed class ProjectManifestRepository(IFileManager files) : IProjectMani
                 throw new JsonException();
             foreach (var (id, document) in manifest.Documents)
             {
-                if (!Guid.TryParseExact(id, "D", out _) || document is null || !double.IsFinite(document.Order)
+                if (!Guid.TryParseExact(id, "D", out _) || document is null
                     || document.Path is null || document.Title is null || document.Synopsis is null || document.Notes is null
                     || !Enum.IsDefined(document.Status) || document.WordGoal is < 0 or > 10000000
                     || !SafePath(document.Path, root && manifest.Version == 1))
                     throw new JsonException();
+                document.LegacyOrder = TakeOrder(document.Extra);
                 document.Links ??= [];
                 MergeLegacyLinks(document);
                 if (document.Links.Any(id => !Guid.TryParseExact(id, "D", out _)) || document.Links.Distinct().Count() != document.Links.Count) throw new JsonException();
@@ -147,8 +150,12 @@ public sealed class ProjectManifestRepository(IFileManager files) : IProjectMani
                 throw new JsonException();
             var localPaths = new HashSet<string>(StringComparer.Ordinal);
             foreach (var (id, folder) in manifest.Folders)
-                if (!Guid.TryParseExact(id, "D", out _) || folder is null || !double.IsFinite(folder.Order)
+            {
+                if (!Guid.TryParseExact(id, "D", out _) || folder is null
                     || !SafePath(folder.Path, false) || !localPaths.Add(folder.Path)) throw new JsonException();
+                folder.LegacyOrder = TakeOrder(folder.Extra);
+                if (folder.Extra is { Count: 0 }) folder.Extra = null;
+            }
             if (manifest is ProjectManifest project)
             {
                 project.Settings ??= new ProjectSettings();
@@ -165,6 +172,28 @@ public sealed class ProjectManifestRepository(IFileManager files) : IProjectMani
             return manifest;
         }
         catch (JsonException) { throw Invalid(path); }
+    }
+
+    private static void MigrateItemOrder(FolderManifest owner)
+    {
+        if (!owner.ItemOrder.Any(key => key.StartsWith("folder:", StringComparison.Ordinal))
+            && owner.Documents.Values.All(d => d.LegacyOrder is null) && owner.Folders.Values.All(f => f.LegacyOrder is null)) return;
+        var byName = owner.Folders.ToDictionary(pair => pair.Value.Path, pair => pair.Key, StringComparer.Ordinal);
+        var listed = owner.ItemOrder
+            .Select(key => key.StartsWith("folder:", StringComparison.Ordinal) ? byName.GetValueOrDefault(key["folder:".Length..]) : key)
+            .OfType<string>().Distinct().ToList();
+        var seen = listed.ToHashSet(StringComparer.Ordinal);
+        var folders = owner.Folders.Where(pair => !seen.Contains(pair.Key))
+            .OrderBy(pair => pair.Value.LegacyOrder ?? double.MaxValue).ThenBy(pair => pair.Value.Path, StringComparer.Ordinal).Select(pair => pair.Key);
+        var documents = owner.Documents.Where(pair => !seen.Contains(pair.Key) && !pair.Value.Path.StartsWith('.'))
+            .OrderBy(pair => pair.Value.LegacyOrder ?? double.MaxValue).ThenBy(pair => pair.Value.Path, StringComparer.Ordinal).Select(pair => pair.Key);
+        owner.ItemOrder = [.. listed, .. folders, .. documents];
+    }
+
+    private static double? TakeOrder(Dictionary<string, JsonElement>? extra)
+    {
+        if (extra is null || !extra.Remove("order", out var value)) return null;
+        return value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var order) && double.IsFinite(order) ? order : null;
     }
 
     private static List<string> LegacyIds(Dictionary<string, JsonElement>? extra, string key)
