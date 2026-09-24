@@ -3,7 +3,6 @@
   "version": 1,
   "pinnedView": null,
   "itemOrder": [
-    "00d1e246-4f36-47e8-a308-000000000007",
     "00d1e246-4f36-47e8-a308-000000000029",
     "folder:World building",
     "folder:Research"
@@ -20,19 +19,6 @@
       "order": 29,
       "lastKnownHash": "",
       "links": []
-    },
-    "00d1e246-4f36-47e8-a308-000000000007": {
-      "path": "Bellwether Island.md",
-      "title": "Bellwether Island",
-      "synopsis": "An island whose geography follows memory. The places its residents forget begin to disappear.",
-      "notes": "Keep a consistent relationship between memory and the landscape.",
-      "status": "revised",
-      "wordGoal": 0,
-      "order": 41,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000024"
-      ]
     },
     "00d1e246-4f36-47e8-a308-000000000044": {
       "path": "How this manuscript is organised.md",

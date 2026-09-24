@@ -8,7 +8,7 @@ namespace Odysseum.Server.API.Controllers;
 [Route("api/themes")]
 public class ThemesController(ThemeStore themes) : ControllerBase
 {
-    /// <summary>Every saved colour scheme. Which one a browser is showing is remembered by that browser.</summary>
+    /// <summary>Every saved colour scheme. Each browser remembers which one it shows.</summary>
     [HttpGet]
     public IResult List() => ApiResults.SuccessCollection(themes.List().Select(Describe));
 

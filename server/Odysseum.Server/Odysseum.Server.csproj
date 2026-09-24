@@ -4,6 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The OpenAPI generator reads summaries from the XML doc file; 1591 would fail the build on every undocumented public member. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Examples/**/*" CopyToOutputDirectory="PreserveNewest" />
@@ -11,6 +14,7 @@
     <Content Include="../../webui.zip" Link="webui.zip" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../webui.zip')" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="LibGit2Sharp" Version="0.32.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.3" />
   </ItemGroup>

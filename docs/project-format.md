@@ -147,6 +147,10 @@ Multi-manifest writes use flushed temporary files and a rollback journal at `.od
 
 The browser keeps its copy of each opened project in IndexedDB (database `odysseum`): the project response, every document's server content and fingerprint, a queue of pending text edits (each recording the fingerprint it was written against), and an ordered queue of other operations (create, details, move, order, settings, create project). Edits are pushed with their fingerprint, so the server's revision check decides whether they apply cleanly or become a conflict; operations are replayed in order against the server's current state. Scenes and projects created offline carry temporary ids (`local-…`) until the server assigns real ones, at which point every local record naming them is re-keyed. The local copy belongs to that browser and is not a substitute for project backups; the workspace files remain the source of truth.
 
+`.git` holds the project's versions: every file of the project as it was at each automatic or named save. It is an
+ordinary git repository, so any git tool can read it, but only the server writes it. Recovery snapshots and the
+instance lock are not part of a version.
+
 `.odysseum/instance.lock` is an application process lock, not project content. Back up the entire project including metadata and history; the lock file does not need to be backed up.
 
 ## Interoperability

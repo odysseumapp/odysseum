@@ -14,7 +14,7 @@ public class EventsController : ControllerBase
         _library = library;
     }
 
-    /// <summary>Server-sent events: a "workspace" message whenever the project changes on disk, with heartbeats in between.</summary>
+    /// <summary>Open a stream that stays connected and reports changes to the project on disk. Each change arrives as a "workspace" event carrying the new revision. When nothing changes, a heartbeat comment arrives every 15 seconds.</summary>
     [HttpGet]
     [Produces("text/event-stream")]
     public async Task Stream(string project)

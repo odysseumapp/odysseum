@@ -48,7 +48,7 @@ public class ProjectsController : ControllerBase
         return ApiResults.Success(await handle.Settings.GetSettingsAsync());
     }
 
-    /// <summary>Update the project settings; returns the project with its new revision.</summary>
+    /// <summary>Update the project settings and return the project with its new revision.</summary>
     [HttpPut("{project}/settings")]
     public async Task<IResult> UpdateSettings(string project, [FromBody] ProjectSettingsRequest request)
     {

@@ -20,20 +20,6 @@
         "00d1e246-4f36-47e8-a308-000000000034",
         "00d1e246-4f36-47e8-a308-000000000036"
       ]
-    },
-    "00d1e246-4f36-47e8-a308-000000000016": {
-      "path": "Nan Hollis.md",
-      "title": "Nan Hollis",
-      "synopsis": "Keeps the only shop in the harbor village and the island’s unofficial record of who has forgotten what.",
-      "notes": "The gossip who is always accurate. Use her to deliver information Elin will not.",
-      "status": "draft",
-      "wordGoal": 0,
-      "order": 16,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000018",
-        "00d1e246-4f36-47e8-a308-000000000034"
-      ]
     }
   },
   "folders": {}

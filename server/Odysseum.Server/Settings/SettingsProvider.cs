@@ -64,8 +64,8 @@ public class SettingsProvider : ISettingsProvider
         _logger.LogInformation("Workspace: {Workspace}", settings.Workspace);
         _logger.LogInformation("Themes: {Themes}", settings.Themes);
         _logger.LogInformation("Project templates: {Templates}", settings.Templates);
-        _logger.LogInformation("Demo seeding: {Demo}; scan interval: {Seconds}s; keys: {Keys}; password: {Password}; deleting default folders: {DefaultFolders}",
-            settings.Demo, settings.ScanSeconds, settings.Keys ?? "(default)", settings.PasswordRequired ? "configured" : "not set", settings.AllowDeletingDefaultFolders ? "allowed" : "blocked");
+        _logger.LogInformation("Demo seeding: {Demo}; scan interval: {Seconds}s; version after {VersionSeconds}s quiet; keys: {Keys}; password: {Password}; deleting default folders: {DefaultFolders}",
+            settings.Demo, settings.ScanSeconds, settings.VersionSeconds, settings.Keys ?? "(default)", settings.PasswordRequired ? "configured" : "not set", settings.AllowDeletingDefaultFolders ? "allowed" : "blocked");
     }
 
     private IServerSettings LoadSettings()
@@ -93,6 +93,7 @@ public class SettingsProvider : ISettingsProvider
         settings.Templates = Path.GetFullPath(_configuration["ODYSSEUM_TEMPLATES"] ?? settings.Templates
             ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_settingsPath))!, "templates"));
         settings.ScanSeconds = _configuration.GetValue("ODYSSEUM_SCAN_SECONDS", settings.ScanSeconds);
+        settings.VersionSeconds = _configuration.GetValue("ODYSSEUM_VERSION_SECONDS", settings.VersionSeconds);
         settings.AllowDeletingDefaultFolders = _configuration.GetValue("ODYSSEUM_ALLOW_DELETING_DEFAULT_FOLDERS", settings.AllowDeletingDefaultFolders);
         Validate(settings);
         settings.Workspace = Path.GetFullPath(settings.Workspace);

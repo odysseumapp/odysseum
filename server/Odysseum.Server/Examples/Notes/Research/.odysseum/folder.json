@@ -17,19 +17,6 @@
       "links": [
         "00d1e246-4f36-47e8-a308-000000000017"
       ]
-    },
-    "00d1e246-4f36-47e8-a308-000000000033": {
-      "path": "Tides and timetables.md",
-      "title": "Tides and timetables",
-      "synopsis": "When a ferry can and cannot cross a shallow bay; why a timetable can be accurate and useless at once.",
-      "notes": "Tomas’s crossings should be plausible even when the island is not.",
-      "status": "draft",
-      "wordGoal": 0,
-      "order": 33,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000022"
-      ]
     }
   },
   "folders": {}

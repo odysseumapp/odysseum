@@ -4,8 +4,7 @@
   "pinnedView": "grid",
   "itemOrder": [
     "folder:Chapter 03",
-    "00d1e246-4f36-47e8-a308-000000000034",
-    "00d1e246-4f36-47e8-a308-000000000035"
+    "00d1e246-4f36-47e8-a308-000000000034"
   ],
   "gridFolder": null,
   "documents": {
@@ -21,26 +20,8 @@
       "links": [
         "00d1e246-4f36-47e8-a308-000000000006",
         "00d1e246-4f36-47e8-a308-000000000015",
-        "00d1e246-4f36-47e8-a308-000000000016",
         "00d1e246-4f36-47e8-a308-000000000018",
         "00d1e246-4f36-47e8-a308-000000000024",
-        "00d1e246-4f36-47e8-a308-000000000028"
-      ]
-    },
-    "00d1e246-4f36-47e8-a308-000000000035": {
-      "path": "Chapter 05 – The eastern spit.md",
-      "title": "Chapter 05 – The eastern spit",
-      "synopsis": "Mara walks to where the tower used to be and finds the sixty-one steps, going down into the sea. Elin meets her there.",
-      "notes": "Chapter-as-file, two scenes. The first time Mara measures something and the island lets her.",
-      "status": "draft",
-      "wordGoal": 1300,
-      "order": 9,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000006",
-        "00d1e246-4f36-47e8-a308-000000000009",
-        "00d1e246-4f36-47e8-a308-000000000020",
-        "00d1e246-4f36-47e8-a308-000000000025",
         "00d1e246-4f36-47e8-a308-000000000028"
       ]
     }

@@ -3,6 +3,7 @@ using Odysseum.Server.Services.Monitoring;
 using Odysseum.Server.Services.Projects;
 using Odysseum.Server.Services.Storage;
 using Odysseum.Server.Services.Templates;
+using Odysseum.Server.Services.Versioning;
 using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
@@ -21,6 +22,7 @@ public sealed class ProjectServices : IDisposable
     private readonly ProjectQueries _queries;
     private readonly ProjectTemplateService _templates;
     private FileStream? _instanceLock;
+    private ProjectVersionStore? _versions;
     public string Root => _files.Root;
 
     public ProjectServices(string root, ProjectEvents events, ISettingsProvider? settings = null)
@@ -41,7 +43,10 @@ public sealed class ProjectServices : IDisposable
     {
         _instanceLock = _files.AcquireInstanceLock();
         await new ManifestTransaction(_files).RecoverAsync();
+        _versions = new ProjectVersionStore(Root);
         await RescanAsync();
+        // The state a project opens in is always there to go back to; an empty folder is not a state worth keeping.
+        if (_state.Documents.Count > 0) Versions.Save(null);
         return true;
     }, scan: false);
 
@@ -101,6 +106,7 @@ public sealed class ProjectServices : IDisposable
             var ids = await _templates.WriteFilesAsync(template);
             await RescanAsync();
             await _templates.ApplyDetailsAsync(template, ids, validated);
+            Versions.Save(null); // A new project's first version is the template, not the empty folder before it.
             return _queries.GetProject();
         });
     }
@@ -123,6 +129,29 @@ public sealed class ProjectServices : IDisposable
         _state.Find(id);
         return _history.ReadAsync(id, snapshot);
     }, scan: false);
+
+    public Task<IReadOnlyList<VersionInfo>> GetVersionsAsync() => ExecuteAsync(() => Task.FromResult(Versions.List()), scan: false);
+
+    /// <summary>Saves the project as it is now, even when nothing changed since the last version.</summary>
+    public Task<VersionInfo> SaveVersionAsync(string name)
+    {
+        name = name?.Trim() ?? "";
+        if (name.Length is 0 or > 200 || name.Contains('\n')) throw new WorkspaceException(400, "A version name is one line of up to 200 characters.");
+        return ExecuteAsync(() => Task.FromResult(Versions.Save(name)!));
+    }
+
+    /// <summary>Saves a version only when something changed since the last one; the monitor calls this after a quiet period.</summary>
+    public Task<VersionInfo?> SaveAutomaticVersionAsync() => ExecuteAsync(() => Task.FromResult(Versions.Save(null)));
+
+    /// <summary>Puts every file back as it was in a version, saving the current state first so the restore can be undone.</summary>
+    public Task<ProjectResponse> RestoreVersionAsync(string id) => ExecuteAsync(async () =>
+    {
+        Versions.Restore(id);
+        await RescanAsync();
+        return _queries.GetProject();
+    });
+
+    private ProjectVersionStore Versions => _versions ?? throw new InvalidOperationException("The project has not been initialized.");
 
     private Task<T> ReadAsync<T>(Func<T> query) => ExecuteAsync(() => Task.FromResult(query()));
 
@@ -151,5 +180,5 @@ public sealed class ProjectServices : IDisposable
         finally { _gate.Release(); }
     }
 
-    public void Dispose() { _instanceLock?.Dispose(); _gate.Dispose(); }
+    public void Dispose() { _versions?.Dispose(); _instanceLock?.Dispose(); _gate.Dispose(); }
 }
