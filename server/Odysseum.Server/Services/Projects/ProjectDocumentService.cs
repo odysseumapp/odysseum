@@ -1,3 +1,4 @@
+using Odysseum.Server.Repositories.Files;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Storage;
 using Odysseum.Server.Services.Storage.Models;
@@ -7,7 +8,7 @@ using static Odysseum.Server.Services.Storage.ContentRevision;
 
 namespace Odysseum.Server.Services.Projects;
 
-internal sealed class ProjectDocumentService(ProjectState state, ProjectFileStore files, DocumentHistoryStore history)
+internal sealed class ProjectDocumentService(ProjectState state, IFileManager files, DocumentHistoryStore history)
 {
     public async Task<string> SaveAsync(string id, SaveDocumentRequest request)
     {

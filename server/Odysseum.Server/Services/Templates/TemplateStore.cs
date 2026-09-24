@@ -1,3 +1,4 @@
+using Odysseum.Server.Repositories.Files;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -161,14 +162,14 @@ public sealed partial class TemplateStore(string root)
         var paths = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         foreach (var folder in template.Folders)
         {
-            if (folder?.Path is null || (folder.Path != "" && !ProjectFileStore.IsSafePath(folder.Path)) || !paths.Add(folder.Path))
+            if (folder?.Path is null || (folder.Path != "" && !FileManager.IsSafePath(folder.Path)) || !paths.Add(folder.Path))
                 throw Invalid($"The template has a folder it cannot create: '{folder?.Path}'.");
             if (folder.PinnedView is not (null or "write" or "board" or "outline" or "grid")) throw Invalid("The template pins a view that does not exist.");
             folder.ItemOrder = [.. (folder.ItemOrder ?? []).Where(key => !string.IsNullOrWhiteSpace(key)).Distinct()];
         }
         foreach (var document in template.Documents)
         {
-            if (document?.Path is null || !ProjectFileStore.IsSafePath(document.Path) || !DocumentRules.IsDocument(document.Path) || !paths.Add(document.Path))
+            if (document?.Path is null || !FileManager.IsSafePath(document.Path) || !DocumentRules.IsDocument(document.Path) || !paths.Add(document.Path))
                 throw Invalid($"The template has a document it cannot create: '{document?.Path}'.");
             document.Title = DocumentRules.ValidateTitle(string.IsNullOrWhiteSpace(document.Title) ? Path.GetFileNameWithoutExtension(document.Path).TrimStart('.') : document.Title);
         }

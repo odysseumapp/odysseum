@@ -1,3 +1,4 @@
+using Odysseum.Server.Repositories.Files;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -6,7 +7,7 @@ using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services.Storage;
 
-internal sealed class ProjectManifestStore(ProjectFileStore files)
+internal sealed class ProjectManifestStore(IFileManager files)
 {
     private const string ManifestPath = ".odysseum/project.json";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -111,7 +112,7 @@ internal sealed class ProjectManifestStore(ProjectFileStore files)
     private static byte[] Serialize<T>(T value)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(value, Json);
-        if (bytes.Length > ProjectFileStore.MaxFileBytes) throw new WorkspaceException(413, "Folder metadata exceeds the 4 MB limit.");
+        if (bytes.Length > FileManager.MaxFileBytes) throw new WorkspaceException(413, "Folder metadata exceeds the 4 MB limit.");
         return bytes;
     }
 

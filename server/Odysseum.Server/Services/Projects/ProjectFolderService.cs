@@ -1,9 +1,10 @@
+using Odysseum.Server.Repositories.Files;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Storage;
 
 namespace Odysseum.Server.Services.Projects;
 
-internal sealed class ProjectFolderService(ProjectState state, ProjectFileStore files, Func<bool> allowDeletingDefaultFolders)
+internal sealed class ProjectFolderService(ProjectState state, IFileManager files, Func<bool> allowDeletingDefaultFolders)
 {
     private void CheckRevision(string revision)
     {

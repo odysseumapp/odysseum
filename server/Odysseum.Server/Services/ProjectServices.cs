@@ -1,3 +1,4 @@
+using Odysseum.Server.Repositories.Files;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Monitoring;
 using Odysseum.Server.Services.Projects;
@@ -11,7 +12,7 @@ namespace Odysseum.Server.Services;
 public sealed class ProjectServices : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly ProjectFileStore _files;
+    private readonly IFileManager _files;
     private readonly DocumentHistoryStore _history;
     private readonly ProjectState _state;
     private readonly ProjectScanner _scanner;
@@ -26,7 +27,7 @@ public sealed class ProjectServices : IDisposable
 
     public ProjectServices(string root, ProjectEvents events, ISettingsProvider? settings = null)
     {
-        _files = new ProjectFileStore(root);
+        _files = new FileManager(root);
         var manifests = new ProjectManifestStore(_files);
         _history = new DocumentHistoryStore(_files);
         _state = new ProjectState(Root, manifests, events);

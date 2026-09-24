@@ -1,3 +1,4 @@
+using Odysseum.Server.Repositories.Files;
 using System.Text;
 using Odysseum.Server.Services.Storage;
 using Odysseum.Server.Services.Storage.Models;
@@ -7,7 +8,7 @@ using static Odysseum.Server.Services.Storage.ContentRevision;
 
 namespace Odysseum.Server.Services.Projects;
 
-internal sealed class ProjectScanner(ProjectState state, ProjectFileStore files, ProjectManifestStore manifests)
+internal sealed class ProjectScanner(ProjectState state, IFileManager files, ProjectManifestStore manifests)
 {
     public async Task ScanAsync()
     {

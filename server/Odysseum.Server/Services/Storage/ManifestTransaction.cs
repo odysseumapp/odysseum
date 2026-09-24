@@ -1,8 +1,9 @@
+using Odysseum.Server.Repositories.Files;
 using System.Text.Json;
 
 namespace Odysseum.Server.Services.Storage;
 
-internal sealed class ManifestTransaction(ProjectFileStore files)
+internal sealed class ManifestTransaction(IFileManager files)
 {
     private const string Journal = ".odysseum/pending-manifests.json";
     internal sealed record Entry(string Path, string? Backup, string After);
@@ -25,7 +26,7 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
         }
         foreach (var entry in entries.Reverse())
         {
-            if (entry.Backup is null) files.DeleteMetadata(entry.Path);
+            if (entry.Backup is null) files.Delete(entry.Path, metadata: true);
             else
             {
                 var before = await files.ReadAsync(entry.Backup, metadata: true);
@@ -34,7 +35,7 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
                     await files.WriteAsync(entry.Path, before, metadata: true);
             }
         }
-        files.DeleteMetadata(Journal);
+        files.Delete(Journal, metadata: true);
         CleanBackups(entries);
     }
 
@@ -46,7 +47,7 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
         try
         {
             foreach (var path in changes.Keys)
-                if (before.ContainsKey(path)) locks.Add(files.LockMetadata(path));
+                if (before.ContainsKey(path)) locks.Add(files.Lock(path, metadata: true));
             foreach (var (path, bytes) in before)
             {
                 var current = files.Exists(path, metadata: true) ? await files.ReadAsync(path, metadata: true) : null;
@@ -66,12 +67,12 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
                 entries.Add(new(path, backup, ContentRevision.Hash(bytes)));
             }
             var journal = JsonSerializer.SerializeToUtf8Bytes(entries);
-            if (journal.Length > ProjectFileStore.MaxFileBytes) throw new WorkspaceException(413, "Too many manifests in one update.");
+            if (journal.Length > FileManager.MaxFileBytes) throw new WorkspaceException(413, "Too many manifests in one update.");
             await files.WriteAsync(Journal, journal, overwrite: false, metadata: true);
             foreach (var handle in locks) handle.Dispose();
             locks.Clear();
             foreach (var (path, bytes) in changes) await files.WriteAsync(path, bytes, metadata: true);
-            files.DeleteMetadata(Journal);
+            files.Delete(Journal, metadata: true);
         }
         catch
         {
@@ -91,7 +92,7 @@ internal sealed class ManifestTransaction(ProjectFileStore files)
     {
         foreach (var entry in entries)
         {
-            try { if (entry.Backup is not null) files.DeleteMetadata(entry.Backup); }
+            try { if (entry.Backup is not null) files.Delete(entry.Backup, metadata: true); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {  }
         }
     }

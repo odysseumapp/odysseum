@@ -10,7 +10,7 @@ internal static partial class MarkdownDocumentCodec
     public static byte[] Encode(string prefix, string body)
     {
         var bytes = Utf8.GetBytes(prefix + body);
-        if (bytes.Length > Storage.ProjectFileStore.MaxFileBytes)
+        if (bytes.Length > Repositories.Files.FileManager.MaxFileBytes)
             throw new WorkspaceException(413, "Documents must be smaller than 4 MB.");
         return bytes;
     }

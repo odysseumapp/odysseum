@@ -1,3 +1,4 @@
+using Odysseum.Server.Repositories.Files;
 using Odysseum.Server.Services.Storage;
 using Odysseum.Server.Services.Templates;
 using Odysseum.Server.Settings;
@@ -6,7 +7,7 @@ using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;
 
 namespace Odysseum.Server.Services.Projects;
 
-internal sealed class ProjectTemplateService(ProjectState state, ProjectFileStore files)
+internal sealed class ProjectTemplateService(ProjectState state, IFileManager files)
 {
     private static string Parent(string path) => Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
 

@@ -1,3 +1,4 @@
+using Odysseum.Server.Repositories.Files;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Collections.Concurrent;
@@ -95,7 +96,7 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         var id = "";
         try
         {
-            var (manifest, _) = await new ProjectManifestStore(new ProjectFileStore(directory)).ReadAsync();
+            var (manifest, _) = await new ProjectManifestStore(new FileManager(directory)).ReadAsync();
             if (manifest is not null)
             {
                 title = manifest.Settings.Title;

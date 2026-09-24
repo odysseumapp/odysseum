@@ -1,16 +1,17 @@
+using Odysseum.Server.Repositories.Files;
 using System.Text.RegularExpressions;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Services.Documents;
 
 namespace Odysseum.Server.Services.Storage;
 
-internal sealed partial class DocumentHistoryStore(ProjectFileStore files)
+internal sealed partial class DocumentHistoryStore(IFileManager files)
 {
     public async Task SaveAsync(string id, byte[] bytes)
     {
         var folder = $".odysseum/history/{id}";
         var hash = ContentRevision.Hash(bytes);
-        if (files.EnumerateMetadataFiles(folder, $"*-{hash}.md").Any()) return;
+        if (files.EnumerateFiles(folder, $"*-{hash}.md", metadata: true).Any()) return;
         var name = $"{DateTime.UtcNow:yyyyMMddTHHmmssfffffff}-{hash}.md";
         await files.WriteAsync($"{folder}/{name}", bytes, overwrite: false, metadata: true);
     }
@@ -18,7 +19,7 @@ internal sealed partial class DocumentHistoryStore(ProjectFileStore files)
     public async Task<IReadOnlyList<SnapshotInfo>> ListAsync(string id)
     {
         var result = new List<SnapshotInfo>();
-        foreach (var path in files.EnumerateMetadataFiles($".odysseum/history/{id}", "*.md").OrderDescending().Take(100))
+        foreach (var path in files.EnumerateFiles($".odysseum/history/{id}", "*.md", metadata: true).OrderDescending().Take(100))
         {
             var content = MarkdownDocumentCodec.Decode(await files.ReadAsync(path, metadata: true));
             result.Add(new(Path.GetFileNameWithoutExtension(path), files.LastModified(path, metadata: true),
