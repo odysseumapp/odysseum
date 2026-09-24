@@ -26,7 +26,7 @@ internal sealed class ProjectQueries(ProjectState state)
 
     public string Export()
     {
-        return $"# {state.Manifest.Settings.Title}\n\n" + string.Join("\n\n---\n\n", Ordered().Where(x => KindOf(x.Path) == DocumentKind.Scene && !IsFolderDocument(x.Path)).Select(x =>
+        return $"# {state.Manifest.Settings.Title}\n\n" + string.Join("\n\n---\n\n", Ordered().Where(x => KindOf(x.Path) == Odysseum.Abstractions.Documents.DocumentKind.Scene && !IsFolderDocument(x.Path)).Select(x =>
             $"## {state.Manifest.Documents[x.Id].Title}\n\n{x.Body.Trim()}")) + "\n";
     }
 
@@ -59,7 +59,7 @@ internal sealed class ProjectQueries(ProjectState state)
         foreach (var other in links)
             if ((m.LinkNotes.TryGetValue(other, out var note) || state.Manifest.Documents[other].LinkNotes.TryGetValue(d.Id, out note)) && note.Length > 0) notes[other] = note;
         return new(d.Id, d.Path, m.Title, Path.GetDirectoryName(d.Path)?.Replace('\\', '/') ?? "",
-            m.Synopsis, m.Notes, m.Status, m.WordGoal, m.Order, CountWords(d.Body), d.Revision, d.Modified, KindOf(d.Path), links, notes);
+            m.Synopsis, m.Notes, (DocumentStatus)m.Status, m.WordGoal, m.Order, CountWords(d.Body), d.Revision, d.Modified, (DocumentKind)KindOf(d.Path), links, notes);
     }
     private IEnumerable<DiskDocument> Ordered() => state.Documents.Values.OrderBy(x => state.Manifest.Documents[x.Id].Order).ThenBy(x => x.Path, StringComparer.Ordinal);
 }

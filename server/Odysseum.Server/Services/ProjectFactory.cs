@@ -5,6 +5,14 @@ namespace Odysseum.Server.Services;
 
 public sealed class ProjectFactory(ILoggerFactory loggers, int scanSeconds, ISettingsProvider? settings = null, int versionSeconds = 0)
 {
+    public async Task<OpenProject> OpenProjectAsync(string slug, string path)
+    {
+        var project = new OpenProject(slug, path, new ProjectEvents());
+        try { await project.InitializeAsync(); }
+        catch { project.Dispose(); throw; }
+        return project;
+    }
+
     public async Task<ProjectHandle> OpenAsync(string slug, string path)
     {
         var events = new ProjectEvents();

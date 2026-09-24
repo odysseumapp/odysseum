@@ -1,6 +1,6 @@
 using Odysseum.Abstractions.Exceptions;
 using System.Text.RegularExpressions;
-using Odysseum.Server.API.Enums;
+using Odysseum.Abstractions.Documents;
 
 namespace Odysseum.Server.Services.Documents;
 

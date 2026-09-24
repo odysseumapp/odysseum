@@ -17,6 +17,8 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
 
     private readonly ConcurrentDictionary<string, Lazy<Task<ProjectHandle>>> _open =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Lazy<Task<OpenProject>>> _openProjects =
+        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     private readonly SemaphoreSlim _createGate = new(1, 1);
     public string Root { get; } = Path.GetFullPath(root);
 
@@ -48,6 +50,38 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         catch
         {
             _open.TryRemove(new KeyValuePair<string, Lazy<Task<ProjectHandle>>>(slug, lazy));
+            throw;
+        }
+    }
+
+    public bool Exists(string slug) => Directory.Exists(Path.Combine(Root, ValidateSlug(slug)));
+
+    public IEnumerable<string> Slugs()
+    {
+        Directory.CreateDirectory(Root);
+        foreach (var directory in Directory.EnumerateDirectories(Root).Order(StringComparer.Ordinal))
+        {
+            var slug = Path.GetFileName(directory);
+            if (slug.StartsWith('.') || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) continue;
+            yield return slug;
+        }
+    }
+
+    public async Task<OpenProject> OpenProjectAsync(string slug)
+    {
+        slug = ValidateSlug(slug);
+        var path = Path.Combine(Root, slug);
+        if (!Directory.Exists(path))
+        {
+            if (_openProjects.TryRemove(slug, out var stale) && stale.IsValueCreated && stale.Value.IsCompletedSuccessfully)
+                stale.Value.Result.Dispose();
+            throw new WorkspaceException(WorkspaceError.NotFound, "That project no longer exists in the workspace.");
+        }
+        var lazy = _openProjects.GetOrAdd(slug, key => new Lazy<Task<OpenProject>>(() => factory.OpenProjectAsync(key, path)));
+        try { return await lazy.Value; }
+        catch
+        {
+            _openProjects.TryRemove(new KeyValuePair<string, Lazy<Task<OpenProject>>>(slug, lazy));
             throw;
         }
     }
@@ -125,6 +159,13 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
             catch (WorkspaceException) {  }
         }
         _open.Clear();
+        foreach (var entry in _openProjects.Values)
+        {
+            if (!entry.IsValueCreated) continue;
+            try { (await entry.Value).Dispose(); }
+            catch (WorkspaceException) {  }
+        }
+        _openProjects.Clear();
         _createGate.Dispose();
     }
 }

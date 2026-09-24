@@ -21,7 +21,7 @@ internal sealed class ProjectOrganizationService(ProjectState state)
         metadata.Title = title;
         metadata.Synopsis = request.Synopsis;
         metadata.Notes = request.Notes;
-        metadata.Status = request.Status;
+        metadata.Status = (Odysseum.Abstractions.Documents.DocumentStatus)request.Status;
         metadata.WordGoal = request.WordGoal;
         if (request.Links is not null)
         {

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Odysseum.Server.API.Enums;
+using Odysseum.Abstractions.Documents;
 
 namespace Odysseum.Server.Repositories.Manifests;
 

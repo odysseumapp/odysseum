@@ -2,6 +2,7 @@ using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text.RegularExpressions;
 using Odysseum.Server.API.Models;
+using Odysseum.Server.Models;
 using Odysseum.Server.Services.Documents;
 
 namespace Odysseum.Server.Repositories;
@@ -27,6 +28,16 @@ public sealed partial class DocumentVersionRepository(IFileManager files) : IDoc
                 MarkdownDocumentCodec.CountWords(MarkdownDocumentCodec.Split(content).Body)));
         }
         return result;
+    }
+
+    public Task<IReadOnlyList<DocumentVersion>> ListAsync(Document document)
+    {
+        var versions = files.EnumerateFiles($".odysseum/history/{document.Id}", "*.md", metadata: true).OrderDescending().Take(100)
+            .Select(path => Path.GetFileNameWithoutExtension(path) is var name
+                ? new DocumentVersion(document, name, new DateTimeOffset(files.LastModified(path, metadata: true), TimeSpan.Zero), () => ReadAsync(document.Id, name))
+                : throw new InvalidOperationException())
+            .ToArray();
+        return Task.FromResult<IReadOnlyList<DocumentVersion>>(versions);
     }
 
     public async Task<string> ReadAsync(string id, string snapshot)
