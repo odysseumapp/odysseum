@@ -1,51 +1,65 @@
-using Odysseum.Abstractions.Exceptions;
-using Odysseum.Server.Repositories.Files;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Collections.Concurrent;
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.API.Models;
-using Odysseum.Server.Services.Documents;
+using Odysseum.Server.Models;
 using Odysseum.Server.Repositories;
+using Odysseum.Server.Repositories.Files;
+using Odysseum.Server.Services.Documents;
+using Odysseum.Server.Services.Templates;
 using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
 
-public sealed class ProjectLibrary(string root, ProjectFactory factory, TemplateRepository? templates = null) : IAsyncDisposable
+public sealed class ProjectLibrary(string root, ProjectFactory factory, ITemplateRepository? templates = null) : IAsyncDisposable
 {
     public static readonly string[] DefaultFolders = ["Manuscript", "Characters", "Locations", "Threads", "Notes", "Styles"];
     public static bool IsDefaultFolder(string path) => DefaultFolders.Contains(path, StringComparer.OrdinalIgnoreCase);
 
+    private readonly FileManager _files = new(root);
+    private readonly ProjectTemplateService _templateService = new();
     private readonly ConcurrentDictionary<string, Lazy<Task<ProjectHandle>>> _open =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, Lazy<Task<OpenProject>>> _openProjects =
-        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     private readonly SemaphoreSlim _createGate = new(1, 1);
-    public string Root { get; } = Path.GetFullPath(root);
+    public string Root => _files.Root;
+
+    public event Action<Project>? ProjectChanged;
+    public event Action<Document>? DocumentRemoved;
+    public event Action<Folder>? FolderRemoved;
+
+    public IEnumerable<string> Slugs()
+    {
+        _files.CreateFolder("");
+        return _files.EnumerateFolders(recursive: false);
+    }
+
+    public bool Exists(string slug) => _files.FolderExists(ValidateSlug(slug));
 
     public async Task<IReadOnlyList<ProjectInfo>> ListAsync()
     {
-        Directory.CreateDirectory(Root);
         var projects = new List<ProjectInfo>();
-        foreach (var directory in Directory.EnumerateDirectories(Root))
-        {
-            var slug = Path.GetFileName(directory);
-            if (slug.StartsWith('.') || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) continue;
-            projects.Add(await DescribeAsync(slug, directory));
-        }
+        foreach (var slug in Slugs()) projects.Add(await DescribeAsync(slug));
         return projects.OrderBy(x => x.Title, StringComparer.CurrentCultureIgnoreCase).ThenBy(x => x.Slug, StringComparer.Ordinal).ToArray();
     }
 
     public async Task<ProjectHandle> OpenAsync(string slug)
     {
         slug = ValidateSlug(slug);
-        var path = Path.Combine(Root, slug);
-        if (!Directory.Exists(path))
+        if (!_files.FolderExists(slug))
         {
             if (_open.TryRemove(slug, out var stale) && stale.IsValueCreated && stale.Value.IsCompletedSuccessfully)
                 await stale.Value.Result.DisposeAsync();
             throw new WorkspaceException(WorkspaceError.NotFound, "That project no longer exists in the workspace.");
         }
-        var lazy = _open.GetOrAdd(slug, key => new Lazy<Task<ProjectHandle>>(() => factory.OpenAsync(key, path)));
+        var lazy = _open.GetOrAdd(slug, key => new Lazy<Task<ProjectHandle>>(async () =>
+        {
+            var handle = await factory.OpenAsync(key, Path.Combine(Root, key));
+            handle.Project.Changed += project => ProjectChanged?.Invoke(project);
+            handle.Project.DocumentsRemoved += documents => { foreach (var document in documents) DocumentRemoved?.Invoke(document); };
+            handle.Project.FoldersRemoved += folders => { foreach (var folder in folders) FolderRemoved?.Invoke(folder); };
+            return handle;
+        }));
         try { return await lazy.Value; }
         catch
         {
@@ -54,37 +68,7 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         }
     }
 
-    public bool Exists(string slug) => Directory.Exists(Path.Combine(Root, ValidateSlug(slug)));
-
-    public IEnumerable<string> Slugs()
-    {
-        Directory.CreateDirectory(Root);
-        foreach (var directory in Directory.EnumerateDirectories(Root).Order(StringComparer.Ordinal))
-        {
-            var slug = Path.GetFileName(directory);
-            if (slug.StartsWith('.') || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) continue;
-            yield return slug;
-        }
-    }
-
-    public async Task<OpenProject> OpenProjectAsync(string slug)
-    {
-        slug = ValidateSlug(slug);
-        var path = Path.Combine(Root, slug);
-        if (!Directory.Exists(path))
-        {
-            if (_openProjects.TryRemove(slug, out var stale) && stale.IsValueCreated && stale.Value.IsCompletedSuccessfully)
-                stale.Value.Result.Dispose();
-            throw new WorkspaceException(WorkspaceError.NotFound, "That project no longer exists in the workspace.");
-        }
-        var lazy = _openProjects.GetOrAdd(slug, key => new Lazy<Task<OpenProject>>(() => factory.OpenProjectAsync(key, path)));
-        try { return await lazy.Value; }
-        catch
-        {
-            _openProjects.TryRemove(new KeyValuePair<string, Lazy<Task<OpenProject>>>(slug, lazy));
-            throw;
-        }
-    }
+    public async Task<OpenProject> OpenProjectAsync(string slug) => (await OpenAsync(slug)).Project;
 
     public async Task<ProjectInfo> CreateAsync(CreateProjectRequest request)
     {
@@ -93,27 +77,26 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         var template = templates?.Get(string.IsNullOrWhiteSpace(request.Template) ? TemplateRepository.DefaultName : request.Template)
             ?? (string.IsNullOrWhiteSpace(request.Template) || TemplateRepository.IsDefault(request.Template) ? TemplateRepository.Default()
                 : throw new WorkspaceException(WorkspaceError.NotFound, $"There is no project template called '{request.Template}'."));
+        var settings = ProjectSettings.From(new ProjectSettings
+        {
+            Title = title, WordGoal = request.WordGoal ?? template.Settings.WordGoal, DefaultSceneWordGoal = template.Settings.DefaultSceneWordGoal,
+        }, out var error);
+        if (error is not null) throw new WorkspaceException(WorkspaceError.Invalid, error);
         string slug;
         await _createGate.WaitAsync();
         try
         {
-            Directory.CreateDirectory(Root);
+            _files.CreateFolder("");
             slug = stem;
             var suffix = 2;
-            while (Directory.Exists(Path.Combine(Root, slug)) || File.Exists(Path.Combine(Root, slug))) slug = $"{stem}-{suffix++}";
-            Directory.CreateDirectory(Path.Combine(Root, slug));
+            while (_files.FolderExists(slug) || _files.Exists(slug)) slug = $"{stem}-{suffix++}";
+            _files.CreateFolder(slug);
         }
         finally { _createGate.Release(); }
         var handle = await OpenAsync(slug);
-        var settings = new ProjectSettings
-        {
-            Title = title, WordGoal = request.WordGoal ?? template.Settings.WordGoal, DefaultSceneWordGoal = template.Settings.DefaultSceneWordGoal,
-        };
-        await handle.Services.ApplyTemplateAsync(template, settings);
-        return await DescribeAsync(slug, Path.Combine(Root, slug));
+        await _templateService.ApplyAsync(handle.Project, template, settings);
+        return await DescribeAsync(slug);
     }
-
-    public async Task<ProjectServices> OpenServicesAsync(string slug) => (await OpenAsync(slug)).Services;
 
     public static string ValidateSlug(string slug)
     {
@@ -124,28 +107,29 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
         return slug;
     }
 
-    private static async Task<ProjectInfo> DescribeAsync(string slug, string directory)
+    private async Task<ProjectInfo> DescribeAsync(string slug)
     {
         var title = slug;
         var id = "";
+        var files = new FileManager(Path.Combine(Root, slug));
         try
         {
-            var (manifest, _) = await new ProjectManifestRepository(new FileManager(directory)).ReadAsync();
+            var (manifest, _) = await new ProjectManifestRepository(files).ReadAsync();
             if (manifest is not null)
             {
                 title = manifest.Settings.Title;
                 id = manifest.Id;
             }
-            else if (File.Exists(Path.Combine(directory, ".writer", "project.json")))
+            else if (files.Exists(".writer/project.json", metadata: true))
             {
-                var legacy = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(directory, ".writer", "project.json")));
+                var legacy = JsonNode.Parse(await files.ReadAsync(".writer/project.json", metadata: true));
                 title = Text(legacy?["settings"]?["title"]) ?? Text(legacy?["title"]) ?? title;
                 id = Text(legacy?["id"]) ?? id;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WorkspaceException or JsonException)
         {  }
-        return new(slug, title, id, Directory.GetLastWriteTimeUtc(directory));
+        return new(slug, title, id, _files.LastModified(slug));
     }
 
     private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
@@ -159,13 +143,6 @@ public sealed class ProjectLibrary(string root, ProjectFactory factory, Template
             catch (WorkspaceException) {  }
         }
         _open.Clear();
-        foreach (var entry in _openProjects.Values)
-        {
-            if (!entry.IsValueCreated) continue;
-            try { (await entry.Value).Dispose(); }
-            catch (WorkspaceException) {  }
-        }
-        _openProjects.Clear();
         _createGate.Dispose();
     }
 }

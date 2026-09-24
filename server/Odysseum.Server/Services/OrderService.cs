@@ -109,6 +109,8 @@ public sealed class OrderService : IOrderService
     internal static void Remove(FolderManifest owner, string id) =>
         owner.ItemOrder = owner.ItemOrder.Where(key => key != id).ToArray();
 
+    internal static void Set(FolderManifest owner, IReadOnlyList<string> ids) => owner.ItemOrder = [.. ids];
+
     private static int DefaultRank(string name)
     {
         var index = Array.FindIndex(ProjectLibrary.DefaultFolders, folder => string.Equals(folder, name, StringComparison.OrdinalIgnoreCase));

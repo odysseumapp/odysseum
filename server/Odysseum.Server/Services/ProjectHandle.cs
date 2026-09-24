@@ -1,18 +1,16 @@
 using Odysseum.Server.Services.Monitoring;
-using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
 
-public sealed class ProjectHandle(string slug, ProjectServices services, ProjectEvents events, ProjectMonitor monitor, IProjectSettingsProvider settings) : IAsyncDisposable
+public sealed class ProjectHandle(string slug, OpenProject project, ProjectMonitor monitor) : IAsyncDisposable
 {
     public string Slug { get; } = slug;
-    public ProjectServices Services { get; } = services;
-    public ProjectEvents Events { get; } = events;
-    public IProjectSettingsProvider Settings { get; } = settings;
+    public OpenProject Project { get; } = project;
+    public ProjectEvents Events => Project.Events;
 
     public async ValueTask DisposeAsync()
     {
         try { await monitor.DisposeAsync(); }
-        finally { Services.Dispose(); }
+        finally { Project.Dispose(); }
     }
 }

@@ -6,7 +6,7 @@ namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api/themes")]
-public class ThemesController(ThemeRepository themes) : ControllerBase
+public class ThemesController(IThemeRepository themes) : ControllerBase
 {
     /// <summary>Every saved colour scheme. Each browser remembers which one it shows.</summary>
     [HttpGet]

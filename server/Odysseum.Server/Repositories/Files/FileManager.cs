@@ -81,7 +81,7 @@ public sealed class FileManager(string root) : IFileManager
 
     public void CreateFolder(string relative)
     {
-        var path = ResolvePath(relative);
+        var path = RootOr(relative);
         if (File.Exists(path)) throw new WorkspaceException(WorkspaceError.Conflict, "A file already has that name.");
         var parent = Path.GetDirectoryName(path)!;
         if (!Directory.Exists(parent)) throw new WorkspaceException(WorkspaceError.NotFound, "The parent folder no longer exists.");

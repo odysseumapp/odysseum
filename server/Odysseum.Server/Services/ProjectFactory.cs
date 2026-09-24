@@ -1,36 +1,25 @@
 using Odysseum.Server.Services.Monitoring;
-using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
 
-public sealed class ProjectFactory(ILoggerFactory loggers, int scanSeconds, ISettingsProvider? settings = null, int versionSeconds = 0)
+public sealed class ProjectFactory(ILoggerFactory loggers, int scanSeconds, int versionSeconds = 0, bool watch = true)
 {
-    public async Task<OpenProject> OpenProjectAsync(string slug, string path)
-    {
-        var project = new OpenProject(slug, path, new ProjectEvents());
-        try { await project.InitializeAsync(); }
-        catch { project.Dispose(); throw; }
-        return project;
-    }
-
     public async Task<ProjectHandle> OpenAsync(string slug, string path)
     {
-        var events = new ProjectEvents();
-        var services = new ProjectServices(path, events, settings);
+        var project = new OpenProject(slug, path, new ProjectEvents());
         ProjectMonitor? monitor = null;
         try
         {
-            await services.InitializeAsync();
-            monitor = new ProjectMonitor(services, loggers.CreateLogger<ProjectMonitor>(), scanSeconds, versionSeconds);
-            var settings = new ProjectSettingsProvider(slug, services, loggers.CreateLogger<ProjectSettingsProvider>());
-            var handle = new ProjectHandle(slug, services, events, monitor, settings);
-            monitor.Start();
+            await project.InitializeAsync();
+            monitor = new ProjectMonitor(project, loggers.CreateLogger<ProjectMonitor>(), scanSeconds, versionSeconds);
+            var handle = new ProjectHandle(slug, project, monitor);
+            if (watch) monitor.Start();
             return handle;
         }
         catch
         {
             try { if (monitor is not null) await monitor.DisposeAsync(); }
-            finally { services.Dispose(); }
+            finally { project.Dispose(); }
             throw;
         }
     }

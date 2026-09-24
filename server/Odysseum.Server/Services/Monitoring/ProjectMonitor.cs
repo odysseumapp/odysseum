@@ -1,9 +1,9 @@
-using Odysseum.Abstractions.Exceptions;
 using System.Threading.Channels;
+using Odysseum.Abstractions.Exceptions;
 
 namespace Odysseum.Server.Services.Monitoring;
 
-public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int seconds, int versionSeconds = 0) : IAsyncDisposable
+public sealed class ProjectMonitor(OpenProject project, ILogger logger, int seconds, int versionSeconds = 0) : IAsyncDisposable
 {
     private readonly CancellationTokenSource _stopping = new();
     private Task _loop = Task.CompletedTask;
@@ -13,14 +13,14 @@ public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int
     private async Task RunAsync(CancellationToken stoppingToken)
     {
         var changes = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
-        using var watcher = new FileSystemWatcher(services.Root)
+        using var watcher = new FileSystemWatcher(project.Root)
         {
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size
         };
         void Changed(object? sender, FileSystemEventArgs args)
         {
-            var relative = Path.GetRelativePath(services.Root, args.FullPath).Replace('\\', '/');
+            var relative = Path.GetRelativePath(project.Root, args.FullPath).Replace('\\', '/');
             if (relative.Split('/').Any(part => part.StartsWith('.'))
                 && relative != ".odysseum/project.json" && !relative.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)) return;
             changes.Writer.TryWrite(true);
@@ -31,7 +31,7 @@ public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int
         watcher.Renamed += (sender, args) => Changed(sender, args);
         watcher.Error += (_, _) => changes.Writer.TryWrite(true);
         try { watcher.EnableRaisingEvents = true; }
-        catch (IOException ex) { logger.LogWarning(ex, "File notifications are unavailable for {Root}; using polling.", services.Root); }
+        catch (IOException ex) { logger.LogWarning(ex, "File notifications are unavailable for {Root}; using polling.", project.Root); }
         DateTime? changedAt = null;
         try
         {
@@ -55,15 +55,15 @@ public sealed class ProjectMonitor(ProjectServices services, ILogger logger, int
                 if (notified) changedAt = DateTime.UtcNow;
                 try
                 {
-                    await services.ScanAsync();
+                    await project.ScanAsync();
                     if (versionSeconds > 0 && changedAt is { } at && DateTime.UtcNow - at >= TimeSpan.FromSeconds(versionSeconds))
                     {
                         changedAt = null;
-                        await services.SaveAutomaticVersionAsync();
+                        await project.SaveAutomaticVersionAsync();
                     }
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WorkspaceException)
-                { logger.LogWarning("Scan of {Root} deferred: {Message}", services.Root, ex.Message); }
+                { logger.LogWarning("Scan of {Root} deferred: {Message}", project.Root, ex.Message); }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }

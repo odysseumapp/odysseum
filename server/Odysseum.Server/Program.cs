@@ -6,7 +6,12 @@ using Odysseum.Server.API.Models;
 using Odysseum.Server.Bootstrap;
 using Odysseum.Server.Services;
 using Odysseum.Server.Settings;
+using Odysseum.Abstractions.Documents;
+using Odysseum.Abstractions.Folders;
+using Odysseum.Abstractions.Projects;
+using Odysseum.Server.API.Views;
 using Odysseum.Server.Repositories;
+using Odysseum.Server.Services.Templates;
 using Odysseum.Server.Services.WebUi;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -45,12 +50,12 @@ var bundledUi = Path.Combine(AppContext.BaseDirectory, "webui.zip");
 if (webUi.CurrentDirectory is null && File.Exists(bundledUi)) await webUi.InstallAsync(bundledUi);
 builder.Services.AddSingleton(webUi);
 builder.Services.AddSingleton<WebUiFileProvider>();
-builder.Services.AddSingleton(new ThemeRepository(settings.Themes!));
+builder.Services.AddSingleton<IThemeRepository>(new ThemeRepository(settings.Themes!));
 var templates = new TemplateRepository(settings.Templates!);
 try { templates.EnsureDefault(); }
 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 { startupLoggers.CreateLogger<TemplateRepository>().LogWarning(ex, "Could not write the Default project template to {Path}; the built-in one is used", templates.Root); }
-builder.Services.AddSingleton(templates);
+builder.Services.AddSingleton<ITemplateRepository>(templates);
 
 settingsProvider.DebugSettingsToLog();
 
@@ -58,8 +63,14 @@ builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 
 
 builder.Services.AddSingleton<ISettingsProvider>(settingsProvider);
 
-builder.Services.AddSingleton(provider => new ProjectFactory(provider.GetRequiredService<ILoggerFactory>(), settings.ScanSeconds, settingsProvider, settings.VersionSeconds));
+builder.Services.AddSingleton(provider => new ProjectFactory(provider.GetRequiredService<ILoggerFactory>(), settings.ScanSeconds, settings.VersionSeconds));
 builder.Services.AddSingleton(provider => new ProjectLibrary(settings.Workspace, provider.GetRequiredService<ProjectFactory>(), templates));
+builder.Services.AddSingleton<IOrderService, OrderService>();
+builder.Services.AddSingleton<IProjectService>(provider => new ProjectService(provider.GetRequiredService<ProjectLibrary>()));
+builder.Services.AddSingleton<IFolderService>(provider => new FolderService(provider.GetRequiredService<ProjectLibrary>(), settingsProvider));
+builder.Services.AddSingleton<IDocumentService>(provider => new DocumentService(provider.GetRequiredService<ProjectLibrary>()));
+builder.Services.AddSingleton<ProjectViews>();
+builder.Services.AddSingleton<ProjectTemplateService>();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 

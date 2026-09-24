@@ -40,6 +40,8 @@ public sealed class OpenProject : IDisposable
     public FolderRepository Folders { get; }
     public Project Current { get; private set; }
     public event Action<Project>? Changed;
+    public event Action<IReadOnlyList<Document>>? DocumentsRemoved;
+    public event Action<IReadOnlyList<Folder>>? FoldersRemoved;
     public IProjectVersionRepository Versions => _versions ?? throw new InvalidOperationException("The project has not been initialized.");
 
     internal ProjectManifest NewManifest() => new() { Settings = new ProjectSettings { Title = Slug } };
@@ -55,6 +57,8 @@ public sealed class OpenProject : IDisposable
     }, scan: false);
 
     public Task<Project> SnapshotAsync() => RunAsync(() => Task.FromResult(Current));
+
+    public Task ScanAsync() => SnapshotAsync();
 
     public async Task<T> RunAsync<T>(Func<Task<T>> action, bool scan = true)
     {
@@ -82,11 +86,16 @@ public sealed class OpenProject : IDisposable
 
     internal void Apply(Project next)
     {
-        var changed = Current.Fingerprint() != next.Fingerprint();
+        var previous = Current;
+        var changed = previous.Fingerprint() != next.Fingerprint();
         Current = next;
         if (!changed) return;
         Events.Publish();
         Changed?.Invoke(next);
+        var documents = previous.Documents.Where(document => next.Document(document.Id) is null).ToArray();
+        if (documents.Length > 0) DocumentsRemoved?.Invoke(documents);
+        var folders = previous.Folders.Where(folder => next.Folder(folder.Id) is null).ToArray();
+        if (folders.Length > 0) FoldersRemoved?.Invoke(folders);
     }
 
     public Task<IReadOnlyList<VersionInfo>> ListVersionsAsync() => RunAsync(() => Task.FromResult(Versions.List()), scan: false);
