@@ -2,7 +2,7 @@
 
 ## Workspace layout
 
-The workspace (`ODYSSEUM_WORKSPACE`) is a directory whose immediate subdirectories are projects. Hidden directories (leading `.`), symbolic links/junctions, and files at the workspace root are ignored. A project's identifier in URLs and the API is its directory name; renaming the directory changes the address but not the project's UUID, so browser drafts keyed by that UUID survive.
+The workspace (`ODYSSEUM_WORKSPACE`) is a directory whose immediate subdirectories are projects. Hidden directories (leading `.`), symbolic links/junctions, and files at the workspace root are ignored. A project's name in URLs and the API is its directory name; renaming the directory changes the address but not the project's UUID, so browser drafts keyed by that UUID survive.
 
 Project directory names follow the same rules as document paths: no leading `.`, no trailing `.` or space, no path separators or characters the filesystem forbids. The application derives a name from the title when it creates a project and appends `-2`, `-3`, … to avoid collisions.
 
@@ -62,13 +62,14 @@ The root manifest contains project settings and indexes only its immediate files
   "id": "fa1367f8-b351-47fc-82f2-0f8420d1ea31",
   "settings": { "title": "My Novel", "wordGoal": 60000, "defaultSceneWordGoal": 1000 },
   "documents": {},
+  "itemOrder": ["0ad487f0-00b8-42b3-9c58-c27cfa20bb6d"],
   "folders": {
-    "0ad487f0-00b8-42b3-9c58-c27cfa20bb6d": { "path": "Manuscript", "order": 0 }
+    "0ad487f0-00b8-42b3-9c58-c27cfa20bb6d": { "path": "Manuscript" }
   }
 }
 ```
 
-Each folder manifest has its own stable UUID, immediate child folder references, and metadata for its immediate documents. The UUID in a parent's `folders` dictionary matches the child's manifest ID. Paths are local names, never project-relative paths. For example, `Manuscript/Chapter 01/.odysseum/folder.json`:
+Each folder manifest has its own stable UUID, immediate child folder references, metadata for its immediate documents, and `itemOrder`, the order of its immediate children. The UUID in a parent's `folders` dictionary matches the child's manifest ID. Paths are local names, never project-relative paths. For example, `Manuscript/Chapter 01/.odysseum/folder.json`:
 
 ```json
 {
@@ -83,7 +84,6 @@ Each folder manifest has its own stable UUID, immediate child folder references,
       "notes": "Remember the lighthouse.",
       "status": "draft",
       "wordGoal": 1000,
-      "order": 0,
       "links": [],
       "linkNotes": {},
       "lastKnownHash": "sha256 of the complete file bytes"
@@ -104,7 +104,9 @@ Kind follows the top-level folder (case-insensitive): `Characters/` is character
 
 Each folder's Grid view needs no setup: its rows are the folder's documents in order, grouped by subfolder, and its columns are every document of one other folder — Threads by default (Manuscript when you are in Threads). A mark sits where a row and a column are linked. The only saved choice is `gridFolder`, the UUID of the folder supplying the columns; `null` means the default, and a folder that no longer exists is rejected when the layout is saved. A pinned `threads` view from earlier releases becomes `grid`; its `threads`, `threadAxis` and `positions` keys are dropped on the next write.
 
-`status` is `draft`, `revised`, or `done`. Document `order` retains the existing project-wide sequence used by the API, outline, and export. Child folder entries have their own order values; the current API does not expose a separate folder-reordering operation. Reordering documents changes metadata without renaming files. `lastKnownHash` helps change detection and conservative legacy rename matching.
+`status` is `draft`, `revised`, or `done`. `lastKnownHash` helps change detection and conservative legacy rename matching.
+
+There is one ordering. `itemOrder` lists the UUIDs of the folder's immediate children, documents and subfolders alike, in the order they appear; the folder's own hidden document is never listed. Children missing from the list come after the listed ones: subfolders first (at the root in the default order, otherwise by name), then documents by file name. The manuscript order the API, outline, and export use is the walk from the root: each folder's hidden document, then its children in order, descending into subfolders. Reordering changes `itemOrder` without renaming files; the application does it by moving one item to an index in a folder, which also moves documents and folders between folders. Manifests written by earlier releases carried a per-document `order` number, a per-subfolder `order` number, and `folder:Name` keys in `itemOrder`; opening the project translates the keys to UUIDs, appends unlisted children in their old order, and drops the numbers.
 
 Unknown root, folder, child folder, and document properties round-trip. Invalid JSON, unsafe local paths, and unsupported versions block saves instead of being replaced. Removed-file entries remain in surviving folders so restored documents can recover metadata. Removing a folder removes its metadata with it; back up the complete folder to preserve that information.
 
@@ -137,21 +139,20 @@ The project root is the folder with the empty path. `itemOrder` keys are `folder
 
 Opening a version 1 project automatically distributes its centralized document metadata into the owning folders and upgrades the root to version 2. The original root bytes are retained in `.odysseum/project.v1.json` before migration. Markdown, document UUIDs, ordering, links, and history are preserved. Old top-level `title` and `wordGoal` settings are migrated into `settings`. Project listing is read-only and does not migrate files.
 
-The API still returns a flat document list with project-relative paths. Its project revision is an opaque fingerprint of all current manifests and their paths, so an edit to any folder invalidates stale metadata writes. New projects without metadata receive manifests on first open.
+The API returns a flat document list with project-relative paths, and each folder's `children` as IDs in order. Its project revision is an opaque fingerprint of all current manifests and their paths, so an edit to any folder invalidates stale metadata writes. New projects without metadata receive manifests on first open.
 
 Multi-manifest writes use flushed temporary files and a rollback journal at `.odysseum/pending-manifests.json`, with originals under `.odysseum/manifest-transaction/`. Removing the journal commits the batch. Failed writes restore the previous manifests; after a process interruption, the project lock owner recovers before scanning. Recovery refuses to overwrite an unrelated external edit. Keep the journal and its backups if recovery reports a conflict. Markdown saves and moves remain separate filesystem operations from metadata commits.
 
 ## Recovery
 
-`.odysseum/history/<id>/` contains complete, readable document revisions, including frontmatter. Snapshot filenames consist of a UTC timestamp and a SHA-256 hash. The history viewer strips frontmatter for editing; the files themselves retain it. Snapshots include attempted saves and are not a definitive audit log of successful commits.
-
-The browser keeps its copy of each opened project in IndexedDB (database `odysseum`): the project response, every document's server content and fingerprint, a queue of pending text edits (each recording the fingerprint it was written against), and an ordered queue of other operations (create, details, move, order, settings, create project). Edits are pushed with their fingerprint, so the server's revision check decides whether they apply cleanly or become a conflict; operations are replayed in order against the server's current state. Scenes and projects created offline carry temporary ids (`local-…`) until the server assigns real ones, at which point every local record naming them is re-keyed. The local copy belongs to that browser and is not a substitute for project backups; the workspace files remain the source of truth.
+The browser keeps its copy of each opened project in IndexedDB (database `odysseum`): the project response, every document's server content and fingerprint, a queue of pending text edits (each recording the fingerprint it was written against), and an ordered queue of other operations (create, details, move, settings, create project). Edits are pushed with their fingerprint, so the server's revision check decides whether they apply cleanly or become a conflict; operations are replayed in order against the server's current state. Scenes and projects created offline carry temporary ids (`local-…`) until the server assigns real ones, at which point every local record naming them is re-keyed. The local copy belongs to that browser and is not a substitute for project backups; the workspace files remain the source of truth.
 
 `.git` holds the project's versions: every file of the project as it was at each automatic or named save. It is an
-ordinary git repository, so any git tool can read it, but only the server writes it. Recovery snapshots and the
-instance lock are not part of a version.
+ordinary git repository, so any git tool can read it, but only the server writes it. It is also the history of each
+document: the versions that changed a file, and the file as it was in each of them. The instance lock and the
+transaction scratch are not part of a version.
 
-`.odysseum/instance.lock` is an application process lock, not project content. Back up the entire project including metadata and history; the lock file does not need to be backed up.
+`.odysseum/instance.lock` is an application process lock, not project content. Back up the entire project including metadata and `.git`; the lock file does not need to be backed up.
 
 ## Interoperability
 

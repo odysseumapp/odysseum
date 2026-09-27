@@ -1,5 +1,5 @@
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.API.Models;
-using Odysseum.Server.Services;
 
 namespace Odysseum.Server.API.Middleware;
 
@@ -23,7 +23,7 @@ public class ApiExceptionMiddleware
         }
         catch (WorkspaceException ex) when (!context.Response.HasStarted)
         {
-            await ApiResults.Error(ex.Status, ex.Message).ExecuteAsync(context);
+            await ApiResults.Error(StatusOf(ex.Error), ex.Message).ExecuteAsync(context);
         }
         catch (FileNotFoundException) when (!context.Response.HasStarted)
         {
@@ -39,4 +39,16 @@ public class ApiExceptionMiddleware
             await ApiResults.Unavailable("The workspace is temporarily unavailable or read-only. Your draft has been kept.").ExecuteAsync(context);
         }
     }
+
+    public static int StatusOf(WorkspaceError error) => error switch
+    {
+        WorkspaceError.Invalid => StatusCodes.Status400BadRequest,
+        WorkspaceError.Forbidden => StatusCodes.Status403Forbidden,
+        WorkspaceError.NotFound => StatusCodes.Status404NotFound,
+        WorkspaceError.Conflict => StatusCodes.Status409Conflict,
+        WorkspaceError.TooLarge => StatusCodes.Status413PayloadTooLarge,
+        WorkspaceError.Corrupt => StatusCodes.Status422UnprocessableEntity,
+        WorkspaceError.Unavailable => StatusCodes.Status503ServiceUnavailable,
+        _ => StatusCodes.Status500InternalServerError,
+    };
 }

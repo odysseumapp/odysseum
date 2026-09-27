@@ -4,12 +4,12 @@ namespace Odysseum.Server.Bootstrap;
 
 public static class DemoContent
 {
-    public const string ProjectSlug = "Sample manuscript";
+    public const string ProjectName = "Sample manuscript";
 
     public static void Seed(IServerSettings settings)
     {
         Directory.CreateDirectory(settings.Workspace);
-        var project = Path.Combine(settings.Workspace, ProjectSlug);
+        var project = Path.Combine(settings.Workspace, ProjectName);
         if (!settings.Demo || Directory.Exists(project)) return;
         var examples = Path.Combine(AppContext.BaseDirectory, "Examples");
         if (!Directory.Exists(examples)) return;

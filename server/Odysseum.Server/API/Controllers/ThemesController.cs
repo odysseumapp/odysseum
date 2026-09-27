@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Odysseum.Server.API.Models;
-using Odysseum.Server.Services.Themes;
+using Odysseum.Server.Repositories;
 
 namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api/themes")]
-public class ThemesController(ThemeStore themes) : ControllerBase
+public class ThemesController(IThemeRepository themes) : ControllerBase
 {
     /// <summary>Every saved colour scheme. Each browser remembers which one it shows.</summary>
     [HttpGet]
@@ -14,7 +14,7 @@ public class ThemesController(ThemeStore themes) : ControllerBase
 
     /// <summary>The roles a theme colours and the palettes they may name.</summary>
     [HttpGet("options")]
-    public IResult Options() => ApiResults.Success(new ThemeOptionsResponse(ThemeStore.Roles, ThemeStore.Palettes));
+    public IResult Options() => ApiResults.Success(new ThemeOptionsResponse(ThemeRepository.Roles, ThemeRepository.Palettes));
 
     /// <summary>One saved colour scheme.</summary>
     [HttpGet("{name}")]

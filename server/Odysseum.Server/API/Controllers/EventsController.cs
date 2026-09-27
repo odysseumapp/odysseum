@@ -1,25 +1,19 @@
-using Odysseum.Server.Services;
 using Microsoft.AspNetCore.Mvc;
+using Odysseum.Abstractions.Projects;
+using Odysseum.Server.Services.Projects;
 
 namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api/projects/{project}/events")]
-public class EventsController : ControllerBase
+public class EventsController(ProjectSessions sessions) : ControllerBase
 {
-    private readonly ProjectLibrary _library;
-
-    public EventsController(ProjectLibrary library)
-    {
-        _library = library;
-    }
-
     /// <summary>Open a stream that stays connected and reports changes to the project on disk. Each change arrives as a "workspace" event carrying the new revision. When nothing changes, a heartbeat comment arrives every 15 seconds.</summary>
     [HttpGet]
     [Produces("text/event-stream")]
     public async Task Stream(string project)
     {
-        var events = (await _library.OpenAsync(project)).Events;
+        var events = (await sessions.OpenAsync(ProjectBranch.Main(project))).Events;
         var response = HttpContext.Response;
         var aborted = HttpContext.RequestAborted;
         response.ContentType = "text/event-stream";
