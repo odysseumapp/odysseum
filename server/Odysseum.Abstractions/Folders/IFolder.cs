@@ -1,16 +1,15 @@
 using Odysseum.Abstractions.Documents;
-using Odysseum.Abstractions.Projects;
+using Odysseum.Abstractions.Items;
 
 namespace Odysseum.Abstractions.Folders;
 
-public interface IFolder
+public interface IFolder : IItem
 {
-    string Id { get; }
-    IProject Project { get; }
-    IFolder? Parent { get; }
-    string Name { get; }
     FolderView? PinnedView { get; }
-    IFolder? GridFolder { get; }
-    IReadOnlyList<IFolder> Folders { get; }
-    IReadOnlyList<IDocument> Documents { get; }
+    /// <summary>The folder whose documents are the columns of this folder's grid. Null means the default.</summary>
+    string? GridFolderId { get; }
+    /// <summary>Subfolders and documents in order. This is the only source of the order.</summary>
+    IReadOnlyList<IItem> Children { get; }
+    /// <summary>The folder's own hidden document. It is never one of the children. The root has none.</summary>
+    IDocument? OwnDocument { get; }
 }

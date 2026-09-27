@@ -1,4 +1,4 @@
-using Odysseum.Server.Services;
+using Odysseum.Server.Services.Projects;
 using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text.Json;
@@ -62,10 +62,10 @@ public sealed partial class TemplateRepository(string root) : ITemplateRepositor
         Name = DefaultName,
         Folders =
         [
-            new() { Path = "", ItemOrder = [.. ProjectLibrary.DefaultFolders.Select(name => "folder:" + name)] },
+            new() { Path = "", ItemOrder = [.. DefaultFolders.Names.Select(name => "folder:" + name)] },
             new() { Path = "Manuscript" },
             new() { Path = "Manuscript/Chapter 01" },
-            .. ProjectLibrary.DefaultFolders.Skip(1).Select(name => new TemplateFolder { Path = name }),
+            .. DefaultFolders.Names.Skip(1).Select(name => new TemplateFolder { Path = name }),
         ],
         Documents =
         [

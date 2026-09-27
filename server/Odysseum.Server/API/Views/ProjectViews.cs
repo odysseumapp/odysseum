@@ -3,69 +3,66 @@ using Odysseum.Abstractions.Exceptions;
 using Odysseum.Abstractions.Projects;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Models;
-using Odysseum.Server.Services;
-using static Odysseum.Server.Services.Documents.MarkdownDocumentCodec;
 
 namespace Odysseum.Server.API.Views;
 
-public sealed class ProjectViews(IOrderService order)
+/// <summary>Builds the API response records from a project.</summary>
+public sealed class ProjectViews(IDocumentService documents)
 {
-    public async Task<ProjectResponse> ProjectAsync(IProject project)
+    public ProjectResponse View(Project project) => new(project.Id, project.Settings.Clone(), project.Revision,
+        project.Walk().Select((document, index) => Summary(document, index)).ToArray(), project.Warning,
+        project.Folders.Select(Folder).ToArray());
+
+    /// <summary>The document with its prose. The document must have its body loaded.</summary>
+    public DocumentContent View(Project project, Document document)
     {
-        var model = Model(project);
-        var documents = (await order.DocumentsAsync(model)).Select((document, index) => Summary((Document)document, index)).ToArray();
-        var folders = new List<FolderSummary>();
-        foreach (var folder in model.Folders) folders.Add(await FolderAsync(folder));
-        return new(model.Id, model.Settings.Clone(), model.Revision, documents, model.Warning, folders);
+        var body = document.Body ?? throw new InvalidOperationException("The document body is not loaded.");
+        var position = project.Walk().Select((d, index) => (d, index)).FirstOrDefault(pair => pair.d.Id == document.Id).index;
+        return new(Summary(document, position), body);
     }
 
-    public async Task<DocumentContent> DocumentAsync(IDocument document)
+    /// <summary>The document with its prose, loading the body when it is not loaded yet.</summary>
+    public async Task<DocumentContent> ViewAsync(Project project, IDocument document)
     {
-        var model = (Document)document;
-        var ordered = await order.DocumentsAsync(model.Project);
-        var position = ordered.Select((d, index) => (d, index)).FirstOrDefault(pair => pair.d.Id == model.Id).index;
-        return new(Summary(model, position), model.Body);
+        var model = document.Body is null ? (Document)await documents.OpenAsync(project.Branch, document.Id) : (Document)document;
+        return View(project, model);
     }
 
-    public async Task<IReadOnlyList<DocumentContent>> DocumentsAsync(IProject project) =>
-        (await order.DocumentsAsync(Model(project))).Select((document, index) => new DocumentContent(Summary((Document)document, index), document.Body)).ToArray();
+    public async Task<IReadOnlyList<DocumentContent>> DocumentsAsync(Project project) =>
+        (await documents.OpenAllAsync(project.Branch)).Select((document, index) => new DocumentContent(Summary((Document)document, index), document.Body!)).ToArray();
 
-    public async Task<string> ExportAsync(IProject project)
+    public async Task<string> ExportAsync(Project project)
     {
-        var model = Model(project);
-        var scenes = (await order.DocumentsAsync(model)).Cast<Document>().Where(d => d.Kind == DocumentKind.Scene && !d.IsFolderDocument);
-        return $"# {model.Title}\n\n" + string.Join("\n\n---\n\n", scenes.Select(d => $"## {d.Title}\n\n{d.Body.Trim()}")) + "\n";
+        var scenes = (await documents.OpenAllAsync(project.Branch)).Cast<Document>().Where(d => d.Kind == DocumentKind.Scene && !d.IsFolderDocument);
+        return $"# {project.Title}\n\n" + string.Join("\n\n---\n\n", scenes.Select(d => $"## {d.Title}\n\n{d.Body!.Trim()}")) + "\n";
     }
 
-    public async Task<IReadOnlyList<SearchResult>> SearchAsync(IProject project, string query)
+    public async Task<IReadOnlyList<SearchResult>> SearchAsync(Project project, string query)
     {
         if (string.IsNullOrWhiteSpace(query)) return [];
         var results = new List<SearchResult>();
-        var ordered = await order.DocumentsAsync(Model(project));
+        var ordered = await documents.OpenAllAsync(project.Branch);
         for (var index = 0; index < ordered.Count; index++)
         {
             var document = (Document)ordered[index];
-            var position = document.Body.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+            var body = document.Body!;
+            var position = body.IndexOf(query, StringComparison.OrdinalIgnoreCase);
             if (position < 0 && !document.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
                 && !document.Synopsis.Contains(query, StringComparison.OrdinalIgnoreCase)
                 && !document.Notes.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
             var start = Math.Max(0, position - 55);
-            results.Add(new(Summary(document, index), document.Body.Substring(start, Math.Min(180, document.Body.Length - start)).Replace('\n', ' ')));
+            results.Add(new(Summary(document, index), body.Substring(start, Math.Min(180, body.Length - start)).Replace('\n', ' ')));
             if (results.Count == 50) break;
         }
         return results;
     }
 
-    public async Task<FolderSummary> FolderAsync(Folder folder)
-    {
-        var keys = (await order.ChildrenAsync(folder)).Select(child => child.Folder is { } sub ? "folder:" + sub.Name : child.Document!.Id).ToArray();
-        return new(folder.Id, folder.Path, folder.Name, folder.IsRoot ? null : Project.ParentPath(folder.Path),
-            folder.PinnedView?.ToString().ToLowerInvariant(), keys, folder.GridFolderId);
-    }
+    public static FolderSummary Folder(Folder folder) => new(folder.Id, folder.Path, folder.Name, folder.IsRoot ? null : Item.ParentPath(folder.Path),
+        folder.PinnedView?.ToString().ToLowerInvariant(), folder.Children.Select(child => child.Id).ToArray(), folder.GridFolderId);
 
     public static DocumentSummary Summary(Document document, int order) => new(document.Id, document.Path, document.Title,
-        Project.ParentPath(document.Path), document.Synopsis, document.Notes, (Enums.DocumentStatus)document.Status, document.WordGoal, order,
-        CountWords(document.Body), document.Revision, document.Modified.UtcDateTime, (Enums.DocumentKind)document.Kind, document.LinkIds, document.LinkNotes);
+        Item.ParentPath(document.Path), document.Synopsis, document.Notes, (Enums.DocumentStatus)document.Status, document.WordGoal, order,
+        document.WordCount, document.Revision, document.Modified.UtcDateTime, (Enums.DocumentKind)document.Kind, document.Links, document.LinkNotes);
 
     public static Project Model(IProject project) => project as Project
         ?? throw new WorkspaceException(WorkspaceError.Invalid, "That project is not open in this workspace.");

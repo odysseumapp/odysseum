@@ -23,8 +23,7 @@ public record MetadataRequest(string Title, string Synopsis, string Notes, Docum
 
 public record MoveDocumentRequest(string Path, string Revision);
 
-public record SnapshotInfo(string Id, DateTime Created, int WordCount);
-
-public record SnapshotContent(string Content);
+/// <summary>One document's prose as it was in a saved version.</summary>
+public record VersionContent(string Content);
 
 public record SearchResult(DocumentSummary Document, string Excerpt);

@@ -8,8 +8,11 @@ public interface IProjectService
     event EventHandler<ProjectEventArgs>? ProjectUpdated;
     event EventHandler<ProjectEventArgs>? ProjectChanged;
 
-    Task<IReadOnlyList<IProject>> ListAsync();
-    Task<IProject> GetAsync(string id);
-    Task<IProject> CreateAsync(string title, string? template = null);
-    Task<IProject> SaveSettingsAsync(IProject project, ProjectSettings settings, string expectedRevision);
+    Task<IReadOnlyList<ProjectInfo>> ListAsync();
+    Task<IProject> GetAsync(ProjectBranch branch);
+    /// <summary>Opens the main branch of the project with that folder name, or with that UUID.</summary>
+    Task<IProject> GetAsync(string nameOrId);
+    Task<IProject> CreateAsync(string title, int? wordGoal = null, string? template = null);
+    /// <summary>Null settings keep their current value.</summary>
+    Task<IProject> SaveSettingsAsync(ProjectBranch branch, ProjectSettings settings, string expectedRevision);
 }

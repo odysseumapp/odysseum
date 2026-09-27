@@ -2,7 +2,7 @@ using Odysseum.Abstractions.Exceptions;
 using Odysseum.Server.Repositories.Files;
 using System.Text.Json;
 
-namespace Odysseum.Server.Repositories;
+namespace Odysseum.Server.Repositories.Disk;
 
 internal sealed class ManifestTransaction(IFileManager files)
 {

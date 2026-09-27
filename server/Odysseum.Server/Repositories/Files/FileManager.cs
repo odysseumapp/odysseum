@@ -1,9 +1,12 @@
 using Odysseum.Abstractions.Exceptions;
+using Odysseum.Server.Repositories.Disk;
 using Odysseum.Server.Services.Documents;
 
 namespace Odysseum.Server.Repositories.Files;
 
-public sealed class FileManager(string root) : IFileManager
+/// <summary>The only class that touches a project's files on disk. Every write is recorded in <see cref="OwnWrites"/>
+/// when one is given, so the file watcher can tell the server's own writes from external changes.</summary>
+public sealed class FileManager(string root, OwnWrites? ownWrites = null) : IFileManager
 {
     public const int MaxFileBytes = 4 * 1024 * 1024;
     public const string MetadataDirectory = ".odysseum";
@@ -44,11 +47,13 @@ public sealed class FileManager(string root) : IFileManager
     public DateTime LastModified(string relative, bool metadata = false) => File.GetLastWriteTimeUtc(RootOr(relative, metadata));
     public Task<byte[]> ReadAsync(string relative, bool metadata = false) => ReadBytesAsync(ResolvePath(relative, metadata));
 
-    public Task WriteAsync(string relative, byte[] bytes, bool overwrite = true, bool metadata = false)
+    public async Task WriteAsync(string relative, byte[] bytes, bool overwrite = true, bool metadata = false)
     {
         var path = ResolvePath(relative, metadata);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        return AtomicWriteAsync(path, bytes, overwrite);
+        Changing(path);
+        await AtomicWriteAsync(path, bytes, overwrite);
+        Changed(path);
     }
 
     public void Move(string source, string destination)
@@ -56,10 +61,37 @@ public sealed class FileManager(string root) : IFileManager
         var from = ResolvePath(source);
         var to = ResolvePath(destination);
         Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+        Changing(from);
+        Changing(to);
         File.Move(from, to);
+        Changed(from);
+        Changed(to);
     }
 
-    public void Delete(string relative, bool metadata = false) => File.Delete(ResolvePath(relative, metadata));
+    public void MoveFolder(string source, string destination)
+    {
+        var from = ResolvePath(source);
+        var to = ResolvePath(destination);
+        if (!Directory.Exists(from)) throw new WorkspaceException(WorkspaceError.NotFound, "The folder no longer exists.");
+        if (Directory.Exists(to) || File.Exists(to)) throw new WorkspaceException(WorkspaceError.Conflict, "A folder or file already has that name.");
+        var parent = Path.GetDirectoryName(to)!;
+        if (!Directory.Exists(parent)) throw new WorkspaceException(WorkspaceError.NotFound, "The parent folder no longer exists.");
+        if (to.StartsWith(from + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new WorkspaceException(WorkspaceError.Invalid, "A folder cannot move into itself.");
+        Changing(from);
+        Changing(to);
+        Directory.Move(from, to);
+        Changed(from);
+        Changed(to);
+    }
+
+    public void Delete(string relative, bool metadata = false)
+    {
+        var path = ResolvePath(relative, metadata);
+        Changing(path);
+        File.Delete(path);
+        Changed(path);
+    }
 
     public FileStream Lock(string relative, bool metadata = false) => new(ResolvePath(relative, metadata), FileMode.Open,
         FileAccess.ReadWrite, FileShare.Read | FileShare.Delete);
@@ -85,7 +117,9 @@ public sealed class FileManager(string root) : IFileManager
         if (File.Exists(path)) throw new WorkspaceException(WorkspaceError.Conflict, "A file already has that name.");
         var parent = Path.GetDirectoryName(path)!;
         if (!Directory.Exists(parent)) throw new WorkspaceException(WorkspaceError.NotFound, "The parent folder no longer exists.");
+        Changing(path);
         Directory.CreateDirectory(path);
+        Changed(path);
     }
 
     public void RemoveEmptyFolder(string relative)
@@ -96,7 +130,26 @@ public sealed class FileManager(string root) : IFileManager
             throw new WorkspaceException(WorkspaceError.Conflict, "Only empty folders can be removed. Move their files and subfolders first.");
         var destination = ResolvePath(".odysseum/removed-folders/" + Guid.NewGuid().ToString("N"), true);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        Changing(path);
         Directory.Move(path, destination);
+        Changed(path);
+    }
+
+    /// <summary>Records a path this process is about to change, together with its parent folder, whose
+    /// modification time changes with it.</summary>
+    private void Changing(string fullPath)
+    {
+        if (ownWrites is null) return;
+        ownWrites.Begin(fullPath);
+        if (Path.GetDirectoryName(fullPath) is { } parent) ownWrites.Begin(parent);
+    }
+
+    /// <summary>Records the state a path and its parent folder were left in.</summary>
+    private void Changed(string fullPath)
+    {
+        if (ownWrites is null) return;
+        ownWrites.Add(fullPath);
+        if (Path.GetDirectoryName(fullPath) is { } parent) ownWrites.Add(parent);
     }
 
     private IEnumerable<string> EnumerateFolders(string directory, bool recursive)

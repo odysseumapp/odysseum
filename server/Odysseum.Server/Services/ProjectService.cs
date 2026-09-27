@@ -1,62 +1,66 @@
 using Odysseum.Abstractions.Exceptions;
 using Odysseum.Abstractions.Projects;
 using Odysseum.Abstractions.Projects.Events;
-using Odysseum.Server.API.Models;
 using Odysseum.Server.Models;
 using Odysseum.Server.Repositories;
+using Odysseum.Server.Services.Projects;
 
 namespace Odysseum.Server.Services;
 
 public sealed class ProjectService : IProjectService
 {
-    private readonly ProjectLibrary _library;
-    private readonly ProjectRepository _projects;
+    private readonly ProjectSessions _sessions;
 
-    public ProjectService(ProjectLibrary library)
+    public ProjectService(ProjectSessions sessions)
     {
-        _library = library;
-        _projects = new ProjectRepository(library);
-        library.ProjectChanged += project => ProjectChanged?.Invoke(this, new(project));
+        _sessions = sessions;
+        sessions.Changed += (_, project) => ProjectChanged?.Invoke(this, new(project));
     }
 
     public event EventHandler<ProjectEventArgs>? ProjectCreated;
     public event EventHandler<ProjectEventArgs>? ProjectUpdated;
     public event EventHandler<ProjectEventArgs>? ProjectChanged;
 
-    public async Task<IReadOnlyList<IProject>> ListAsync() => await _projects.GetAllAsync();
+    public Task<IReadOnlyList<ProjectInfo>> ListAsync() => _sessions.ListAsync();
 
-    public async Task<IProject> GetAsync(string id)
+    public async Task<IProject> GetAsync(ProjectBranch branch) => await (await _sessions.OpenAsync(branch)).ReloadAsync();
+
+    public async Task<IProject> GetAsync(string nameOrId)
     {
-        if (await _projects.GetAsync(id) is { } bySlug) return bySlug;
-        var listed = (await _library.ListAsync()).FirstOrDefault(info => info.Id == id);
-        return (listed is null ? null : await _projects.GetAsync(listed.Slug))
-            ?? throw new WorkspaceException(WorkspaceError.NotFound, "That project no longer exists in the workspace.");
+        try { return await GetAsync(ProjectBranch.Main(nameOrId)); }
+        catch (WorkspaceException ex) when (ex.Error is WorkspaceError.NotFound && Guid.TryParse(nameOrId, out _))
+        {
+            var listed = (await ListAsync()).FirstOrDefault(info => info.Id == nameOrId);
+            if (listed is null) throw;
+            return await GetAsync(ProjectBranch.Main(listed.Name));
+        }
     }
 
-    public async Task<IProject> CreateAsync(string title, string? template = null)
+    public async Task<IProject> CreateAsync(string title, int? wordGoal = null, string? template = null)
     {
-        var info = await _library.CreateAsync(new CreateProjectRequest(title, null, template));
-        var project = await GetAsync(info.Slug);
+        var info = await _sessions.CreateAsync(title, wordGoal, template);
+        var project = await GetAsync(ProjectBranch.Main(info.Name));
         ProjectCreated?.Invoke(this, new(project));
         return project;
     }
 
-    public Task<IProject> SaveSettingsAsync(IProject project, ProjectSettings settings, string expectedRevision)
+    public async Task<IProject> SaveSettingsAsync(ProjectBranch branch, ProjectSettings settings, string expectedRevision)
     {
-        var open = OpenProject.Of(project);
-        return open.RunAsync<IProject>(async () =>
+        var session = await _sessions.OpenAsync(branch);
+        return await session.RunAsync<IProject>(async () =>
         {
-            ContentRevision.Check(open.Current.Revision, expectedRevision);
+            var current = session.Current;
+            ContentRevision.Check(current.Revision, expectedRevision);
             var validated = Settings.ProjectSettings.From(new Settings.ProjectSettings
             {
-                Title = settings.Title ?? open.Current.Title,
-                WordGoal = settings.WordGoal ?? open.Current.WordGoal,
-                DefaultSceneWordGoal = settings.DefaultSceneWordGoal ?? open.Current.DefaultSceneWordGoal,
+                Title = settings.Title ?? current.Title,
+                WordGoal = settings.WordGoal ?? current.WordGoal,
+                DefaultSceneWordGoal = settings.DefaultSceneWordGoal ?? current.DefaultSceneWordGoal,
             }, out var error);
             if (error is not null) throw new WorkspaceException(WorkspaceError.Invalid, error);
-            await _projects.SaveAsync(open.Current.With(validated));
-            ProjectUpdated?.Invoke(this, new(open.Current));
-            return open.Current;
+            var saved = await session.SaveAsync(new Changes(validated, [], [], []), current.Revision);
+            ProjectUpdated?.Invoke(this, new(saved));
+            return saved;
         });
     }
 }

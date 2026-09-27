@@ -1,19 +1,23 @@
 using Odysseum.Abstractions.Documents;
 using Odysseum.Abstractions.Documents.Events;
 using Odysseum.Abstractions.Exceptions;
-using Odysseum.Abstractions.Folders;
 using Odysseum.Abstractions.Projects;
 using Odysseum.Server.Models;
+using Odysseum.Server.Models.Editing;
 using Odysseum.Server.Repositories;
+using Odysseum.Server.Services.Projects;
 using static Odysseum.Server.Services.Documents.DocumentRules;
 
 namespace Odysseum.Server.Services;
 
 public sealed class DocumentService : IDocumentService
 {
-    public DocumentService(ProjectLibrary library)
+    private readonly ProjectSessions _sessions;
+
+    public DocumentService(ProjectSessions sessions)
     {
-        library.DocumentRemoved += document => DocumentRemoved?.Invoke(this, new(document));
+        _sessions = sessions;
+        sessions.DocumentsRemoved += (session, documents) => { foreach (var document in documents) DocumentRemoved?.Invoke(this, new(session.Branch, document)); };
     }
 
     public event EventHandler<DocumentEventArgs>? DocumentCreated;
@@ -25,86 +29,95 @@ public sealed class DocumentService : IDocumentService
 
     public Task<IDocument> GetAsync(IProject project, string id) => Task.FromResult<IDocument>(Find(Model(project), id));
 
-    public Task<IDocument> CreateAsync(IFolder folder, string title, string? body = null)
+    public async Task<IDocument> OpenAsync(ProjectBranch branch, string id)
     {
-        var validTitle = ValidateTitle(title);
-        var open = OpenProject.Of(folder);
-        return open.RunAsync<IDocument>(async () =>
+        var session = await _sessions.OpenAsync(branch);
+        return await session.RunAsync<IDocument>(async () =>
         {
-            var target = open.Current.Folder(folder.Id) ?? throw new WorkspaceException(WorkspaceError.NotFound, "The folder no longer exists.");
-            var created = await open.Documents.CreateAsync(target, validTitle, string.IsNullOrEmpty(body) ? null : body);
-            DocumentCreated?.Invoke(this, new(created));
+            var document = Find(session.Current, id);
+            return document.WithBody(await session.LoadBodyAsync(id));
+        });
+    }
+
+    public async Task<IReadOnlyList<IDocument>> OpenAllAsync(ProjectBranch branch)
+    {
+        var session = await _sessions.OpenAsync(branch);
+        return await session.RunAsync<IReadOnlyList<IDocument>>(async () =>
+        {
+            var documents = new List<IDocument>();
+            foreach (var document in session.Current.Walk())
+                documents.Add(document.WithBody(await session.LoadBodyAsync(document.Id)));
+            return documents;
+        });
+    }
+
+    public async Task<IDocument> CreateAsync(ProjectBranch branch, string folderId, string title, string? body = null)
+    {
+        var session = await _sessions.OpenAsync(branch);
+        return await session.RunAsync<IDocument>(async () =>
+        {
+            var current = session.Current;
+            var editor = new DocumentEditor(current);
+            var draft = editor.Create(folderId, title, body);
+            var saved = await session.SaveAsync(editor.Changes(), current.Revision);
+            var created = Find(saved, draft.Id).WithBody(await session.LoadBodyAsync(draft.Id));
+            DocumentCreated?.Invoke(this, new(branch, created));
             return created;
         });
     }
 
-    public Task<IDocument> SaveBodyAsync(IDocument document, string body, string expectedRevision)
+    public async Task<IDocument> SaveBodyAsync(ProjectBranch branch, string id, string body, string expectedRevision)
     {
         if (body is null) throw new WorkspaceException(WorkspaceError.Invalid, "Document content is required.");
-        var open = OpenProject.Of(document);
-        return open.RunAsync<IDocument>(async () =>
+        var session = await _sessions.OpenAsync(branch);
+        return await session.RunAsync<IDocument>(async () =>
         {
-            var current = Find(open.Current, document.Id);
+            var current = session.Current;
+            var document = Find(current, id);
+            ContentRevision.Check(document.Revision, expectedRevision);
+            var editor = new DocumentEditor(current);
+            editor.SetBody(id, body);
+            var saved = await session.SaveAsync(editor.Changes(), current.Revision);
+            var result = Find(saved, id).WithBody(body);
+            DocumentSaved?.Invoke(this, new(branch, result));
+            return result;
+        });
+    }
+
+    public async Task<IDocument> UpdateAsync(ProjectBranch branch, string id, DocumentDetails details, string expectedRevision)
+    {
+        var session = await _sessions.OpenAsync(branch);
+        return await session.RunAsync<IDocument>(async () =>
+        {
+            var current = session.Current;
             ContentRevision.Check(current.Revision, expectedRevision);
-            await open.Documents.SaveAsync(current.WithBody(body));
-            var saved = Find(open.Current, document.Id);
-            DocumentSaved?.Invoke(this, new(saved));
-            return saved;
+            Find(current, id);
+            var editor = new DocumentEditor(current);
+            editor.SetDetails(id, details);
+            var saved = await session.SaveAsync(editor.Changes(), current.Revision);
+            var result = Find(saved, id);
+            DocumentSaved?.Invoke(this, new(branch, result));
+            return result;
         });
     }
 
-    public Task<IDocument> UpdateAsync(IDocument document, DocumentDetails details, string expectedRevision)
+    public async Task<IDocument> MoveAsync(ProjectBranch branch, string id, string targetFolderId, string? title, string expectedRevision)
     {
-        var open = OpenProject.Of(document);
-        return open.RunAsync<IDocument>(async () =>
+        var session = await _sessions.OpenAsync(branch);
+        return await session.RunAsync<IDocument>(async () =>
         {
-            ContentRevision.Check(open.Current.Revision, expectedRevision);
-            var current = Find(open.Current, document.Id);
-            await open.Documents.SaveAsync(current.With(Validate(open.Current, current, details)));
-            var saved = Find(open.Current, document.Id);
-            DocumentSaved?.Invoke(this, new(saved));
-            return saved;
+            var current = session.Current;
+            var document = Find(current, id);
+            ContentRevision.Check(document.Revision, expectedRevision);
+            var fileName = title is null ? document.Name : FileName(ValidateTitle(title)) + Path.GetExtension(document.Name);
+            var editor = new DocumentEditor(current);
+            editor.Move(id, targetFolderId, fileName);
+            var changes = editor.Changes();
+            var saved = changes.IsEmpty ? current : await session.SaveAsync(changes, current.Revision);
+            var result = Find(saved, id);
+            DocumentMoved?.Invoke(this, new(branch, result));
+            return result;
         });
-    }
-
-    public Task<IDocument> MoveAsync(IDocument document, IFolder target, string? title, string expectedRevision)
-    {
-        var open = OpenProject.Of(document);
-        return open.RunAsync<IDocument>(async () =>
-        {
-            var current = Find(open.Current, document.Id);
-            ContentRevision.Check(current.Revision, expectedRevision);
-            var destination = open.Current.Folder(target.Id) ?? throw new WorkspaceException(WorkspaceError.NotFound, "The folder no longer exists.");
-            var fileName = title is null ? current.FileName : FileName(ValidateTitle(title)) + Path.GetExtension(current.FileName);
-            var moved = await open.Documents.MoveAsync(current, destination, fileName);
-            DocumentMoved?.Invoke(this, new(moved));
-            return moved;
-        });
-    }
-
-    public Task<IReadOnlyList<IDocumentVersion>> ListVersionsAsync(IDocument document)
-    {
-        var open = OpenProject.Of(document);
-        return open.RunAsync<IReadOnlyList<IDocumentVersion>>(async () => await open.Documents.VersionsAsync(Find(open.Current, document.Id)), scan: false);
-    }
-
-    private static DocumentDetails Validate(Project project, Document current, DocumentDetails details)
-    {
-        var title = details.Title is null ? null : ValidateTitle(details.Title);
-        if (details.Status is { } status && !Enum.IsDefined(status)) throw new WorkspaceException(WorkspaceError.Invalid, "Unknown document status.");
-        if (details.WordGoal is < 0 or > 10000000) throw new WorkspaceException(WorkspaceError.Invalid, "Invalid word goal.");
-        if (details.Synopsis?.Length > 20000 || details.Notes?.Length > 100000) throw new WorkspaceException(WorkspaceError.Invalid, "Notes are too long.");
-        IReadOnlyList<string>? links = null;
-        if (details.Links is not null)
-        {
-            if (details.Links.Count > 200) throw new WorkspaceException(WorkspaceError.Invalid, "Too many links attached.");
-            links = details.Links.Distinct().ToArray();
-            if (links.Any(id => id is null || id == current.Id || project.Document(id) is null))
-                throw new WorkspaceException(WorkspaceError.Invalid, "One of the linked documents no longer exists.");
-        }
-        if (details.LinkNotes is not null && details.LinkNotes.Values.Any(note => note is null || note.Length > 2000))
-            throw new WorkspaceException(WorkspaceError.Invalid, "A link note is too long.");
-        return details with { Title = title, Links = links };
     }
 
     private static Document Find(Project project, string id) => project.Document(id)

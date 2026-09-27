@@ -10,6 +10,7 @@ public interface IFileManager
     Task<byte[]> ReadAsync(string relative, bool metadata = false);
     Task WriteAsync(string relative, byte[] bytes, bool overwrite = true, bool metadata = false);
     void Move(string source, string destination);
+    void MoveFolder(string source, string destination);
     void Delete(string relative, bool metadata = false);
     FileStream Lock(string relative, bool metadata = false);
     IEnumerable<string> EnumerateDocuments();

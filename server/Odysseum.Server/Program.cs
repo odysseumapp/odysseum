@@ -5,12 +5,16 @@ using Odysseum.Server.API.Middleware;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Bootstrap;
 using Odysseum.Server.Services;
+using Odysseum.Server.Services.Projects;
 using Odysseum.Server.Settings;
 using Odysseum.Abstractions.Documents;
 using Odysseum.Abstractions.Folders;
+using Odysseum.Abstractions.History;
 using Odysseum.Abstractions.Projects;
 using Odysseum.Server.API.Views;
 using Odysseum.Server.Repositories;
+using Odysseum.Server.Repositories.Disk;
+using Odysseum.Server.Repositories.Git;
 using Odysseum.Server.Services.Templates;
 using Odysseum.Server.Services.WebUi;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -63,12 +67,19 @@ builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 
 
 builder.Services.AddSingleton<ISettingsProvider>(settingsProvider);
 
-builder.Services.AddSingleton(provider => new ProjectFactory(provider.GetRequiredService<ILoggerFactory>(), settings.ScanSeconds, settings.VersionSeconds));
-builder.Services.AddSingleton(provider => new ProjectLibrary(settings.Workspace, provider.GetRequiredService<ProjectFactory>(), templates));
-builder.Services.AddSingleton<IOrderService, OrderService>();
-builder.Services.AddSingleton<IProjectService>(provider => new ProjectService(provider.GetRequiredService<ProjectLibrary>()));
-builder.Services.AddSingleton<IFolderService>(provider => new FolderService(provider.GetRequiredService<ProjectLibrary>(), settingsProvider));
-builder.Services.AddSingleton<IDocumentService>(provider => new DocumentService(provider.GetRequiredService<ProjectLibrary>()));
+builder.Services.AddSingleton<OwnWrites>();
+builder.Services.AddSingleton<IProjectRepository>(provider => new DiskProjectRepository(settings.Workspace, provider.GetRequiredService<OwnWrites>()));
+builder.Services.AddSingleton<IProjectWatcher>(provider => new FileProjectWatcher(settings.Workspace, provider.GetRequiredService<OwnWrites>(),
+    settings.ScanSeconds, provider.GetRequiredService<ILogger<FileProjectWatcher>>()));
+builder.Services.AddSingleton<IProjectHistory>(_ => new GitProjectHistory(settings.Workspace));
+builder.Services.AddSingleton(provider => new ProjectSessions(provider.GetRequiredService<IProjectRepository>(), provider.GetRequiredService<IProjectWatcher>(),
+    provider.GetRequiredService<IProjectHistory>(), templates, provider.GetRequiredService<ILogger<ProjectSessions>>()));
+builder.Services.AddSingleton<IProjectService>(provider => new ProjectService(provider.GetRequiredService<ProjectSessions>()));
+builder.Services.AddSingleton<IFolderService>(provider => new FolderService(provider.GetRequiredService<ProjectSessions>(), settingsProvider));
+builder.Services.AddSingleton<IDocumentService>(provider => new DocumentService(provider.GetRequiredService<ProjectSessions>()));
+builder.Services.AddSingleton(provider => new HistoryService(provider.GetRequiredService<ProjectSessions>(), provider.GetRequiredService<IProjectHistory>(),
+    settings.VersionSeconds, provider.GetRequiredService<ILogger<HistoryService>>()));
+builder.Services.AddSingleton<IHistoryService>(provider => provider.GetRequiredService<HistoryService>());
 builder.Services.AddSingleton<ProjectViews>();
 builder.Services.AddSingleton<ProjectTemplateService>();
 
@@ -126,7 +137,8 @@ if (builder.Configuration.GetValue<int?>("ODYSSEUM_PARENT_PID") is { } parentId)
 
 DemoContent.Seed(settings);
 
-await app.Services.GetRequiredService<ProjectLibrary>().ListAsync();
+await app.Services.GetRequiredService<ProjectSessions>().ListAsync();
+app.Services.GetRequiredService<HistoryService>().Start();
 
 app.UseMiddleware<ResponseHeadersMiddleware>();
 app.UseMiddleware<ApiExceptionMiddleware>();

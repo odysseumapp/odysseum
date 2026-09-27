@@ -6,9 +6,9 @@ using System.Text.Json.Serialization;
 using Odysseum.Server.Repositories.Manifests;
 using Odysseum.Server.Settings;
 
-namespace Odysseum.Server.Repositories;
+namespace Odysseum.Server.Repositories.Disk;
 
-public sealed class ProjectManifestRepository(IFileManager files) : IProjectManifestRepository
+internal sealed class ManifestFiles(IFileManager files)
 {
     private const string ManifestPath = ".odysseum/project.json";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)

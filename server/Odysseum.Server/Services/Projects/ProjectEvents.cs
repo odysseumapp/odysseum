@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 
-namespace Odysseum.Server.Services.Monitoring;
+namespace Odysseum.Server.Services.Projects;
 
 public sealed class ProjectEvents
 {

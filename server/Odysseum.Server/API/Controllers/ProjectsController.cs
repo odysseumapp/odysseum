@@ -3,29 +3,29 @@ using Microsoft.AspNetCore.Mvc;
 using Odysseum.Abstractions.Projects;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.API.Views;
-using Odysseum.Server.Services;
+using Odysseum.Server.Services.Projects;
 
 namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api/projects")]
-public class ProjectsController(ProjectLibrary library, IProjectService projects, IOrderService order, ProjectViews views) : ControllerBase
+public class ProjectsController(ProjectSessions sessions, IProjectService projects, ProjectViews views) : ControllerBase
 {
     /// <summary>List the projects in the workspace.</summary>
     [HttpGet]
-    public async Task<IResult> List() => ApiResults.SuccessCollection(await library.ListAsync());
+    public async Task<IResult> List() => ApiResults.SuccessCollection(await sessions.ListAsync());
 
     /// <summary>Create a project folder with its own metadata.</summary>
     [HttpPost]
     public async Task<IResult> Create([FromBody] CreateProjectRequest request)
     {
-        var created = await library.CreateAsync(request);
-        return ApiResults.Created(created, $"/api/projects/{Uri.EscapeDataString(created.Slug)}");
+        var created = await sessions.CreateAsync(request.Title, request.WordGoal, request.Template);
+        return ApiResults.Created(created, $"/api/projects/{Uri.EscapeDataString(created.Name)}");
     }
 
     /// <summary>The project's settings, documents, and folder layouts.</summary>
     [HttpGet("{project}")]
-    public async Task<IResult> Get(string project) => ApiResults.Success(await views.ProjectAsync(await projects.GetAsync(project)));
+    public async Task<IResult> Get(string project) => ApiResults.Success(views.View(ProjectViews.Model(await projects.GetAsync(project))));
 
     /// <summary>The project's settings: title and word goals.</summary>
     [HttpGet("{project}/settings")]
@@ -39,26 +39,19 @@ public class ProjectsController(ProjectLibrary library, IProjectService projects
     [HttpPut("{project}/settings")]
     public async Task<IResult> UpdateSettings(string project, [FromBody] ProjectSettingsRequest request)
     {
+        var current = await projects.GetAsync(project);
         var settings = new ProjectSettings { Title = request.Title, WordGoal = request.WordGoal, DefaultSceneWordGoal = request.DefaultSceneWordGoal };
-        var updated = await projects.SaveSettingsAsync(await projects.GetAsync(project), settings, request.Revision);
-        return ApiResults.Success(await views.ProjectAsync(updated));
-    }
-
-    /// <summary>Set the manuscript order of every document.</summary>
-    [HttpPut("{project}/order")]
-    public async Task<IResult> Reorder(string project, [FromBody] ReorderRequest request)
-    {
-        await order.ArrangeDocumentsAsync(await projects.GetAsync(project), request.Ids ?? [], request.Revision);
-        return ApiResults.Success(await views.ProjectAsync(await projects.GetAsync(project)));
+        var updated = await projects.SaveSettingsAsync(current.Branch, settings, request.Revision);
+        return ApiResults.Success(views.View(ProjectViews.Model(updated)));
     }
 
     /// <summary>Download the saved manuscript as one Markdown file.</summary>
     [HttpGet("{project}/export")]
     public async Task<IResult> Export(string project) =>
-        ApiResults.File(Encoding.UTF8.GetBytes(await views.ExportAsync(await projects.GetAsync(project))), "text/markdown; charset=utf-8", "manuscript.md");
+        ApiResults.File(Encoding.UTF8.GetBytes(await views.ExportAsync(ProjectViews.Model(await projects.GetAsync(project)))), "text/markdown; charset=utf-8", "manuscript.md");
 
     /// <summary>Search prose, titles, synopses, and notes.</summary>
     [HttpGet("{project}/search")]
     public async Task<IResult> Search(string project, [FromQuery] string q = "") =>
-        ApiResults.SuccessCollection(await views.SearchAsync(await projects.GetAsync(project), q));
+        ApiResults.SuccessCollection(await views.SearchAsync(ProjectViews.Model(await projects.GetAsync(project)), q));
 }
