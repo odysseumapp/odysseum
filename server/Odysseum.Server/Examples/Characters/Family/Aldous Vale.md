@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000013
----
-
 ## At a glance
 
 - **Age:** 44 when he disappeared

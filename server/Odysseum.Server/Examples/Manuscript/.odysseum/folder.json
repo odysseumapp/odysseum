@@ -1,55 +1,34 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200001",
-  "version": 1,
+  "version": 3,
   "pinnedView": "grid",
   "itemOrder": [
     "00d1e246-4f36-47e8-a308-000000000010",
-    "folder:Part One – The Mainland",
-    "folder:Part Two – The Island",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200002",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200005",
     "00d1e246-4f36-47e8-a308-000000000036"
   ],
-  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000010": {
-      "path": "The first map.md",
       "title": "Prologue: The first map",
       "synopsis": "Years before the letter, a father and his small daughter draw the island together, and he tells her the one rule of cartography that matters.",
       "notes": "Short. This is the memory every later chapter bends around. End on the pencil.",
       "status": "revised",
-      "wordGoal": 600,
-      "order": 0,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000006",
-        "00d1e246-4f36-47e8-a308-000000000013",
-        "00d1e246-4f36-47e8-a308-000000000019",
-        "00d1e246-4f36-47e8-a308-000000000024"
-      ]
+      "wordGoal": 600
     },
     "00d1e246-4f36-47e8-a308-000000000036": {
-      "path": "Interlude – Sixty-one.md",
       "title": "Interlude – Sixty-one",
       "synopsis": "Father Quill, alone, counts the bell. A one-page interlude between the second and third parts.",
       "notes": "Standalone piece filed loose in Manuscript, ordered between two Part folders.",
       "status": "revised",
-      "wordGoal": 250,
-      "order": 10,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000015",
-        "00d1e246-4f36-47e8-a308-000000000020",
-        "00d1e246-4f36-47e8-a308-000000000028"
-      ]
-    }
-  },
-  "folders": {
-    "0ad487f0-00b8-42b3-9c58-c27cfa200002": {
-      "path": "Part One – The Mainland",
-      "order": 0
+      "wordGoal": 250
     },
-    "0ad487f0-00b8-42b3-9c58-c27cfa200005": {
-      "path": "Part Two – The Island",
-      "order": 2
+    "e97e97e0-62cf-444f-9736-a680f750b1c6": {
+      "title": "Manuscript",
+      "synopsis": "",
+      "notes": "",
+      "status": "draft",
+      "wordGoal": 0
     }
   }
 }

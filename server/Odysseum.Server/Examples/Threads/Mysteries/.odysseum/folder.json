@@ -1,27 +1,24 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200016",
-  "version": 1,
+  "version": 3,
   "pinnedView": null,
-  "itemOrder": [],
-  "gridFolder": null,
+  "itemOrder": [
+    "00d1e246-4f36-47e8-a308-000000000028"
+  ],
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000028": {
-      "path": "Where the bell tower went.md",
       "title": "Where the bell tower went",
       "synopsis": "The tower was on the east spit. It is on the west. It rings when a place moves, and Father Quill swears he rings it.",
       "notes": "The comic mystery that turns out to be the same mystery as the serious one.",
       "status": "draft",
-      "wordGoal": 0,
-      "order": 28,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000004",
-        "00d1e246-4f36-47e8-a308-000000000015",
-        "00d1e246-4f36-47e8-a308-000000000020",
-        "00d1e246-4f36-47e8-a308-000000000034",
-        "00d1e246-4f36-47e8-a308-000000000036"
-      ]
+      "wordGoal": 0
+    },
+    "ce0544d7-742d-4c37-8b3a-fab2ce614ed2": {
+      "title": "Mysteries",
+      "synopsis": "",
+      "notes": "",
+      "status": "draft",
+      "wordGoal": 0
     }
-  },
-  "folders": {}
+  }
 }

@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000002
----
-
 Her father had taught her that every map was an argument.
 
 A road said: *this is how you get there.* A border said: *this is where you stop.* Even the smallest blue line of a river insisted that the water knew which way it wanted to go.

@@ -15,6 +15,8 @@ public interface IFileManager
     FileStream Lock(string relative, bool metadata = false);
     IEnumerable<string> EnumerateDocuments();
     IEnumerable<string> EnumerateFolders(bool recursive = true);
+    IEnumerable<string> EnumerateSubfolders(string relative);
+    IEnumerable<string> EnumerateDocumentsIn(string relative);
     IEnumerable<string> EnumerateFiles(string relative, string pattern, bool metadata = false);
     void CreateFolder(string relative);
     void RemoveEmptyFolder(string relative);

@@ -1,23 +1,24 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200019",
-  "version": 1,
+  "version": 3,
   "pinnedView": null,
-  "itemOrder": [],
-  "gridFolder": null,
+  "itemOrder": [
+    "00d1e246-4f36-47e8-a308-000000000032"
+  ],
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000032": {
-      "path": "Lighthouse mechanics.md",
       "title": "Lighthouse mechanics",
       "synopsis": "How a clockwork lamp turns, how often it is wound, and what the machinery sounds like from the kitchen below.",
       "notes": "Enough to be right about the sound. No more.",
       "status": "done",
-      "wordGoal": 0,
-      "order": 32,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000017"
-      ]
+      "wordGoal": 0
+    },
+    "95a903d3-1ee3-405d-bd82-f334087c04d8": {
+      "title": "Research",
+      "synopsis": "",
+      "notes": "",
+      "status": "draft",
+      "wordGoal": 0
     }
-  },
-  "folders": {}
+  }
 }

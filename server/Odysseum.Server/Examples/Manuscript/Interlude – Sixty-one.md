@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000036
----
-
 He does not sleep so much as wait, these days, and so he is already awake when it starts.
 
 One.

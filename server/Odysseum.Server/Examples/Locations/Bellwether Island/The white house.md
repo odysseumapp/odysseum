@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000019
----
-
 ## The house
 
 Two storeys of whitewashed stone at the point where the hill road gives up. A kitchen at the back with a long table scarred by pencil knives. Mara’s room under the roof, with the atlas shelf still up.

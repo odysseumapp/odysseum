@@ -1,25 +1,24 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200009",
-  "version": 1,
+  "version": 3,
   "pinnedView": null,
-  "itemOrder": [],
-  "gridFolder": null,
+  "itemOrder": [
+    "00d1e246-4f36-47e8-a308-000000000013"
+  ],
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000013": {
-      "path": "Aldous Vale.md",
       "title": "Aldous Vale",
       "synopsis": "Mara’s father. A surveyor who drew Bellwether so often that the island started drawing him back. Missing for twelve years.",
       "notes": "He is never on the page in the present. Every trace of him should be a map, a pencil or a rule.",
       "status": "revised",
-      "wordGoal": 0,
-      "order": 13,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000010",
-        "00d1e246-4f36-47e8-a308-000000000019",
-        "00d1e246-4f36-47e8-a308-000000000024"
-      ]
+      "wordGoal": 0
+    },
+    "8f34e308-f0fc-4620-910a-299e01d0ab32": {
+      "title": "Family",
+      "synopsis": "",
+      "notes": "",
+      "status": "draft",
+      "wordGoal": 0
     }
-  },
-  "folders": {}
+  }
 }

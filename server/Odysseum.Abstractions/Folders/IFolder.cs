@@ -1,15 +1,22 @@
-using Odysseum.Abstractions.Documents;
-using Odysseum.Abstractions.Items;
+using System.Text.Json;
 
 namespace Odysseum.Abstractions.Folders;
 
-public interface IFolder : IItem
+public interface IFolder
 {
-    FolderView? PinnedView { get; }
-    /// <summary>The folder whose documents are the columns of this folder's grid. Null means the default.</summary>
-    string? GridFolderId { get; }
-    /// <summary>Subfolders and documents in order. This is the only source of the order.</summary>
-    IReadOnlyList<IItem> Children { get; }
-    /// <summary>The folder's own hidden document. It is never one of the children. The root has none.</summary>
-    IDocument? OwnDocument { get; }
+    string Id { get; }
+    string ProjectId { get; }
+    string Name { get; }
+    /// <summary>Null for the project's top folder.</summary>
+    string? ParentFolderId { get; }
+    /// <summary>The IDs of the subfolders and documents in order. This is the only source of the order.</summary>
+    IReadOnlyList<string> ChildIds { get; }
+    /// <summary>The ID of the folder's own hidden document. It is never one of the children. The top folder has none.</summary>
+    string? OwnDocumentId { get; }
+    /// <summary>The name of the view the folder opens in, or null.</summary>
+    string? PinnedView { get; }
+    /// <summary>Settings by view name, each a JSON object. The server stores them without reading them.</summary>
+    IReadOnlyDictionary<string, JsonElement> Views { get; }
+    /// <summary>Changes when the folder's name, place, children or layout change.</summary>
+    string ETag { get; }
 }

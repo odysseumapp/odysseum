@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000024
----
-
 ## The line
 
 The blank atlas page → the palm-sized map → the bell tower on the wrong side → the photograph → the northern shore.

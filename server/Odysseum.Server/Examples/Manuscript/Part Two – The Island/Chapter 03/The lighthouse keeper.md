@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000005
----
-
 Elin opened the door before Mara knocked.
 
 “You have his eyes,” she said. “Come in. There’s soup.”

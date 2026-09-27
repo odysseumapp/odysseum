@@ -6,13 +6,12 @@ public interface IProjectService
 {
     event EventHandler<ProjectEventArgs>? ProjectCreated;
     event EventHandler<ProjectEventArgs>? ProjectUpdated;
-    event EventHandler<ProjectEventArgs>? ProjectChanged;
+    event EventHandler<ProjectEventArgs>? ProjectRemoved;
 
-    Task<IReadOnlyList<ProjectInfo>> ListAsync();
-    Task<IProject> GetAsync(ProjectBranch branch);
-    /// <summary>Opens the main branch of the project with that folder name, or with that UUID.</summary>
-    Task<IProject> GetAsync(string nameOrId);
-    Task<IProject> CreateAsync(string title, int? wordGoal = null, string? template = null);
-    /// <summary>Null settings keep their current value.</summary>
-    Task<IProject> SaveSettingsAsync(ProjectBranch branch, ProjectSettings settings, string expectedRevision);
+    /// <summary>Every project in the workspace, also project folders that were added since the last call.</summary>
+    Task<IReadOnlyList<IProject>> GetAllProjectsAsync();
+    Task<IProject> GetProjectByIdAsync(string projectId);
+    /// <summary>Makes a project from a template. Without a template name, the <c>Default</c> template is used.</summary>
+    Task<IProject> CreateProjectAsync(string title, int? wordGoal = null, string? templateName = null);
+    Task<IProject> UpdateProjectSettingsAsync(string projectId, ProjectSettings settings, string expectedETag);
 }

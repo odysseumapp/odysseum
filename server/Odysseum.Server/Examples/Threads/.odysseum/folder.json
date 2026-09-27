@@ -1,58 +1,34 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200014",
-  "version": 1,
+  "version": 3,
   "pinnedView": "grid",
   "itemOrder": [
     "00d1e246-4f36-47e8-a308-000000000023",
     "00d1e246-4f36-47e8-a308-000000000024",
-    "folder:Character arcs",
-    "folder:Mysteries"
+    "0ad487f0-00b8-42b3-9c58-c27cfa200015",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200016"
   ],
-  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000023": {
-      "path": "Mara’s return.md",
       "title": "Mara’s return",
       "synopsis": "The spine of the book: a woman goes home to an island that is not where she left it, and decides whether to stay long enough to remember.",
       "notes": "Every scene on this thread moves Mara physically closer to the white house or further from the mainland.",
       "status": "revised",
-      "wordGoal": 0,
-      "order": 23,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000001",
-        "00d1e246-4f36-47e8-a308-000000000003",
-        "00d1e246-4f36-47e8-a308-000000000005"
-      ]
+      "wordGoal": 0
     },
     "00d1e246-4f36-47e8-a308-000000000024": {
-      "path": "The changing map.md",
       "title": "The changing map",
       "synopsis": "The island’s geography follows memory. Places people forget disappear; places someone remembers too hard move. The little map is the only honest witness.",
       "notes": "Never explain the mechanism in dialogue. Show it on the map, then in the landscape, in that order.",
       "status": "revised",
-      "wordGoal": 0,
-      "order": 24,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000002",
-        "00d1e246-4f36-47e8-a308-000000000004",
-        "00d1e246-4f36-47e8-a308-000000000010",
-        "00d1e246-4f36-47e8-a308-000000000012",
-        "00d1e246-4f36-47e8-a308-000000000013",
-        "00d1e246-4f36-47e8-a308-000000000030",
-        "00d1e246-4f36-47e8-a308-000000000034"
-      ]
-    }
-  },
-  "folders": {
-    "0ad487f0-00b8-42b3-9c58-c27cfa200015": {
-      "path": "Character arcs",
-      "order": 0
+      "wordGoal": 0
     },
-    "0ad487f0-00b8-42b3-9c58-c27cfa200016": {
-      "path": "Mysteries",
-      "order": 1
+    "5f84d203-dd74-4b82-ac17-415deb108142": {
+      "title": "Threads",
+      "synopsis": "",
+      "notes": "",
+      "status": "draft",
+      "wordGoal": 0
     }
   }
 }

@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000001
----
-
 The letter arrived on a Tuesday, folded into the shape of a small, imperfect square.
 
 Mara almost threw it away.

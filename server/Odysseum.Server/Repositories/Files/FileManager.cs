@@ -10,7 +10,6 @@ public sealed class FileManager(string root, OwnWrites? ownWrites = null) : IFil
 {
     public const int MaxFileBytes = 4 * 1024 * 1024;
     public const string MetadataDirectory = ".odysseum";
-    private const string LegacyMetadataDirectory = ".writer";
     public string Root { get; } = Path.GetFullPath(root);
 
     public FileStream AcquireInstanceLock()
@@ -19,7 +18,6 @@ public sealed class FileManager(string root, OwnWrites? ownWrites = null) : IFil
         AssertNoLinks(Root);
         try
         {
-            MigrateLegacyMetadata();
             Directory.CreateDirectory(ResolvePath(MetadataDirectory, true));
             return new FileStream(ResolvePath(".odysseum/instance.lock", true), FileMode.OpenOrCreate,
                 FileAccess.ReadWrite, FileShare.None);
@@ -27,18 +25,6 @@ public sealed class FileManager(string root, OwnWrites? ownWrites = null) : IFil
         catch (IOException)
         {
             throw new WorkspaceException(WorkspaceError.Unavailable, "Another Odysseum instance is already using this project.");
-        }
-    }
-
-    private void MigrateLegacyMetadata()
-    {
-        foreach (var folder in EnumerateFolders().Prepend("").ToArray())
-        {
-            var directory = folder == "" ? Root : ResolvePath(folder);
-            var legacy = Path.Combine(directory, LegacyMetadataDirectory);
-            if (!Directory.Exists(legacy) || Directory.Exists(Path.Combine(directory, MetadataDirectory))) continue;
-            AssertNoLinks(legacy);
-            Directory.Move(legacy, Path.Combine(directory, MetadataDirectory));
         }
     }
 
@@ -99,6 +85,13 @@ public sealed class FileManager(string root, OwnWrites? ownWrites = null) : IFil
     public IEnumerable<string> EnumerateDocuments() => EnumerateDocuments(Root);
 
     public IEnumerable<string> EnumerateFolders(bool recursive = true) => EnumerateFolders(Root, recursive);
+
+    /// <summary>The folders directly inside the folder, as paths relative to the root.</summary>
+    public IEnumerable<string> EnumerateSubfolders(string relative) => EnumerateFolders(RootOr(relative), recursive: false);
+
+    /// <summary>The documents directly inside the folder, with the folder's own hidden document, as paths relative to the root.</summary>
+    public IEnumerable<string> EnumerateDocumentsIn(string relative) =>
+        EnumerateDocuments(RootOr(relative), recursive: false).Order(StringComparer.Ordinal);
 
     public IEnumerable<string> EnumerateFiles(string relative, string pattern, bool metadata = false)
     {
@@ -165,9 +158,10 @@ public sealed class FileManager(string root, OwnWrites? ownWrites = null) : IFil
         }
     }
 
-    private IEnumerable<string> EnumerateDocuments(string directory)
+    private IEnumerable<string> EnumerateDocuments(string directory, bool recursive = true)
     {
         AssertNoLinks(directory);
+        if (!Directory.Exists(directory)) yield break;
         foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
         {
             var name = Path.GetFileName(entry);
@@ -175,6 +169,7 @@ public sealed class FileManager(string root, OwnWrites? ownWrites = null) : IFil
             if ((name.StartsWith('.') && !folderDocument) || (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) continue;
             if (Directory.Exists(entry))
             {
+                if (!recursive) continue;
                 foreach (var child in EnumerateDocuments(entry)) yield return child;
             }
             else if (DocumentRules.IsDocument(entry)) yield return Path.GetRelativePath(Root, entry).Replace('\\', '/');

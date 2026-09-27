@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000021
----
-
 ## The flat
 
 Two rooms above a bakery, so it is always slightly too warm and smells of bread at five in the morning. A drawing table by the window. A narrow kitchen with a kettle that clicks off louder than it needs to.

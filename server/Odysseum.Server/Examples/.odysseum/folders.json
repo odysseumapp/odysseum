@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "paths": {
+    "0ad487f0-00b8-42b3-9c58-c27cfa200008": "Characters",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200009": "Characters/Family",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200010": "Characters/Islanders",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200011": "Locations",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200012": "Locations/Bellwether Island",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200013": "Locations/The mainland",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200001": "Manuscript",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200002": "Manuscript/Part One – The Mainland",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200003": "Manuscript/Part One – The Mainland/Chapter 01",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200004": "Manuscript/Part One – The Mainland/Chapter 02",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200005": "Manuscript/Part Two – The Island",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200006": "Manuscript/Part Two – The Island/Chapter 03",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200017": "Notes",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200019": "Notes/Research",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200018": "Notes/World building",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200014": "Threads",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200015": "Threads/Character arcs",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200016": "Threads/Mysteries"
+  }
+}

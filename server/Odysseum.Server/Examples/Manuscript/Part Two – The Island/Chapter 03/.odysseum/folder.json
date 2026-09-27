@@ -1,58 +1,32 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200006",
-  "version": 1,
+  "version": 3,
   "pinnedView": "outline",
   "itemOrder": [
     "00d1e246-4f36-47e8-a308-000000000005",
     "00d1e246-4f36-47e8-a308-000000000012"
   ],
-  "gridFolder": null,
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000039": {
-      "path": ".Chapter 03.md",
       "title": "Chapter 03",
       "synopsis": "Chapter heading and epigraph, kept in the chapter folder’s own document. It opens when you click the folder.",
       "notes": "Every folder has one of these; this one has something in it. Keep the epigraph; cut the rest if it reads as throat-clearing.",
       "status": "draft",
-      "wordGoal": 0,
-      "order": 5,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000017"
-      ]
+      "wordGoal": 0
     },
     "00d1e246-4f36-47e8-a308-000000000005": {
-      "path": "The lighthouse keeper.md",
       "title": "The lighthouse keeper",
       "synopsis": "An old family friend offers Mara a room and an unsettling warning: some things on the island are better left unremembered.",
       "notes": "Elin is warm, practical, and keeping one enormous secret.",
       "status": "draft",
-      "wordGoal": 1300,
-      "order": 6,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000006",
-        "00d1e246-4f36-47e8-a308-000000000009",
-        "00d1e246-4f36-47e8-a308-000000000017",
-        "00d1e246-4f36-47e8-a308-000000000023"
-      ]
+      "wordGoal": 1300
     },
     "00d1e246-4f36-47e8-a308-000000000012": {
-      "path": "The photograph.md",
       "title": "The photograph",
       "synopsis": "Elin explains the photograph, or tries to. Mara learns she was on the island the day her father vanished, and that she has forgotten it on purpose.",
       "notes": "Elin gives up one truth and keeps two. Mara should feel the floor move.",
       "status": "draft",
-      "wordGoal": 1200,
-      "order": 7,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000006",
-        "00d1e246-4f36-47e8-a308-000000000009",
-        "00d1e246-4f36-47e8-a308-000000000017",
-        "00d1e246-4f36-47e8-a308-000000000024"
-      ]
+      "wordGoal": 1200
     }
-  },
-  "folders": {}
+  }
 }

@@ -20,8 +20,8 @@ internal sealed class ManifestTransaction(IFileManager files)
         {
             Validate(entry);
             var current = files.Exists(entry.Path, metadata: true)
-                ? ContentRevision.Hash(await files.ReadAsync(entry.Path, metadata: true)) : null;
-            var before = entry.Backup is null ? null : ContentRevision.Hash(await files.ReadAsync(entry.Backup, metadata: true));
+                ? ETags.Hash(await files.ReadAsync(entry.Path, metadata: true)) : null;
+            var before = entry.Backup is null ? null : ETags.Hash(await files.ReadAsync(entry.Backup, metadata: true));
             if (current != before && current != entry.After)
                 throw new WorkspaceException(WorkspaceError.Conflict, "A manifest changed during recovery. Preserve the pending-manifests journal and resolve the external edit before reopening.");
         }
@@ -32,7 +32,7 @@ internal sealed class ManifestTransaction(IFileManager files)
             {
                 var before = await files.ReadAsync(entry.Backup, metadata: true);
                 if (!files.Exists(entry.Path, metadata: true)
-                    || ContentRevision.Hash(await files.ReadAsync(entry.Path, metadata: true)) != ContentRevision.Hash(before))
+                    || ETags.Hash(await files.ReadAsync(entry.Path, metadata: true)) != ETags.Hash(before))
                     await files.WriteAsync(entry.Path, before, metadata: true);
             }
         }
@@ -65,7 +65,7 @@ internal sealed class ManifestTransaction(IFileManager files)
                     backup = $".odysseum/manifest-transaction/{Guid.NewGuid():N}.bak";
                     await files.WriteAsync(backup, old, overwrite: false, metadata: true);
                 }
-                entries.Add(new(path, backup, ContentRevision.Hash(bytes)));
+                entries.Add(new(path, backup, ETags.Hash(bytes)));
             }
             var journal = JsonSerializer.SerializeToUtf8Bytes(entries);
             if (journal.Length > FileManager.MaxFileBytes) throw new WorkspaceException(WorkspaceError.TooLarge, "Too many manifests in one update.");
@@ -101,7 +101,7 @@ internal sealed class ManifestTransaction(IFileManager files)
     private static void Validate(Entry entry)
     {
         if (entry is null || entry.Path is null || entry.After is null || entry.After.Length != 64 || !entry.After.All(Uri.IsHexDigit)
-            || entry.Path != ".odysseum/project.json" && (!entry.Path.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)
+            || entry.Path is not (".odysseum/project.json" or ".odysseum/links.json" or ".odysseum/documents.json" or ".odysseum/folders.json") && (!entry.Path.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)
                 || entry.Path.Split('/')[..^2].Any(part => part.StartsWith('.')))
             || entry.Backup is not null && (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(entry.Backup), "N", out var id)
                 || entry.Backup != $".odysseum/manifest-transaction/{id:N}.bak"))

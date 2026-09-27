@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000044
----
-
 The Manuscript folder mixes several ways of organising a book on purpose. Every folder shows the same four views, so pick whichever habits suit you and ignore the rest.
 
 ## Parts

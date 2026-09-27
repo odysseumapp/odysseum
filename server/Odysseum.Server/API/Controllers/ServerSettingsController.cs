@@ -10,17 +10,15 @@ public class ServerSettingsController(ISettingsProvider settingsProvider) : Cont
 {
     /// <summary>Server settings that apply to every project.</summary>
     [HttpGet]
-    public IResult Get() => ApiResults.Success(Describe(settingsProvider.GetSettings()));
+    public IResult GetServerSettings() => ApiResults.Success(new ServerSettingsDto(settingsProvider.GetSettings().AllowDeletingDefaultFolders));
 
     /// <summary>Save server settings. Changes apply immediately, but an ODYSSEUM_* environment variable overrides them again after a restart.</summary>
     [HttpPut]
-    public IResult Update([FromBody] ServerSettingsRequest request)
+    public IResult UpdateServerSettings([FromBody] UpdateServerSettingsRequest request)
     {
         var settings = settingsProvider.GetSettings(copy: true);
-        settings.AllowDeletingDefaultFolders = request.AllowDeletingDefaultFolders;
+        settings.AllowDeletingDefaultFolders = request.AllowDeletingDefaultFolders!.Value;
         settingsProvider.SaveSettings(settings);
-        return ApiResults.Success(Describe(settings));
+        return ApiResults.Success(new ServerSettingsDto(settings.AllowDeletingDefaultFolders));
     }
-
-    private static ServerSettingsResponse Describe(IServerSettings settings) => new(settings.AllowDeletingDefaultFolders);
 }

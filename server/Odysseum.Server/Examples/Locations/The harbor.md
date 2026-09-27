@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000018
----
-
 ## The place
 
 A stone jetty, a curve of low houses, a shop with a noticeboard, and a slipway where boats go to be forgotten about. The harbor faces north-west into the weather, which everyone agrees was a mistake made by someone else.

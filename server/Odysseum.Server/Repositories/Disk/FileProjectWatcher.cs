@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Odysseum.Abstractions.Projects;
 using Odysseum.Server.Services.Projects;
 
 namespace Odysseum.Server.Repositories.Disk;
@@ -14,40 +13,40 @@ public sealed class FileProjectWatcher(string workspaceRoot, OwnWrites ownWrites
     private readonly OwnWrites _ownWrites = ownWrites;
     private readonly int _pollSeconds = pollSeconds;
     private readonly ILogger<FileProjectWatcher>? _logger = logger;
-    private readonly ConcurrentDictionary<ProjectBranch, ProjectWatch> _watches = new(ProjectBranchComparer.Instance);
+    private readonly ConcurrentDictionary<string, ProjectWatch> _watches =
+        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
-    public event Action<ProjectBranch>? Changed;
+    public event Action<string>? Changed;
 
-    public void Watch(ProjectBranch branch)
+    public void Watch(string projectName)
     {
-        if (!branch.IsMain) return;
-        _watches.GetOrAdd(branch, key => new ProjectWatch(this, key, Path.Combine(_root, ProjectNames.Validate(key.Project))));
+        _watches.GetOrAdd(projectName, key => new ProjectWatch(this, key, Path.Combine(_root, ProjectNames.Validate(key))));
     }
 
-    public void Unwatch(ProjectBranch branch)
+    public void Unwatch(string projectName)
     {
-        if (_watches.TryRemove(branch, out var watch)) watch.Dispose();
+        if (_watches.TryRemove(projectName, out var watch)) watch.Dispose();
     }
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var branch in _watches.Keys.ToArray())
-            if (_watches.TryRemove(branch, out var watch)) await watch.StopAsync();
+        foreach (var projectName in _watches.Keys.ToArray())
+            if (_watches.TryRemove(projectName, out var watch)) await watch.StopAsync();
     }
 
     private sealed class ProjectWatch : IDisposable
     {
         private readonly FileProjectWatcher _owner;
-        private readonly ProjectBranch _branch;
+        private readonly string _projectName;
         private readonly string _root;
         private readonly CancellationTokenSource _stopping = new();
         private readonly Channel<bool> _changes = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
         private readonly Task _loop;
 
-        public ProjectWatch(FileProjectWatcher owner, ProjectBranch branch, string root)
+        public ProjectWatch(FileProjectWatcher owner, string projectName, string root)
         {
             _owner = owner;
-            _branch = branch;
+            _projectName = projectName;
             _root = root;
             _loop = Task.Run(() => RunAsync(_stopping.Token));
         }
@@ -56,7 +55,7 @@ public sealed class FileProjectWatcher(string workspaceRoot, OwnWrites ownWrites
         {
             var relative = Path.GetRelativePath(_root, fullPath).Replace('\\', '/');
             if (relative.Split('/').Any(part => part.StartsWith('.'))
-                && relative != ".odysseum/project.json" && !relative.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)) return;
+                && relative is not (".odysseum/project.json" or ".odysseum/links.json" or ".odysseum/documents.json" or ".odysseum/folders.json") && !relative.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)) return;
             if (_owner._ownWrites.Contains(fullPath)) return;
             _changes.Writer.TryWrite(true);
         }
@@ -88,7 +87,7 @@ public sealed class FileProjectWatcher(string workspaceRoot, OwnWrites ownWrites
                     stoppingToken.ThrowIfCancellationRequested();
                     await Task.Delay(200, stoppingToken);
                     while (_changes.Reader.TryRead(out _)) { }
-                    _owner.Changed?.Invoke(_branch);
+                    _owner.Changed?.Invoke(_projectName);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }

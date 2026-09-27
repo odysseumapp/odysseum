@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000003
----
-
 The timetable said there had never been a ferry to Bellwether.
 
 Mara read it twice.

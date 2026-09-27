@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000025
----
-
 ## Start
 
 A cartographer who trusts the ruler. Faces the door. Has not been on a boat in twelve years.

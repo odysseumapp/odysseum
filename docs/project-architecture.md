@@ -5,6 +5,7 @@ This document shows the classes of the server and how they connect. It matches t
 Words used here:
 
 - A **project name** is the project's folder name in the workspace. Example: `my-novel`.
+- A **project ID** is the UUID in the project's `project.json`. It does not change when the folder is renamed.
 - A **project branch** is a project name with a branch name. The type is `ProjectBranch(Project, Branch)`. Only the branch `main` exists now.
 - An **item** is a folder or a document.
 
@@ -74,7 +75,7 @@ Words used here:
           |------------------------------|  |------------------------------|
           | Children : Item[]  in order  |  | Title, Synopsis, Notes,      |
           | OwnDocument : Document?      |  |   Status, WordGoal           |
-          | PinnedView, GridFolderId     |  | Links, LinkNotes             |
+          | PinnedView, Views            |  | Links, LinkNotes             |
           +------------------------------+  | Kind, IsFolderDocument       |
                                             | Revision, Modified,          |
                                             |   WordCount                  |
