@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000012
----
-
 “You were four,” Elin said.
 
 She took the frame gently from Mara’s hands and set it face down on the windowsill, as though it might be listening.

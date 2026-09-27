@@ -1,44 +1,32 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200004",
-  "version": 1,
+  "version": 3,
   "pinnedView": null,
-  "itemOrder": [],
-  "gridFolder": null,
+  "itemOrder": [
+    "00d1e246-4f36-47e8-a308-000000000003",
+    "00d1e246-4f36-47e8-a308-000000000004"
+  ],
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000003": {
-      "path": "The last ferry.md",
       "title": "The last ferry",
       "synopsis": "At the mainland harbor, a reluctant ferryman recognizes Mara’s name—and knows more than he is willing to say.",
       "notes": "Introduce Tomas through what he does, not a description. He should never answer a question directly.",
       "status": "draft",
-      "wordGoal": 1500,
-      "order": 3,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000006",
-        "00d1e246-4f36-47e8-a308-000000000008",
-        "00d1e246-4f36-47e8-a308-000000000018",
-        "00d1e246-4f36-47e8-a308-000000000023"
-      ]
+      "wordGoal": 1500
     },
     "00d1e246-4f36-47e8-a308-000000000004": {
-      "path": "What the tide kept.md",
       "title": "What the tide kept",
       "synopsis": "The crossing reveals how much the island has changed. A familiar landmark appears on the wrong side of the boat.",
       "notes": "A quiet scene between discoveries. Give Mara space to remember.",
       "status": "draft",
-      "wordGoal": 900,
-      "order": 4,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000006",
-        "00d1e246-4f36-47e8-a308-000000000008",
-        "00d1e246-4f36-47e8-a308-000000000020",
-        "00d1e246-4f36-47e8-a308-000000000024",
-        "00d1e246-4f36-47e8-a308-000000000025",
-        "00d1e246-4f36-47e8-a308-000000000028"
-      ]
+      "wordGoal": 900
+    },
+    "0ec57544-6c60-4fa1-8943-34d87b11c338": {
+      "title": "Chapter 02",
+      "synopsis": "",
+      "notes": "",
+      "status": "draft",
+      "wordGoal": 0
     }
-  },
-  "folders": {}
+  }
 }

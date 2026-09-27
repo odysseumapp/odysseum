@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000028
----
-
 ## The question
 
 How does a stone tower cross a mile of island without disturbing a sheep?

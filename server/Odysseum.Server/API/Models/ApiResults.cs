@@ -55,24 +55,25 @@ public static class ApiResults
 {
     private const string ApiVersion = "1.0";
 
-    private static IResult Response<T>(T data, int statusCode, string? location = null)
+    private static IResult Response<T>(T data, int statusCode, string? location = null, string? etag = null)
     {
         var response = TypedResults.Json(new SuccessResponse<T>(ApiVersion, data), statusCode: statusCode);
-        if (location != null)
+        if (location != null || etag != null)
         {
-            return new HeaderResult(response, location);
+            return new HeaderResult(response, location, etag);
         }
         return response;
     }
 
-    public static IResult Success<T>(T data) =>
-        Response(data, StatusCodes.Status200OK);
+    /// <summary>A response with one item. <paramref name="etag"/> goes in the ETag header.</summary>
+    public static IResult Success<T>(T data, string? etag = null) =>
+        Response(data, StatusCodes.Status200OK, etag: etag);
 
     public static IResult SuccessCollection<T>(IEnumerable<T>? items, int? total = null) =>
         Success(new ApiCollection<T>(items ?? Array.Empty<T>(), total));
 
-    public static IResult Created<T>(T data, string? uri = null) =>
-        Response(data, StatusCodes.Status201Created, uri);
+    public static IResult Created<T>(T data, string? uri = null, string? etag = null) =>
+        Response(data, StatusCodes.Status201Created, uri, etag);
 
     public static IResult File(byte[] content, string contentType, string fileName) =>
         TypedResults.File(content, contentType, fileName);
@@ -95,6 +96,9 @@ public static class ApiResults
     public static IResult Conflict(string message) =>
         Error(StatusCodes.Status409Conflict, message);
 
+    public static IResult PreconditionRequired(string message) =>
+        Error(StatusCodes.Status428PreconditionRequired, message);
+
     public static IResult TooManyRequests(string message) =>
         Error(StatusCodes.Status429TooManyRequests, message);
 
@@ -110,17 +114,20 @@ public static class ApiResults
     private class HeaderResult : IResult
     {
         private readonly IResult _result;
-        private readonly string _locationValue;
+        private readonly string? _location;
+        private readonly string? _etag;
 
-        public HeaderResult(IResult result, string locationValue)
+        public HeaderResult(IResult result, string? location, string? etag)
         {
             _result = result;
-            _locationValue = locationValue;
+            _location = location;
+            _etag = etag;
         }
 
         public async Task ExecuteAsync(HttpContext httpContext)
         {
-            httpContext.Response.Headers.Location = _locationValue;
+            if (_location != null) httpContext.Response.Headers.Location = _location;
+            if (_etag != null) httpContext.Response.Headers.ETag = $"\"{_etag}\"";
             await _result.ExecuteAsync(httpContext);
         }
     }

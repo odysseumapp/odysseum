@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000020
----
-
 ## The tower
 
 Square, grey, older than the village. One bell, no clock. Sixty-one steps, which Mara climbed on a dare at ten and counted on the way down.

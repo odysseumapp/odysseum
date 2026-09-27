@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000004
----
-
 Halfway across the bay, the rain stopped.
 
 It did not fade. One moment it was there, tapping a thousand small fingers against the cabin roof, and the next it was gone. Ahead of them, the water lay perfectly still.

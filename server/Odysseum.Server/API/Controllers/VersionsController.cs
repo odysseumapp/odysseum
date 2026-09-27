@@ -1,40 +1,54 @@
 using Microsoft.AspNetCore.Mvc;
+using Odysseum.Abstractions.Documents;
 using Odysseum.Abstractions.History;
 using Odysseum.Abstractions.Projects;
 using Odysseum.Server.API.Models;
-using Odysseum.Server.API.Views;
 
 namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
-[Route("api/projects/{project}/versions")]
-public class VersionsController(IProjectService projects, IHistoryService history, ProjectViews views) : ControllerBase
+[Route("api")]
+public class VersionsController(IHistoryService history, IProjectService projects, IDocumentService documents) : ControllerBase
 {
     /// <summary>The project's saved versions, newest first.</summary>
-    [HttpGet]
-    public async Task<IResult> List(string project)
-    {
-        var current = await projects.GetAsync(project);
-        return ApiResults.SuccessCollection((await history.ListVersionsAsync(current.Branch)).Select(Describe));
-    }
+    [HttpGet("projects/{projectId}/versions")]
+    public async Task<IResult> GetVersionsByProjectId(string projectId) =>
+        ApiResults.SuccessCollection((await history.GetVersionsByProjectIdAsync(projectId)).Select(VersionDto.FromVersion));
 
     /// <summary>Save the project as it is now under a name.</summary>
-    [HttpPost]
-    public async Task<IResult> Save(string project, [FromBody] SaveVersionRequest request)
+    [HttpPost("projects/{projectId}/versions")]
+    public async Task<IResult> SaveVersion(string projectId, [FromBody] SaveVersionRequest request)
     {
-        var current = await projects.GetAsync(project);
-        var version = Describe(await history.SaveVersionAsync(current.Branch, request.Name));
-        return ApiResults.Created(version, $"/api/projects/{Uri.EscapeDataString(project)}/versions/{version.Id}");
+        var version = await history.SaveVersionAsync(projectId, request.Name);
+        return ApiResults.Created(VersionDto.FromVersion(version), $"/api/projects/{projectId}/versions/{version.Id}");
     }
 
-    /// <summary>Put every file back as it was in that version. The server saves the current state first, so a restore can be undone.</summary>
-    [HttpPost("{version}/restore")]
-    public async Task<IResult> Restore(string project, string version)
+    /// <summary>Put every file back as it was in that version. The server saves the current state first, so a restore
+    /// can be undone. All folders, documents and links of the project can change; read them again.</summary>
+    [HttpPost("projects/{projectId}/versions/{versionId}/restore")]
+    public async Task<IResult> RestoreProjectVersion(string projectId, string versionId)
     {
-        var current = await projects.GetAsync(project);
-        return ApiResults.Success(views.View(ProjectViews.Model(await history.RestoreAsync(current.Branch, version))));
+        await history.RestoreProjectVersionAsync(projectId, versionId);
+        var project = await projects.GetProjectByIdAsync(projectId);
+        return ApiResults.Success(ProjectDto.FromProject(project), project.ETag);
     }
 
-    internal static VersionInfo Describe(ProjectVersion version) =>
-        new(version.Id, version.Label, version.Automatic, version.Saved.UtcDateTime, version.Changes);
+    /// <summary>The versions that changed this document, newest first.</summary>
+    [HttpGet("documents/{documentId}/versions")]
+    public async Task<IResult> GetVersionsByDocumentId(string documentId) =>
+        ApiResults.SuccessCollection((await history.GetVersionsByDocumentIdAsync(documentId)).Select(VersionDto.FromVersion));
+
+    /// <summary>The document's text as it was in that version.</summary>
+    [HttpGet("documents/{documentId}/versions/{versionId}/text")]
+    public async Task<IResult> GetDocumentTextFromVersion(string documentId, string versionId) =>
+        ApiResults.Success(new VersionTextDto(versionId, documentId, await history.GetDocumentTextFromVersionAsync(documentId, versionId)));
+
+    /// <summary>Put this document back as it was in that version. The server saves the current state first.</summary>
+    [HttpPost("documents/{documentId}/versions/{versionId}/restore")]
+    public async Task<IResult> RestoreDocumentVersion(string documentId, string versionId)
+    {
+        await history.RestoreDocumentVersionAsync(documentId, versionId);
+        var document = await documents.GetDocumentByIdAsync(documentId);
+        return ApiResults.Success(DocumentDto.FromDocument(document), document.ETag);
+    }
 }

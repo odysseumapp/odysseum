@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000030
----
-
 ## Forgetting
 
 A place nobody has thought about in a long while begins to thin. Paths grow over first, then walls, then the ground itself. Nan’s ledger records the last person to mention it; when that name is crossed out, the place has a season left.

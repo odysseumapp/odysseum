@@ -17,15 +17,15 @@ internal static partial class MarkdownDocumentCodec
     }
 
     public static int CountWords(string content) => Word().Matches(content).Count;
-    public static (string Prefix, string Body, string? Id) Split(string text)
+
+    /// <summary>Splits off a front matter block that another program wrote at the top of the file. Odysseum does not
+    /// read it; it keeps it unchanged when it saves the text.</summary>
+    public static (string Prefix, string Body) Split(string text)
     {
         var match = Frontmatter().Match(text);
-        if (!match.Success) return (text.StartsWith('\uFEFF') ? "\uFEFF" : "", text.TrimStart('\uFEFF'), null);
-        var idMatch = WriterId().Match(match.Value);
-        string? id = idMatch.Success && Guid.TryParse(idMatch.Groups[1].Value, out var guid) ? guid.ToString() : null;
-        return (match.Value, text[match.Length..], id);
+        if (!match.Success) return (text.StartsWith('﻿') ? "﻿" : "", text.TrimStart('﻿'));
+        return (match.Value, text[match.Length..]);
     }
-    [GeneratedRegex(@"\A\uFEFF?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)(?:\r?\n)?")] private static partial Regex Frontmatter();
-    [GeneratedRegex("(?m)^writer_id:[ \\t]*[\"']?([0-9a-fA-F-]{36})[\"']?[ \\t]*\\r?$")] private static partial Regex WriterId();
+    [GeneratedRegex(@"\A﻿?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)(?:\r?\n)?")] private static partial Regex Frontmatter();
     [GeneratedRegex(@"[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*")] private static partial Regex Word();
 }

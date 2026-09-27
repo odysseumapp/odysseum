@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000023
----
-
 ## The line
 
 Letter → ferry → lighthouse → the white house → the northern shore → the ferry again.

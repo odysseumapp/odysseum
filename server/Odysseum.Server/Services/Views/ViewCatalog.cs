@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Odysseum.Abstractions.Exceptions;
-using Odysseum.Server.Models;
 
 namespace Odysseum.Server.Services.Views;
 
@@ -26,7 +25,7 @@ public sealed class ViewCatalog
     public IReadOnlyCollection<IViewDefinition> Views => _views.Values;
 
     /// <summary>Each folder setting in the given settings must be null or the ID of a folder of the project.</summary>
-    public void CheckFolders(Project project, IReadOnlyDictionary<string, JsonElement>? views)
+    public void CheckFolders(Func<string, bool> folderExists, IReadOnlyDictionary<string, JsonElement>? views)
     {
         foreach (var (name, settings) in views ?? new Dictionary<string, JsonElement>())
         {
@@ -34,7 +33,7 @@ public sealed class ViewCatalog
             foreach (var key in view.FolderSettings)
             {
                 if (!settings.TryGetProperty(key, out var value) || value.ValueKind == JsonValueKind.Null) continue;
-                if (value.ValueKind != JsonValueKind.String || project.Folder(value.GetString()!) is null)
+                if (value.ValueKind != JsonValueKind.String || !folderExists(value.GetString()!))
                     throw new WorkspaceException(WorkspaceError.Invalid, $"The '{name}' view's {key} setting names a folder that does not exist.");
             }
         }

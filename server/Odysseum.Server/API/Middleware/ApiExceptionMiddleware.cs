@@ -46,6 +46,7 @@ public class ApiExceptionMiddleware
         WorkspaceError.Forbidden => StatusCodes.Status403Forbidden,
         WorkspaceError.NotFound => StatusCodes.Status404NotFound,
         WorkspaceError.Conflict => StatusCodes.Status409Conflict,
+        WorkspaceError.ETagMismatch => StatusCodes.Status412PreconditionFailed,
         WorkspaceError.TooLarge => StatusCodes.Status413PayloadTooLarge,
         WorkspaceError.Corrupt => StatusCodes.Status422UnprocessableEntity,
         WorkspaceError.Unavailable => StatusCodes.Status503ServiceUnavailable,

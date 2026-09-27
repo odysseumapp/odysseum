@@ -1,9 +1,12 @@
+using System.Text.Json;
+using Odysseum.Abstractions.Documents;
 using Odysseum.Abstractions.Exceptions;
 using Odysseum.Abstractions.Folders;
 using Odysseum.Abstractions.Folders.Events;
-using Odysseum.Abstractions.Projects;
 using Odysseum.Server.Models;
-using Odysseum.Server.Models.Editing;
+using Odysseum.Server.Repositories;
+using Odysseum.Server.Repositories.Files;
+using Odysseum.Server.Services.Documents;
 using Odysseum.Server.Services.Projects;
 using Odysseum.Server.Services.Views;
 using Odysseum.Server.Settings;
@@ -12,107 +15,155 @@ namespace Odysseum.Server.Services;
 
 public sealed class FolderService : IFolderService
 {
-    private readonly ProjectSessions _sessions;
+    private readonly IFolderRepository _folders;
+    private readonly IFolderPlaceRepository _folderPlaces;
+    private readonly IDocumentRepository _documents;
+    private readonly IDocumentPlaceRepository _documentPlaces;
+    private readonly IProjectLock _projectLock;
     private readonly ISettingsProvider? _settings;
     private readonly ViewCatalog _views;
 
-    public FolderService(ProjectSessions sessions, ISettingsProvider? settings = null, ViewCatalog? views = null)
+    public FolderService(IFolderRepository folders, IFolderPlaceRepository folderPlaces, IDocumentRepository documents,
+        IDocumentPlaceRepository documentPlaces, IProjectLock projectLock, ISettingsProvider? settings = null, ViewCatalog? views = null)
     {
-        _sessions = sessions;
+        _folders = folders;
+        _folderPlaces = folderPlaces;
+        _documents = documents;
+        _documentPlaces = documentPlaces;
+        _projectLock = projectLock;
         _settings = settings;
         _views = views ?? ViewCatalog.Default;
-        sessions.FoldersRemoved += (session, folders) => { foreach (var folder in folders) FolderRemoved?.Invoke(this, new(session.Branch, folder)); };
+        folders.ItemAdded += (_, change) => FolderCreated?.Invoke(this, new(change.Item));
+        folders.ItemUpdated += (_, change) =>
+        {
+            if (change.Before?.ParentFolderId != change.Item.ParentFolderId) FolderMoved?.Invoke(this, new(change.Item));
+            else FolderUpdated?.Invoke(this, new(change.Item));
+        };
+        folders.ItemRemoved += (_, change) => FolderRemoved?.Invoke(this, new(change.Item));
     }
 
     public event EventHandler<FolderEventArgs>? FolderCreated;
     public event EventHandler<FolderEventArgs>? FolderUpdated;
+    public event EventHandler<FolderEventArgs>? FolderMoved;
     public event EventHandler<FolderEventArgs>? FolderRemoved;
 
-    public Task<IReadOnlyList<IFolder>> ListAsync(IProject project) => Task.FromResult<IReadOnlyList<IFolder>>(Model(project).Folders);
+    public async Task<IFolder> GetFolderByIdAsync(string folderId) => await FindAsync(folderId);
 
-    public Task<IFolder> GetAsync(IProject project, string id) => Task.FromResult<IFolder>(Find(Model(project), id));
+    public async Task<IReadOnlyList<IFolder>> GetFoldersByProjectIdAsync(string projectId) => await _folders.GetFoldersByProjectIdAsync(projectId);
 
-    public async Task<IFolder> CreateAsync(ProjectBranch branch, string parentId, string name)
+    /// <summary>Saves the folder's place, then the folder, then its own hidden document, then adds the folder at the end of
+    /// the parent folder's children.</summary>
+    public async Task<IFolder> CreateFolderAsync(string parentFolderId, string name)
     {
-        var session = await _sessions.OpenAsync(branch);
-        return await session.RunAsync<IFolder>(async () =>
+        name = name?.Trim() ?? "";
+        if (name.Length == 0 || name.Contains('/') || !FileManager.IsSafePath(name))
+            throw new WorkspaceException(WorkspaceError.Invalid, "That folder name is not allowed.");
+        var parent = await FindAsync(parentFolderId);
+        return await _projectLock.RunLockedAsync(parent.ProjectId, async () =>
         {
-            var current = session.Current;
-            var editor = new FolderEditor(current);
-            var created = editor.Create(parentId, name);
-            var saved = await session.SaveAsync(editor.Changes(), current.Revision);
-            var folder = Find(saved, created.Id);
-            FolderCreated?.Invoke(this, new(branch, folder));
-            return folder;
+            var projectId = parent.ProjectId;
+            var path = ProjectPaths.Join(await _folderPlaces.GetPathByFolderIdAsync(parent.Id), name);
+            var id = Guid.NewGuid().ToString();
+            await _folderPlaces.AddAsync(new FolderPlace(id, projectId, path, ""));
+            await _folders.AddAsync(new Folder(id, projectId, name, parent.Id, [], null, null, new Dictionary<string, JsonElement>(StringComparer.Ordinal), ""));
+
+            var ownId = Guid.NewGuid().ToString();
+            var ownPath = DocumentRules.FolderDocumentPath(path);
+            await _documentPlaces.AddAsync(new DocumentPlace(ownId, projectId, ownPath, ""));
+            await _documents.AddAsync(new Document(ownId, projectId, id, ProjectPaths.NameOf(ownPath), DocumentRules.KindOf(ownPath), true, name, "", "",
+                DocumentStatus.Draft, 0, 0, default, ""), "");
+
+            var current = await FindAsync(parent.Id);
+            await _folders.UpdateAsync(current with { ChildIds = [.. current.ChildIds.Where(child => child != id), id] }, current.ETag);
+            return (IFolder)await FindAsync(id);
         });
     }
 
-    public async Task<IFolder> SetLayoutAsync(ProjectBranch branch, string folderId, FolderLayout layout, string expectedRevision)
+    /// <summary>Sets the pinned view and changes the settings of the views named in the layout. A view not named keeps
+    /// its settings; a JSON null removes a view's settings.</summary>
+    public async Task<IFolder> UpdateFolderLayoutAsync(string folderId, FolderLayout layout, string expectedETag)
     {
-        var session = await _sessions.OpenAsync(branch);
-        return await session.RunAsync<IFolder>(async () =>
+        var folder = await FindAsync(folderId);
+        if (layout.PinnedView is not null) ViewNames.Check(layout.PinnedView);
+        var projectFolders = (await _folders.GetFoldersByProjectIdAsync(folder.ProjectId)).Select(other => other.Id).ToHashSet(StringComparer.Ordinal);
+        _views.CheckFolders(projectFolders.Contains, layout.Views);
+        var views = new Dictionary<string, JsonElement>(folder.Views, StringComparer.Ordinal);
+        foreach (var (name, settings) in layout.Views ?? new Dictionary<string, JsonElement>())
         {
-            var current = session.Current;
-            CheckRevision(current, expectedRevision);
-            _views.CheckFolders(current, layout.Views);
-            var editor = new FolderEditor(current);
-            editor.SetLayout(folderId, layout);
-            var saved = await session.SaveAsync(editor.Changes(), current.Revision);
-            var folder = Find(saved, folderId);
-            FolderUpdated?.Invoke(this, new(branch, folder));
-            return folder;
+            ViewNames.Check(name);
+            if (ViewNames.Removes(settings)) views.Remove(name);
+            else views[name] = settings.Clone();
+        }
+        ViewNames.CheckSettings(views);
+        return await _folders.UpdateAsync(folder with { PinnedView = layout.PinnedView, Views = views }, expectedETag);
+    }
+
+    /// <summary>Changes the folder's place to the target folder, then puts it at <paramref name="index"/> among the
+    /// target folder's children.</summary>
+    public async Task<FolderMoveResult> MoveFolderToFolderAsync(string folderId, string targetFolderId, int index, string expectedETag)
+    {
+        var folder = await FindAsync(folderId);
+        if (folder.IsRoot) throw new WorkspaceException(WorkspaceError.Invalid, "The project folder itself cannot be moved.");
+        var target = await FindAsync(targetFolderId);
+        if (target.ProjectId != folder.ProjectId) throw new WorkspaceException(WorkspaceError.Invalid, "A folder can only move inside its own project.");
+        for (Folder? current = target; current is not null; current = current.ParentFolderId is { } parentId ? await _folders.GetByIdAsync(parentId) : null)
+            if (current.Id == folder.Id) throw new WorkspaceException(WorkspaceError.Invalid, "A folder cannot move into itself.");
+        return await _projectLock.RunLockedAsync(folder.ProjectId, async () =>
+        {
+            folder = await FindAsync(folderId);
+            ETags.Check(folder.ETag, expectedETag);
+            var oldParentId = folder.ParentFolderId!;
+            if (oldParentId != targetFolderId)
+            {
+                var place = await _folderPlaces.GetPlaceByFolderIdAsync(folderId);
+                var targetPath = await _folderPlaces.GetPathByFolderIdAsync(targetFolderId);
+                await _folderPlaces.UpdateAsync(place with { Path = ProjectPaths.Join(targetPath, folder.Name) }, place.ETag);
+            }
+            target = await FindAsync(targetFolderId);
+            var order = target.ChildIds.Where(child => child != folderId).ToList();
+            order.Insert(Math.Clamp(index, 0, order.Count), folderId);
+            await _folders.UpdateAsync(target with { ChildIds = order }, target.ETag);
+            return new FolderMoveResult(await FindAsync(folderId), await FindAsync(oldParentId), await FindAsync(targetFolderId));
         });
     }
 
-    public async Task<IFolder> MoveAsync(ProjectBranch branch, string itemId, string targetFolderId, int index, string expectedRevision)
+    /// <summary>Deletes the folder's own document and its place, then the folder and its place. View settings in other
+    /// folders that name the deleted folder are cleared.</summary>
+    public async Task DeleteFolderAsync(string folderId, string expectedETag)
     {
-        var session = await _sessions.OpenAsync(branch);
-        return await session.RunAsync<IFolder>(async () =>
+        var folder = await FindAsync(folderId);
+        if (folder.IsRoot) throw new WorkspaceException(WorkspaceError.Invalid, "The project folder itself cannot be deleted.");
+        if (folder.ParentFolderId == folder.ProjectId && DefaultFolders.IsDefaultFolder(folder.Name)
+            && !(_settings?.GetSettings().AllowDeletingDefaultFolders ?? false))
+            throw new WorkspaceException(WorkspaceError.Forbidden, "Default project folders stay unless the server setting 'Allow deleting default project folders' is on.");
+        await _projectLock.RunLockedAsync(folder.ProjectId, async () =>
         {
-            var current = session.Current;
-            CheckRevision(current, expectedRevision);
-            var editor = new FolderEditor(current);
-            editor.Move(itemId, targetFolderId, index);
-            var saved = await session.SaveAsync(editor.Changes(), current.Revision);
-            var target = Find(saved, targetFolderId);
-            FolderUpdated?.Invoke(this, new(branch, target));
-            return target;
-        });
-    }
-
-    public async Task RemoveAsync(ProjectBranch branch, string folderId, string expectedRevision)
-    {
-        var session = await _sessions.OpenAsync(branch);
-        await session.RunAsync(async () =>
-        {
-            var current = session.Current;
-            CheckRevision(current, expectedRevision);
-            var folder = Find(current, folderId);
-            if (DefaultFolders.IsDefaultFolder(folder.Path) && !(_settings?.GetSettings().AllowDeletingDefaultFolders ?? false))
-                throw new WorkspaceException(WorkspaceError.Forbidden, "Default project folders stay unless the server setting 'Allow deleting default project folders' is on.");
-            var editor = new FolderEditor(current);
-            editor.Remove(folderId);
-            // View settings that name the removed folder are cleared.
-            foreach (var other in current.Folders.Where(other => other.Id != folderId))
+            folder = await FindAsync(folderId);
+            ETags.Check(folder.ETag, expectedETag);
+            if (folder.ChildIds.Count > 0)
+                throw new WorkspaceException(WorkspaceError.Conflict, "Only empty folders can be deleted. Move their files and subfolders first.");
+            if (folder.OwnDocumentId is { } ownId)
+            {
+                if (await _documents.GetByIdAsync(ownId) is { } own) await _documents.DeleteAsync(ownId, own.ETag);
+                if (await _documentPlaces.GetByIdAsync(ownId) is { } ownPlace) await _documentPlaces.DeleteAsync(ownId, ownPlace.ETag);
+            }
+            await _folders.DeleteAsync(folderId, (await FindAsync(folderId)).ETag);
+            await _folderPlaces.DeleteAsync(folderId, (await _folderPlaces.GetPlaceByFolderIdAsync(folderId)).ETag);
+            foreach (var other in await _folders.GetFoldersByProjectIdAsync(folder.ProjectId))
             {
                 var cleared = _views.WithoutFolder(other.Views, folderId);
-                if (cleared.Count > 0) editor.SetLayout(other.Id, new FolderLayout { PinnedView = other.PinnedView, Views = cleared });
+                if (cleared.Count == 0) continue;
+                var views = new Dictionary<string, JsonElement>(other.Views, StringComparer.Ordinal);
+                foreach (var (name, settings) in cleared)
+                {
+                    if (ViewNames.Removes(settings)) views.Remove(name);
+                    else views[name] = settings;
+                }
+                await _folders.UpdateAsync(other with { Views = views }, other.ETag);
             }
-            await session.SaveAsync(editor.Changes(), current.Revision);
-            FolderRemoved?.Invoke(this, new(branch, folder));
-            return true;
         });
     }
 
-    private static void CheckRevision(Project project, string expectedRevision)
-    {
-        if (expectedRevision != project.Revision)
-            throw new WorkspaceException(WorkspaceError.Conflict, "The project changed. Refresh before saving again.");
-    }
-
-    private static Folder Find(Project project, string id) => project.Folder(id)
+    private async Task<Folder> FindAsync(string folderId) => await _folders.GetByIdAsync(folderId)
         ?? throw new WorkspaceException(WorkspaceError.NotFound, "The folder no longer exists.");
-
-    private static Project Model(IProject project) => project as Project
-        ?? throw new WorkspaceException(WorkspaceError.Invalid, "That project is not open in this workspace.");
 }

@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000034
----
-
 The shop opened at seven and Nan Hollis had already been up for three hours, which she mentioned twice.
 
 “Surveyor’s girl,” she said, before Mara had reached the counter. “Tea, brown bread, and you’ll want a pencil. Yours is too short.”

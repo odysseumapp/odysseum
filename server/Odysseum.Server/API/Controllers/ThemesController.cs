@@ -10,27 +10,33 @@ public class ThemesController(IThemeRepository themes) : ControllerBase
 {
     /// <summary>Every saved colour scheme. Each browser remembers which one it shows.</summary>
     [HttpGet]
-    public IResult List() => ApiResults.SuccessCollection(themes.List().Select(Describe));
+    public IResult GetThemes() => ApiResults.SuccessCollection(themes.List().Select(theme => new ThemeDto(theme.Name, theme.Colors)));
 
     /// <summary>The roles a theme colours and the palettes they may name.</summary>
     [HttpGet("options")]
-    public IResult Options() => ApiResults.Success(new ThemeOptionsResponse(ThemeRepository.Roles, ThemeRepository.Palettes));
+    public IResult GetThemeOptions() => ApiResults.Success(new ThemeOptionsDto(ThemeRepository.Roles, ThemeRepository.Palettes));
 
     /// <summary>One saved colour scheme.</summary>
     [HttpGet("{name}")]
-    public IResult Get(string name) => ApiResults.Success(Describe(themes.Get(name)));
+    public IResult GetThemeByName(string name)
+    {
+        var theme = themes.Get(name);
+        return ApiResults.Success(new ThemeDto(theme.Name, theme.Colors));
+    }
 
     /// <summary>Save a colour scheme under this name, replacing one already saved with it.</summary>
     [HttpPut("{name}")]
-    public IResult Save(string name, [FromBody] ThemeRequest request) => ApiResults.Success(Describe(themes.Save(name, request.Colors)));
-
-    /// <summary>Forget a saved colour scheme.</summary>
-    [HttpDelete("{name}")]
-    public IResult Delete(string name)
+    public IResult SaveTheme(string name, [FromBody] SaveThemeRequest request)
     {
-        themes.Delete(name);
-        return ApiResults.Success(new { deleted = name });
+        var theme = themes.Save(name, request.Colors);
+        return ApiResults.Success(new ThemeDto(theme.Name, theme.Colors));
     }
 
-    private static ThemeResponse Describe(Theme theme) => new(theme.Name, theme.Colors);
+    /// <summary>Delete a saved colour scheme.</summary>
+    [HttpDelete("{name}")]
+    public IResult DeleteTheme(string name)
+    {
+        themes.Delete(name);
+        return ApiResults.Success(new DeletedItemDto(name));
+    }
 }

@@ -1,16 +1,17 @@
-using Odysseum.Abstractions.Projects;
-
 namespace Odysseum.Abstractions.History;
 
-/// <summary>Saved versions of a project. A version is the whole project at one moment. <c>documentId</c> narrows a
-/// call to one document.</summary>
+/// <summary>Saved versions of a project. A version is the whole project at one moment.</summary>
 public interface IHistoryService
 {
-    Task<ProjectVersion> SaveVersionAsync(ProjectBranch branch, string label);
-    Task<IReadOnlyList<ProjectVersion>> ListVersionsAsync(ProjectBranch branch, string? documentId = null);
-    /// <summary>Puts the files back as they were in that version. The current state is saved first, so a restore can
-    /// be undone. Returns the project after the restore.</summary>
-    Task<IProject> RestoreAsync(ProjectBranch branch, string versionId, string? documentId = null);
-    /// <summary>The body of one document as it was in that version.</summary>
-    Task<string> ReadAsync(ProjectBranch branch, string versionId, string documentId);
+    Task<ProjectVersion> SaveVersionAsync(string projectId, string name);
+    /// <summary>The project's versions, newest first.</summary>
+    Task<IReadOnlyList<ProjectVersion>> GetVersionsByProjectIdAsync(string projectId);
+    /// <summary>The versions that changed this document, newest first.</summary>
+    Task<IReadOnlyList<ProjectVersion>> GetVersionsByDocumentIdAsync(string documentId);
+    /// <summary>The document's text as it was in that version.</summary>
+    Task<string> GetDocumentTextFromVersionAsync(string documentId, string versionId);
+    /// <summary>Puts every file back as it was in that version. The current state is saved first, so a restore can be undone.</summary>
+    Task RestoreProjectVersionAsync(string projectId, string versionId);
+    /// <summary>Puts one document back as it was in that version. The current state is saved first.</summary>
+    Task RestoreDocumentVersionAsync(string documentId, string versionId);
 }

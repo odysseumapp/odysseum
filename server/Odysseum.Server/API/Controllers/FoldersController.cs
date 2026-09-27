@@ -1,57 +1,60 @@
 using Microsoft.AspNetCore.Mvc;
-using Odysseum.Abstractions.Exceptions;
 using Odysseum.Abstractions.Folders;
-using Odysseum.Abstractions.Projects;
+using Odysseum.Server.API.Filters;
 using Odysseum.Server.API.Models;
-using Odysseum.Server.API.Views;
 
 namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
-[Route("api/projects/{project}/folders")]
-public class FoldersController(IProjectService projects, IFolderService folders, ProjectViews views) : ControllerBase
+[Route("api")]
+public class FoldersController(IFolderService folders) : ControllerBase
 {
-    /// <summary>Create an empty folder.</summary>
-    [HttpPost]
-    public async Task<IResult> Create(string project, [FromBody] CreateFolderRequest request)
+    [HttpGet("projects/{projectId}/folders")]
+    public async Task<IResult> GetFoldersByProjectId(string projectId) =>
+        ApiResults.SuccessCollection((await folders.GetFoldersByProjectIdAsync(projectId)).Select(FolderDto.FromFolder));
+
+    [HttpGet("folders/{folderId}")]
+    public async Task<IResult> GetFolderById(string folderId)
     {
-        var current = ProjectViews.Model(await projects.GetAsync(project));
-        if (request.Revision != current.Revision) throw new WorkspaceException(WorkspaceError.Conflict, "The project changed. Refresh before saving again.");
-        var (parentPath, name) = FolderPaths.Split(request.Path);
-        var parent = current.FolderAt(parentPath) ?? throw new WorkspaceException(WorkspaceError.NotFound, "The parent folder no longer exists.");
-        await folders.CreateAsync(current.Branch, parent.Id, name);
-        return ApiResults.Success(views.View(ProjectViews.Model(await projects.GetAsync(current.Branch))));
+        var folder = await folders.GetFolderByIdAsync(folderId);
+        return ApiResults.Success(FolderDto.FromFolder(folder), folder.ETag);
     }
 
-    /// <summary>Remove an empty folder. Files, hidden files, and subfolders prevent removal.</summary>
-    [HttpDelete]
-    public async Task<IResult> Remove(string project, [FromBody] RemoveFolderRequest request)
+    /// <summary>Make an empty folder at the end of the parent folder's children.</summary>
+    [HttpPost("folders")]
+    public async Task<IResult> CreateFolder([FromBody] CreateFolderRequest request)
     {
-        var current = await projects.GetAsync(project);
-        await folders.RemoveAsync(current.Branch, FolderPaths.Find(current, request.Path).Id, request.Revision);
-        return ApiResults.Success(views.View(ProjectViews.Model(await projects.GetAsync(current.Branch))));
+        var folder = await folders.CreateFolderAsync(request.ParentFolderId, request.Name);
+        return ApiResults.Created(FolderDto.FromFolder(folder), $"/api/folders/{folder.Id}", folder.ETag);
     }
 
-    /// <summary>Save a folder's pinned view and change the settings of some of its views.</summary>
-    [HttpPut("layout")]
-    public async Task<IResult> Layout(string project, [FromBody] FolderLayoutRequest request)
+    /// <summary>Set the folder's pinned view and change the settings of some of its views.</summary>
+    [HttpPut("folders/{folderId}/layout")]
+    [RequireIfMatch]
+    public async Task<IResult> UpdateFolderLayout(string folderId, [FromBody] UpdateFolderLayoutRequest request,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
-        if (request.Path is null) throw new WorkspaceException(WorkspaceError.Invalid, "Invalid folder layout.");
-        var current = await projects.GetAsync(project);
-        var folder = FolderPaths.Find(current, request.Path);
         var layout = new FolderLayout { PinnedView = request.PinnedView, Views = request.Views };
-        await folders.SetLayoutAsync(current.Branch, folder.Id, layout, request.Revision);
-        return ApiResults.Success(views.View(ProjectViews.Model(await projects.GetAsync(current.Branch))));
+        var folder = await folders.UpdateFolderLayoutAsync(folderId, layout, ETagHeader.Parse(ifMatch));
+        return ApiResults.Success(FolderDto.FromFolder(folder), folder.ETag);
     }
 
-    /// <summary>Put a folder or document at an index among a folder's children. This moves it between folders and changes the order.</summary>
-    [HttpPut("move")]
-    public async Task<IResult> Move(string project, [FromBody] MoveItemRequest request)
+    /// <summary>Move the folder into another folder, or to another place in the same folder.</summary>
+    [HttpPut("folders/{folderId}/parent")]
+    [RequireIfMatch]
+    public async Task<IResult> MoveFolderToFolder(string folderId, [FromBody] MoveFolderRequest request,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
-        if (string.IsNullOrEmpty(request.Id) || string.IsNullOrEmpty(request.TargetFolder) || request.Index < 0)
-            throw new WorkspaceException(WorkspaceError.Invalid, "A move names the item, the target folder and an index.");
-        var current = await projects.GetAsync(project);
-        await folders.MoveAsync(current.Branch, request.Id, request.TargetFolder, request.Index, request.Revision);
-        return ApiResults.Success(views.View(ProjectViews.Model(await projects.GetAsync(current.Branch))));
+        var result = await folders.MoveFolderToFolderAsync(folderId, request.TargetFolderId, request.Index!.Value, ETagHeader.Parse(ifMatch));
+        return ApiResults.Success(FolderMoveDto.FromMoveResult(result), result.Folder.ETag);
+    }
+
+    /// <summary>Delete an empty folder. Files, hidden files and subfolders prevent the delete.</summary>
+    [HttpDelete("folders/{folderId}")]
+    [RequireIfMatch]
+    public async Task<IResult> DeleteFolder(string folderId, [FromHeader(Name = "If-Match")] string? ifMatch)
+    {
+        await folders.DeleteFolderAsync(folderId, ETagHeader.Parse(ifMatch));
+        return ApiResults.Success(new DeletedItemDto(folderId));
     }
 }

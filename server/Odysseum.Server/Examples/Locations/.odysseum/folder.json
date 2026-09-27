@@ -1,56 +1,39 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200011",
-  "version": 1,
+  "version": 3,
   "pinnedView": null,
+  "views": {
+    "grid": {
+      "columnFolder": "0ad487f0-00b8-42b3-9c58-c27cfa200008"
+    }
+  },
   "itemOrder": [
     "00d1e246-4f36-47e8-a308-000000000017",
     "00d1e246-4f36-47e8-a308-000000000018",
-    "folder:Bellwether Island",
-    "folder:The mainland"
+    "0ad487f0-00b8-42b3-9c58-c27cfa200012",
+    "0ad487f0-00b8-42b3-9c58-c27cfa200013"
   ],
-  "gridFolder": "0ad487f0-00b8-42b3-9c58-c27cfa200008",
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000017": {
-      "path": "The lighthouse.md",
       "title": "The lighthouse",
       "synopsis": "Three windows and a crooked door, above the harbor. Elin has kept the light for forty years. The one place on Bellwether that has never moved.",
       "notes": "The fixed point. Everything is measured from here, including memory.",
       "status": "revised",
-      "wordGoal": 0,
-      "order": 17,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000005",
-        "00d1e246-4f36-47e8-a308-000000000009",
-        "00d1e246-4f36-47e8-a308-000000000012",
-        "00d1e246-4f36-47e8-a308-000000000032",
-        "00d1e246-4f36-47e8-a308-000000000039"
-      ]
+      "wordGoal": 0
     },
     "00d1e246-4f36-47e8-a308-000000000018": {
-      "path": "The harbor.md",
       "title": "The harbor",
       "synopsis": "The only reliable point of arrival. Faces the wrong way, so the wind never quite forgives it. Nan’s shop, the jetty, and whatever boat Tomas is keeping alive.",
       "notes": "Every arrival and departure passes through here. Keep it ordinary.",
       "status": "draft",
-      "wordGoal": 0,
-      "order": 18,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000003",
-        "00d1e246-4f36-47e8-a308-000000000008",
-        "00d1e246-4f36-47e8-a308-000000000034"
-      ]
-    }
-  },
-  "folders": {
-    "0ad487f0-00b8-42b3-9c58-c27cfa200012": {
-      "path": "Bellwether Island",
-      "order": 0
+      "wordGoal": 0
     },
-    "0ad487f0-00b8-42b3-9c58-c27cfa200013": {
-      "path": "The mainland",
-      "order": 1
+    "8afd3b00-ca18-4395-9e33-d0435eff0686": {
+      "title": "Locations",
+      "synopsis": "",
+      "notes": "",
+      "status": "draft",
+      "wordGoal": 0
     }
   }
 }

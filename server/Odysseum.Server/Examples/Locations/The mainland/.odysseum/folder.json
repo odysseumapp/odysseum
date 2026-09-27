@@ -1,25 +1,24 @@
 {
   "id": "0ad487f0-00b8-42b3-9c58-c27cfa200013",
-  "version": 1,
+  "version": 3,
   "pinnedView": null,
-  "itemOrder": [],
-  "gridFolder": null,
+  "itemOrder": [
+    "00d1e246-4f36-47e8-a308-000000000021"
+  ],
   "documents": {
     "00d1e246-4f36-47e8-a308-000000000021": {
-      "path": "Mara’s flat.md",
       "title": "Mara’s flat",
       "synopsis": "A small flat above a bakery in the city. No maps on the walls except the ones she draws for work, and one atlas on the shelf.",
       "notes": "The safe, measured life she built. It should feel thin once the letter arrives.",
       "status": "draft",
-      "wordGoal": 0,
-      "order": 21,
-      "lastKnownHash": "",
-      "links": [
-        "00d1e246-4f36-47e8-a308-000000000001",
-        "00d1e246-4f36-47e8-a308-000000000002",
-        "00d1e246-4f36-47e8-a308-000000000006"
-      ]
+      "wordGoal": 0
+    },
+    "3cd6ecf7-b169-42e8-b494-209821d33fb3": {
+      "title": "The mainland",
+      "synopsis": "",
+      "notes": "",
+      "status": "draft",
+      "wordGoal": 0
     }
-  },
-  "folders": {}
+  }
 }

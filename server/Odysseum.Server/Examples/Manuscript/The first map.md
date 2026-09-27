@@ -1,7 +1,3 @@
----
-writer_id: 00d1e246-4f36-47e8-a308-000000000010
----
-
 The night before he left for the mainland, Aldous Vale spread a sheet of paper across the kitchen table and asked his daughter to draw the island.
 
 Mara was seven. She drew a circle.

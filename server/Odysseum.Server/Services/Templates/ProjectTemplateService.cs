@@ -1,81 +1,104 @@
 using Odysseum.Abstractions.Documents;
+using Odysseum.Abstractions.Exceptions;
 using Odysseum.Abstractions.Folders;
 using Odysseum.Server.Models;
-using Odysseum.Server.Models.Editing;
 using Odysseum.Server.Repositories;
-using Odysseum.Server.Services.Projects;
 using Odysseum.Server.Services.Views;
-using Odysseum.Server.Settings;
 using static Odysseum.Server.Services.Documents.DocumentRules;
 
 namespace Odysseum.Server.Services.Templates;
 
-public sealed class ProjectTemplateService(ViewCatalog? views = null)
+/// <summary>Saves a project's folders, documents and layouts as a template, and makes them in a new project.</summary>
+public sealed class ProjectTemplateService(IFolderService folderService, IDocumentService documentService, IFolderRepository folders,
+    IDocumentRepository documents, IFolderPlaceRepository folderPlaces, IDocumentPlaceRepository documentPlaces, IProjectRepository projects,
+    ViewCatalog? views = null)
 {
     private readonly ViewCatalog _views = views ?? ViewCatalog.Default;
 
-    public ProjectTemplate Capture(Project project, string name)
+    public async Task<ProjectTemplate> CaptureTemplateAsync(string projectId, string name)
     {
+        var project = await projects.GetByIdAsync(projectId) ?? throw new WorkspaceException(WorkspaceError.NotFound, "No project has that ID.");
         var template = new ProjectTemplate
         {
             Name = name,
             Settings = new() { WordGoal = project.WordGoal, DefaultSceneWordGoal = project.DefaultSceneWordGoal },
         };
-        foreach (var folder in project.Folders)
+        var projectFolders = await folders.GetFoldersByProjectIdAsync(projectId);
+        var pathById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var folder in projectFolders) pathById[folder.Id] = await folderPlaces.GetPathByFolderIdAsync(folder.Id);
+        foreach (var folder in projectFolders.OrderBy(folder => pathById[folder.Id], StringComparer.Ordinal))
         {
+            var children = new List<string>();
+            foreach (var id in folder.ChildIds)
+            {
+                if (await documents.GetByIdAsync(id) is { } document) children.Add(document.Name);
+                else if (await folders.GetByIdAsync(id) is { } child) children.Add(child.Name);
+            }
             template.Folders.Add(new()
             {
-                Path = folder.Path,
+                Path = pathById[folder.Id],
                 PinnedView = folder.PinnedView,
-                Children = [.. folder.Children.Select(child => child.Name)],
-                Views = folder.Views.Count == 0 ? null : _views.MapFolders(folder.Views, id => project.Folder(id)?.Path),
+                Children = children,
+                Views = folder.Views.Count == 0 ? null : _views.MapFolders(folder.Views, id => pathById.GetValueOrDefault(id)),
             });
         }
-        foreach (var document in project.Walk().Where(d => !d.IsFolderDocument))
-            template.Documents.Add(new() { Path = document.Path, Title = document.Title });
+        foreach (var document in await documents.GetDocumentsByProjectIdAsync(projectId))
+        {
+            if (document.IsFolderDocument) continue;
+            template.Documents.Add(new() { Path = await documentPlaces.GetPathByDocumentIdAsync(document.Id), Title = document.Title });
+        }
+        template.Documents.Sort((first, second) => StringComparer.Ordinal.Compare(first.Path, second.Path));
         return template;
     }
 
-    /// <summary>Writes the template's folders, documents, layouts and settings into the project in one save.</summary>
-    public Task ApplyAsync(ProjectSession session, ProjectTemplate template, ProjectSettings settings) => session.RunAsync(async () =>
+    /// <summary>Makes the template's folders, documents, layouts and order in the project, through the folder and
+    /// document services. The caller holds the project lock.</summary>
+    public async Task ApplyTemplateAsync(Project project, ProjectTemplate template)
     {
-        var current = session.Current;
-        var editor = new FolderEditor(current);
-        var documents = editor.Documents;
-        var folderIds = new Dictionary<string, string>(StringComparer.Ordinal) { [""] = current.Root.Id };
-        foreach (var path in template.Folders.Select(folder => folder.Path).Concat(template.Documents.Select(document => Item.ParentPath(document.Path))).Where(path => path != "").Distinct())
+        var folderIds = new Dictionary<string, string>(StringComparer.Ordinal) { [""] = project.RootFolderId };
+        var neededPaths = template.Folders.Select(folder => folder.Path)
+            .Concat(template.Documents.Select(document => ProjectPaths.ParentOf(document.Path)))
+            .Where(path => path.Length > 0).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        foreach (var path in neededPaths)
         {
             var segments = path.Split('/');
             for (var depth = 1; depth <= segments.Length; depth++)
             {
                 var partial = string.Join('/', segments[..depth]);
                 if (folderIds.ContainsKey(partial)) continue;
-                folderIds[partial] = current.FolderAt(partial)?.Id ?? editor.Create(folderIds[Item.ParentPath(partial)], segments[depth - 1]).Id;
+                folderIds[partial] = (await folderService.CreateFolderAsync(folderIds[ProjectPaths.ParentOf(partial)], segments[depth - 1])).Id;
             }
         }
         var documentIds = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var document in template.Documents)
         {
-            if (current.Documents.Any(d => d.Path == document.Path)) continue;
-            var created = documents.Create(folderIds[Item.ParentPath(document.Path)], document.Title, document.Content, Path.GetFileName(document.Path));
-            documents.SetDetails(created.Id, new DocumentDetails { WordGoal = IsFolderDocument(document.Path) ? 0 : settings.DefaultSceneWordGoal });
+            if (IsFolderDocument(document.Path)) continue;
+            var created = await documentService.CreateDocumentAsync(folderIds[ProjectPaths.ParentOf(document.Path)], document.Title,
+                document.Content ?? StarterContent(document.Path));
+            var fileName = ProjectPaths.NameOf(document.Path);
+            if (created.Name != fileName)
+                created = await documentService.RenameDocumentAsync(created.Id, Path.GetFileNameWithoutExtension(fileName), created.ETag);
             documentIds[document.Path] = created.Id;
         }
-        foreach (var folder in template.Folders)
+        foreach (var templateFolder in template.Folders)
         {
-            if (!folderIds.TryGetValue(folder.Path, out var id)) continue;
-            editor.SetLayout(id, new FolderLayout
+            if (!folderIds.TryGetValue(templateFolder.Path, out var id)) continue;
+            if (templateFolder.PinnedView is not null || templateFolder.Views is { Count: > 0 })
             {
-                PinnedView = folder.PinnedView,
-                Views = folder.Views is null ? null : _views.MapFolders(folder.Views, path => folderIds.GetValueOrDefault(path)),
-            });
-            var ordered = folder.Children
-                .Select(name => folderIds.GetValueOrDefault(Item.Join(folder.Path, name)) ?? documentIds.GetValueOrDefault(Item.Join(folder.Path, name)))
-                .OfType<string>().Distinct().ToArray();
-            for (var index = 0; index < ordered.Length; index++) editor.Move(ordered[index], id, index);
+                var layout = new FolderLayout
+                {
+                    PinnedView = templateFolder.PinnedView,
+                    Views = templateFolder.Views is null ? null : _views.MapFolders(templateFolder.Views, path => folderIds.GetValueOrDefault(path)),
+                };
+                await folderService.UpdateFolderLayoutAsync(id, layout, (await folderService.GetFolderByIdAsync(id)).ETag);
+            }
+            var folder = await folders.GetByIdAsync(id);
+            if (folder is null || templateFolder.Children.Count == 0) continue;
+            var ordered = templateFolder.Children
+                .Select(name => ProjectPaths.Join(templateFolder.Path, name))
+                .Select(path => folderIds.GetValueOrDefault(path) ?? documentIds.GetValueOrDefault(path))
+                .OfType<string>().Distinct().ToList();
+            await folders.UpdateAsync(folder with { ChildIds = [.. ordered, .. folder.ChildIds.Where(child => !ordered.Contains(child))] }, folder.ETag);
         }
-        editor.SetSettings(settings);
-        await session.SaveAsync(editor.Changes(), current.Revision);
-        return true;
-    });
+    }
 }

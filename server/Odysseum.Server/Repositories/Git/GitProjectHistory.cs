@@ -2,14 +2,13 @@ using System.Text.RegularExpressions;
 using LibGit2Sharp;
 using Odysseum.Abstractions.Exceptions;
 using Odysseum.Abstractions.History;
-using Odysseum.Abstractions.Projects;
 using Odysseum.Server.Services.Documents;
 using Odysseum.Server.Services.Projects;
 
 namespace Odysseum.Server.Repositories.Git;
 
 /// <summary>Project versions as commits in a git repository at <c>&lt;workspace&gt;/&lt;project&gt;/.git</c>.
-/// Only the <c>main</c> branch exists; branch and merge operations are not supported yet.</summary>
+/// A project is named by its folder name in the workspace.</summary>
 public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHistory
 {
     private const string AutomaticMessage = "Automatic version";
@@ -29,11 +28,11 @@ public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHi
         GlobalSettings.SetOwnerValidation(false);
     }
 
-    public Task<ProjectVersion?> SaveVersionAsync(ProjectBranch branch, string? label) =>
-        Task.FromResult(Guarded(branch, repository => SaveIfChanged(repository, label, AutomaticMessage)));
+    public Task<ProjectVersion?> SaveVersionAsync(string projectName, string? name) =>
+        Task.FromResult(Guarded(projectName, repository => SaveIfChanged(repository, name, AutomaticMessage)));
 
-    public Task<IReadOnlyList<ProjectVersion>> ListVersionsAsync(ProjectBranch branch, string? path = null, int take = 100) =>
-        Task.FromResult(Guarded<IReadOnlyList<ProjectVersion>>(branch, repository =>
+    public Task<IReadOnlyList<ProjectVersion>> ListVersionsAsync(string projectName, string? path = null, int take = 100) =>
+        Task.FromResult(Guarded<IReadOnlyList<ProjectVersion>>(projectName, repository =>
         {
             if (repository.Head.Tip is null) return [];
             var filter = new CommitFilter { SortBy = CommitSortStrategies.Topological };
@@ -42,10 +41,10 @@ public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHi
             return commits.Take(take).Select(commit => Describe(repository, commit)).ToArray();
         }));
 
-    public Task<ProjectVersion> RestoreAsync(ProjectBranch branch, string id, string? path = null) =>
-        Task.FromResult(Guarded(branch, repository =>
+    public Task<ProjectVersion> RestoreAsync(string projectName, string versionId, string? path = null) =>
+        Task.FromResult(Guarded(projectName, repository =>
         {
-            var commit = Lookup(repository, id);
+            var commit = Lookup(repository, versionId);
             var options = new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force };
             var source = Describe(repository, commit);
             string message;
@@ -53,7 +52,7 @@ public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHi
             {
                 SaveIfChanged(repository, null, BeforeRestoreMessage);
                 repository.Checkout(commit.Tree, null, options);
-                message = source.Label is { } label ? label.StartsWith("Restored ", StringComparison.Ordinal) ? label : $"Restored “{label}”"
+                message = source.Name is { } label ? label.StartsWith("Restored ", StringComparison.Ordinal) ? label : $"Restored “{label}”"
                     : RestoredPrefix + commit.Committer.When.UtcDateTime.ToString("u");
             }
             else
@@ -66,10 +65,10 @@ public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHi
             return Commit(repository, message, allowEmpty: true);
         }));
 
-    public Task<string> ReadAsync(ProjectBranch branch, string id, string path) =>
-        Task.FromResult(Guarded(branch, repository =>
+    public Task<string> ReadAsync(string projectName, string versionId, string path) =>
+        Task.FromResult(Guarded(projectName, repository =>
         {
-            var commit = Lookup(repository, id);
+            var commit = Lookup(repository, versionId);
             if (commit[path]?.Target is not Blob blob) throw new WorkspaceException(WorkspaceError.NotFound, "That version does not contain this document.");
             using var stream = blob.GetContentStream();
             using var memory = new MemoryStream();
@@ -77,15 +76,11 @@ public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHi
             return MarkdownDocumentCodec.Split(MarkdownDocumentCodec.Decode(memory.ToArray())).Body;
         }));
 
-    public Task CreateBranchAsync(ProjectBranch branch, string name) => throw new NotSupportedException("Branches are not supported yet.");
-
-    public Task MergeAsync(ProjectBranch from, ProjectBranch to) => throw new NotSupportedException("Branches are not supported yet.");
-
-    public void Close(ProjectBranch branch)
+    public void Close(string projectName)
     {
         lock (_repositories)
         {
-            if (_repositories.Remove(branch.Project, out var repository)) repository.Dispose();
+            if (_repositories.Remove(projectName, out var repository)) repository.Dispose();
         }
     }
 
@@ -98,10 +93,9 @@ public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHi
         }
     }
 
-    private Repository Open(ProjectBranch branch)
+    private Repository Open(string projectName)
     {
-        if (!branch.IsMain) throw new WorkspaceException(WorkspaceError.Invalid, "Only the main branch exists.");
-        var name = ProjectNames.Validate(branch.Project);
+        var name = ProjectNames.Validate(projectName);
         lock (_repositories)
         {
             if (_repositories.TryGetValue(name, out var open)) return open;
@@ -117,11 +111,11 @@ public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHi
         }
     }
 
-    private T Guarded<T>(ProjectBranch branch, Func<Repository, T> action)
+    private T Guarded<T>(string projectName, Func<Repository, T> action)
     {
         try
         {
-            var repository = Open(branch);
+            var repository = Open(projectName);
             lock (repository) return action(repository);
         }
         catch (LibGit2SharpException ex) { throw new WorkspaceException(WorkspaceError.Unavailable, "The project's versions could not be read or written: " + ex.Message); }
@@ -133,11 +127,11 @@ public sealed partial class GitProjectHistory(string workspaceRoot) : IProjectHi
         return commit ?? throw new WorkspaceException(WorkspaceError.NotFound, "That version no longer exists.");
     }
 
-    private static ProjectVersion? SaveIfChanged(Repository repository, string? label, string automaticMessage)
+    private static ProjectVersion? SaveIfChanged(Repository repository, string? name, string automaticMessage)
     {
         var changed = repository.RetrieveStatus(new StatusOptions()).IsDirty;
-        if (!changed && label is null) return null;
-        return Commit(repository, label ?? automaticMessage, allowEmpty: true);
+        if (!changed && name is null) return null;
+        return Commit(repository, name ?? automaticMessage, allowEmpty: true);
     }
 
     private static ProjectVersion Commit(Repository repository, string message, bool allowEmpty)
