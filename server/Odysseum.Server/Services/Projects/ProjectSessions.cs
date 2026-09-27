@@ -18,11 +18,13 @@ public sealed class ProjectSessions : IAsyncDisposable
     private readonly IProjectHistory _history;
     private readonly ITemplateRepository? _templates;
     private readonly ILogger<ProjectSessions>? _logger;
-    private readonly ProjectTemplateService _templateService = new();
+    private readonly ProjectTemplateService _templateService;
     private readonly ConcurrentDictionary<ProjectBranch, Lazy<Task<ProjectSession>>> _open = new(ProjectBranchComparer.Instance);
 
-    public ProjectSessions(IProjectRepository repository, IProjectWatcher watcher, IProjectHistory history, ITemplateRepository? templates = null, ILogger<ProjectSessions>? logger = null)
+    public ProjectSessions(IProjectRepository repository, IProjectWatcher watcher, IProjectHistory history, ITemplateRepository? templates = null,
+        ILogger<ProjectSessions>? logger = null, ProjectTemplateService? templateService = null)
     {
+        _templateService = templateService ?? new ProjectTemplateService();
         _repository = repository;
         _watcher = watcher;
         _history = history;
@@ -36,7 +38,28 @@ public sealed class ProjectSessions : IAsyncDisposable
     public event Action<ProjectSession, IReadOnlyList<Document>>? DocumentsRemoved;
     public event Action<ProjectSession, IReadOnlyList<Folder>>? FoldersRemoved;
 
-    public Task<IReadOnlyList<ProjectInfo>> ListAsync() => _repository.ListAsync();
+    /// <summary>Lists the projects. A project folder that was never opened has no ID yet, so it is opened here once;
+    /// the first open writes its <c>project.json</c>.</summary>
+    public async Task<IReadOnlyList<ProjectInfo>> ListAsync()
+    {
+        var listed = await _repository.ListAsync();
+        if (listed.All(info => info.Id.Length > 0)) return listed;
+        var result = new List<ProjectInfo>(listed.Count);
+        foreach (var info in listed)
+        {
+            if (info.Id.Length > 0) { result.Add(info); continue; }
+            try { result.Add(info with { Id = (await OpenAsync(ProjectBranch.Main(info.Name))).Current.Id }); }
+            catch (WorkspaceException ex)
+            {
+                _logger?.LogWarning("Project {Project} could not be opened to give it an ID: {Message}", info.Name, ex.Message);
+                result.Add(info);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>The name of the project with that ID, or null when no project has it.</summary>
+    public Task<string?> FindNameAsync(string id) => _repository.FindNameAsync(id);
 
     /// <summary>The open session for that branch, or null when it is not open.</summary>
     public ProjectSession? Get(ProjectBranch branch) =>

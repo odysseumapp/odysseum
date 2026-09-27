@@ -25,15 +25,11 @@ public sealed class ProjectService : IProjectService
 
     public async Task<IProject> GetAsync(ProjectBranch branch) => await (await _sessions.OpenAsync(branch)).ReloadAsync();
 
+    /// <summary>Finds the project by ID, or by name when the value is not a known ID.</summary>
     public async Task<IProject> GetAsync(string nameOrId)
     {
-        try { return await GetAsync(ProjectBranch.Main(nameOrId)); }
-        catch (WorkspaceException ex) when (ex.Error is WorkspaceError.NotFound && Guid.TryParse(nameOrId, out _))
-        {
-            var listed = (await ListAsync()).FirstOrDefault(info => info.Id == nameOrId);
-            if (listed is null) throw;
-            return await GetAsync(ProjectBranch.Main(listed.Name));
-        }
+        if (Guid.TryParse(nameOrId, out _) && await _sessions.FindNameAsync(nameOrId) is { } name) return await GetAsync(ProjectBranch.Main(name));
+        return await GetAsync(ProjectBranch.Main(nameOrId));
     }
 
     public async Task<IProject> CreateAsync(string title, int? wordGoal = null, string? template = null)

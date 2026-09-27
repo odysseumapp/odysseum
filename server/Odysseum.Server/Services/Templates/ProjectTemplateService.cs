@@ -4,13 +4,16 @@ using Odysseum.Server.Models;
 using Odysseum.Server.Models.Editing;
 using Odysseum.Server.Repositories;
 using Odysseum.Server.Services.Projects;
+using Odysseum.Server.Services.Views;
 using Odysseum.Server.Settings;
 using static Odysseum.Server.Services.Documents.DocumentRules;
 
 namespace Odysseum.Server.Services.Templates;
 
-public sealed class ProjectTemplateService
+public sealed class ProjectTemplateService(ViewCatalog? views = null)
 {
+    private readonly ViewCatalog _views = views ?? ViewCatalog.Default;
+
     public ProjectTemplate Capture(Project project, string name)
     {
         var template = new ProjectTemplate
@@ -23,9 +26,9 @@ public sealed class ProjectTemplateService
             template.Folders.Add(new()
             {
                 Path = folder.Path,
-                PinnedView = folder.PinnedView?.ToString().ToLowerInvariant(),
-                ItemOrder = [.. folder.Children.Select(child => child is Folder sub ? "folder:" + sub.Name : "document:" + child.Name)],
-                GridFolder = folder.GridFolderId is null ? null : project.Folder(folder.GridFolderId)?.Path,
+                PinnedView = folder.PinnedView,
+                Children = [.. folder.Children.Select(child => child.Name)],
+                Views = folder.Views.Count == 0 ? null : _views.MapFolders(folder.Views, id => project.Folder(id)?.Path),
             });
         }
         foreach (var document in project.Walk().Where(d => !d.IsFolderDocument))
@@ -61,11 +64,13 @@ public sealed class ProjectTemplateService
         foreach (var folder in template.Folders)
         {
             if (!folderIds.TryGetValue(folder.Path, out var id)) continue;
-            var view = folder.PinnedView is not null && Enum.TryParse<FolderView>(folder.PinnedView, ignoreCase: true, out var parsed) ? parsed : (FolderView?)null;
-            editor.SetLayout(id, new FolderLayout { PinnedView = view, GridFolderId = folder.GridFolder is null ? null : folderIds.GetValueOrDefault(folder.GridFolder) });
-            var ordered = folder.ItemOrder.Select(key =>
-                key.StartsWith("folder:") ? folderIds.GetValueOrDefault(Item.Join(folder.Path, key["folder:".Length..]))
-                : key.StartsWith("document:") ? documentIds.GetValueOrDefault(Item.Join(folder.Path, key["document:".Length..])) : null)
+            editor.SetLayout(id, new FolderLayout
+            {
+                PinnedView = folder.PinnedView,
+                Views = folder.Views is null ? null : _views.MapFolders(folder.Views, path => folderIds.GetValueOrDefault(path)),
+            });
+            var ordered = folder.Children
+                .Select(name => folderIds.GetValueOrDefault(Item.Join(folder.Path, name)) ?? documentIds.GetValueOrDefault(Item.Join(folder.Path, name)))
                 .OfType<string>().Distinct().ToArray();
             for (var index = 0; index < ordered.Length; index++) editor.Move(ordered[index], id, index);
         }

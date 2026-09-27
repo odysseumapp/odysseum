@@ -16,6 +16,7 @@ using Odysseum.Server.Repositories;
 using Odysseum.Server.Repositories.Disk;
 using Odysseum.Server.Repositories.Git;
 using Odysseum.Server.Services.Templates;
+using Odysseum.Server.Services.Views;
 using Odysseum.Server.Services.WebUi;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -72,16 +73,17 @@ builder.Services.AddSingleton<IProjectRepository>(provider => new DiskProjectRep
 builder.Services.AddSingleton<IProjectWatcher>(provider => new FileProjectWatcher(settings.Workspace, provider.GetRequiredService<OwnWrites>(),
     settings.ScanSeconds, provider.GetRequiredService<ILogger<FileProjectWatcher>>()));
 builder.Services.AddSingleton<IProjectHistory>(_ => new GitProjectHistory(settings.Workspace));
+builder.Services.AddSingleton(ViewCatalog.Default);
+builder.Services.AddSingleton(provider => new ProjectTemplateService(provider.GetRequiredService<ViewCatalog>()));
 builder.Services.AddSingleton(provider => new ProjectSessions(provider.GetRequiredService<IProjectRepository>(), provider.GetRequiredService<IProjectWatcher>(),
-    provider.GetRequiredService<IProjectHistory>(), templates, provider.GetRequiredService<ILogger<ProjectSessions>>()));
+    provider.GetRequiredService<IProjectHistory>(), templates, provider.GetRequiredService<ILogger<ProjectSessions>>(), provider.GetRequiredService<ProjectTemplateService>()));
 builder.Services.AddSingleton<IProjectService>(provider => new ProjectService(provider.GetRequiredService<ProjectSessions>()));
-builder.Services.AddSingleton<IFolderService>(provider => new FolderService(provider.GetRequiredService<ProjectSessions>(), settingsProvider));
+builder.Services.AddSingleton<IFolderService>(provider => new FolderService(provider.GetRequiredService<ProjectSessions>(), settingsProvider, provider.GetRequiredService<ViewCatalog>()));
 builder.Services.AddSingleton<IDocumentService>(provider => new DocumentService(provider.GetRequiredService<ProjectSessions>()));
 builder.Services.AddSingleton(provider => new HistoryService(provider.GetRequiredService<ProjectSessions>(), provider.GetRequiredService<IProjectHistory>(),
     settings.VersionSeconds, provider.GetRequiredService<ILogger<HistoryService>>()));
 builder.Services.AddSingleton<IHistoryService>(provider => provider.GetRequiredService<HistoryService>());
 builder.Services.AddSingleton<ProjectViews>();
-builder.Services.AddSingleton<ProjectTemplateService>();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 

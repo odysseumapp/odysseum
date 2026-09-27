@@ -5,6 +5,7 @@ using Odysseum.Abstractions.Projects;
 using Odysseum.Server.Models;
 using Odysseum.Server.Models.Editing;
 using Odysseum.Server.Services.Projects;
+using Odysseum.Server.Services.Views;
 using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Services;
@@ -13,11 +14,13 @@ public sealed class FolderService : IFolderService
 {
     private readonly ProjectSessions _sessions;
     private readonly ISettingsProvider? _settings;
+    private readonly ViewCatalog _views;
 
-    public FolderService(ProjectSessions sessions, ISettingsProvider? settings = null)
+    public FolderService(ProjectSessions sessions, ISettingsProvider? settings = null, ViewCatalog? views = null)
     {
         _sessions = sessions;
         _settings = settings;
+        _views = views ?? ViewCatalog.Default;
         sessions.FoldersRemoved += (session, folders) => { foreach (var folder in folders) FolderRemoved?.Invoke(this, new(session.Branch, folder)); };
     }
 
@@ -51,6 +54,7 @@ public sealed class FolderService : IFolderService
         {
             var current = session.Current;
             CheckRevision(current, expectedRevision);
+            _views.CheckFolders(current, layout.Views);
             var editor = new FolderEditor(current);
             editor.SetLayout(folderId, layout);
             var saved = await session.SaveAsync(editor.Changes(), current.Revision);
@@ -88,6 +92,12 @@ public sealed class FolderService : IFolderService
                 throw new WorkspaceException(WorkspaceError.Forbidden, "Default project folders stay unless the server setting 'Allow deleting default project folders' is on.");
             var editor = new FolderEditor(current);
             editor.Remove(folderId);
+            // View settings that name the removed folder are cleared.
+            foreach (var other in current.Folders.Where(other => other.Id != folderId))
+            {
+                var cleared = _views.WithoutFolder(other.Views, folderId);
+                if (cleared.Count > 0) editor.SetLayout(other.Id, new FolderLayout { PinnedView = other.PinnedView, Views = cleared });
+            }
             await session.SaveAsync(editor.Changes(), current.Revision);
             FolderRemoved?.Invoke(this, new(branch, folder));
             return true;

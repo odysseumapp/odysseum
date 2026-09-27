@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Odysseum.Server.Repositories.Manifests;
+using Odysseum.Server.Services.Views;
 using Odysseum.Server.Settings;
 
 namespace Odysseum.Server.Repositories.Disk;
@@ -11,6 +12,7 @@ namespace Odysseum.Server.Repositories.Disk;
 internal sealed class ManifestFiles(IFileManager files)
 {
     private const string ManifestPath = ".odysseum/project.json";
+    private const string LinksPath = ".odysseum/links.json";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { WriteIndented = true, Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
     private static string FolderPath(string folder) => folder + "/.odysseum/folder.json";
@@ -22,6 +24,7 @@ internal sealed class ManifestFiles(IFileManager files)
             throw new WorkspaceException(WorkspaceError.Unavailable, "A manifest update needs recovery. Reopen the project before saving.");
         var result = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         if (files.Exists(ManifestPath, metadata: true)) result[ManifestPath] = await files.ReadAsync(ManifestPath, metadata: true);
+        if (files.Exists(LinksPath, metadata: true)) result[LinksPath] = await files.ReadAsync(LinksPath, metadata: true);
         foreach (var folder in files.EnumerateFolders())
         {
             var path = FolderPath(folder);
@@ -34,18 +37,27 @@ internal sealed class ManifestFiles(IFileManager files)
         : ContentRevision.Hash(Encoding.UTF8.GetBytes(string.Join('\n', contents.OrderBy(p => p.Key, StringComparer.Ordinal)
             .Select(p => p.Key + ":" + ContentRevision.Hash(p.Value)))));
 
+    /// <summary>Only <c>project.json</c>: the project's ID and settings, without the folder manifests. Null when it is missing.</summary>
+    public async Task<ProjectManifest?> ReadRootAsync() =>
+        files.Exists(ManifestPath, metadata: true) ? Parse<ProjectManifest>(await files.ReadAsync(ManifestPath, metadata: true), ManifestPath, root: true) : null;
+
     public async Task<(ProjectManifest? Manifest, string Revision)> ReadAsync()
     {
         var contents = await ReadFilesAsync();
         if (!contents.TryGetValue(ManifestPath, out var bytes))
         {
-            if (contents.Count != 0) throw Invalid(ManifestPath);
+            if (contents.Keys.Any(path => path != LinksPath)) throw Invalid(ManifestPath);
             return (null, "");
         }
         var manifest = Parse<ProjectManifest>(bytes, ManifestPath, root: true);
-        if (manifest.Version == 1) return (manifest, Revision(contents));
+        if (contents.TryGetValue(LinksPath, out var links)) manifest.Links = ParseLinks(links);
+        if (manifest.Version == 1)
+        {
+            MoveLegacyLinks(manifest, manifest.Documents);
+            return (manifest, Revision(contents));
+        }
         var folderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { manifest.Id };
-        foreach (var (path, content) in contents.Where(p => p.Key != ManifestPath))
+        foreach (var (path, content) in contents.Where(p => p.Key != ManifestPath && p.Key != LinksPath))
         {
             var folder = path[..^"/.odysseum/folder.json".Length];
             var local = Parse<FolderManifest>(content, path);
@@ -59,6 +71,7 @@ internal sealed class ManifestFiles(IFileManager files)
                     throw new WorkspaceException(WorkspaceError.Conflict, $"Two folder manifests track the same document: {document.Path}");
             }
         }
+        MoveLegacyLinks(manifest, manifest.Documents);
         return (manifest, Revision(contents));
     }
 
@@ -79,6 +92,8 @@ internal sealed class ManifestFiles(IFileManager files)
             if (!owners.TryGetValue(parent, out var owner)) continue;
             var local = metadata.Clone();
             local.Path = Path.GetFileName(metadata.Path);
+            local.Links = null;
+            local.LinkNotes = null;
             owner.Documents[id] = local;
         }
         foreach (var (parent, owner) in owners)
@@ -97,6 +112,7 @@ internal sealed class ManifestFiles(IFileManager files)
         var after = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         foreach (var (folder, manifest) in folders) after[FolderPath(folder)] = Serialize(manifest);
         after[ManifestPath] = Serialize(root);
+        if (candidate.Links.Links.Count > 0 || before.ContainsKey(LinksPath)) after[LinksPath] = Serialize(candidate.Links);
         var changes = after.Where(p => !before.TryGetValue(p.Key, out var old) || !old.AsSpan().SequenceEqual(p.Value))
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         if (before.TryGetValue(ManifestPath, out var legacy) && Parse<ProjectManifest>(legacy, ManifestPath, root: true).Version == 1
@@ -117,6 +133,47 @@ internal sealed class ManifestFiles(IFileManager files)
         var bytes = JsonSerializer.SerializeToUtf8Bytes(value, Json);
         if (bytes.Length > FileManager.MaxFileBytes) throw new WorkspaceException(WorkspaceError.TooLarge, "Folder metadata exceeds the 4 MB limit.");
         return bytes;
+    }
+
+    private static LinkManifest ParseLinks(byte[] bytes)
+    {
+        try
+        {
+            var manifest = JsonSerializer.Deserialize<LinkManifest>(bytes, Json);
+            if (manifest is null || manifest.Version != 1 || manifest.Links is null) throw new JsonException();
+            var kept = new List<LinkEntry>();
+            foreach (var link in manifest.Links)
+            {
+                if (link is null || !Guid.TryParseExact(link.ItemA, "D", out _) || !Guid.TryParseExact(link.ItemB, "D", out _) || link.ItemA == link.ItemB)
+                    throw new JsonException();
+                link.Note ??= "";
+                if (!kept.Any(other => other.Joins(link.ItemA, link.ItemB))) kept.Add(link);
+            }
+            manifest.Links = kept;
+            return manifest;
+        }
+        catch (JsonException) { throw Invalid(LinksPath); }
+    }
+
+    /// <summary>Earlier releases kept each link on both documents. Adds those links to <c>links.json</c> once, with the
+    /// note from either end, and clears them from the documents.</summary>
+    private static void MoveLegacyLinks(ProjectManifest manifest, Dictionary<string, DocumentMetadata> documents)
+    {
+        foreach (var (id, document) in documents)
+        {
+            foreach (var target in document.Links ?? [])
+            {
+                if (target == id || manifest.Links.Links.Any(link => link.Joins(id, target))) continue;
+                var note = document.LinkNotes?.GetValueOrDefault(target);
+                if (string.IsNullOrEmpty(note) && documents.TryGetValue(target, out var other)) note = other.LinkNotes?.GetValueOrDefault(id);
+                manifest.Links.Links.Add(new LinkEntry { ItemA = id, ItemB = target, Note = note ?? "" });
+            }
+        }
+        foreach (var document in documents.Values)
+        {
+            document.Links = null;
+            document.LinkNotes = null;
+        }
     }
 
     private static T Parse<T>(byte[] bytes, string path, bool root = false) where T : FolderManifest
@@ -141,12 +198,13 @@ internal sealed class ManifestFiles(IFileManager files)
                 document.LinkNotes ??= [];
                 if (document.LinkNotes.Any(note => !Guid.TryParseExact(note.Key, "D", out _) || note.Value is null)) throw new JsonException();
             }
+            if (manifest.GridFolder is not null && !Guid.TryParseExact(manifest.GridFolder, "D", out _)) throw new JsonException();
             MergeLegacyLayout(manifest);
-            if (manifest.PinnedView is not (null or "write" or "board" or "outline" or "grid")
+            if ((manifest.PinnedView is not null && !ViewNames.IsValid(manifest.PinnedView))
+                || (manifest.Views?.Any(view => !ViewNames.IsValid(view.Key) || view.Value.ValueKind != JsonValueKind.Object) ?? false)
                 || manifest.ItemOrder is null
                 || manifest.ItemOrder.Any(string.IsNullOrWhiteSpace)
-                || manifest.ItemOrder.Distinct().Count() != manifest.ItemOrder.Length
-                || (manifest.GridFolder is not null && !Guid.TryParseExact(manifest.GridFolder, "D", out _)))
+                || manifest.ItemOrder.Distinct().Count() != manifest.ItemOrder.Length)
                 throw new JsonException();
             var localPaths = new HashSet<string>(StringComparer.Ordinal);
             foreach (var (id, folder) in manifest.Folders)
@@ -203,6 +261,7 @@ internal sealed class ManifestFiles(IFileManager files)
     }
     private static void MergeLegacyLinks(DocumentMetadata document)
     {
+        document.Links ??= [];
         foreach (var key in new[] { "characters", "locations", "threads" })
             foreach (var id in LegacyIds(document.Extra, key)) if (!document.Links.Contains(id)) document.Links.Add(id);
         if (document.Extra is { Count: 0 }) document.Extra = null;
@@ -211,6 +270,15 @@ internal sealed class ManifestFiles(IFileManager files)
     {
         foreach (var key in new[] { "threads", "threadAxis", "positions" }) manifest.Extra?.Remove(key);
         if (manifest.PinnedView == "threads") manifest.PinnedView = "grid";
+        // Earlier releases kept the grid's column folder in its own field.
+        if (manifest.GridFolder is { } columnFolder)
+        {
+            manifest.Views ??= new(StringComparer.Ordinal);
+            if (!manifest.Views.ContainsKey("grid"))
+                manifest.Views["grid"] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["columnFolder"] = columnFolder });
+            manifest.GridFolder = null;
+        }
+        if (manifest.Views is { Count: 0 }) manifest.Views = null;
         if (manifest.Extra is { Count: 0 }) manifest.Extra = null;
     }
 

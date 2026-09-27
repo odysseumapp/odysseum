@@ -6,14 +6,14 @@ namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api/projects/{project}/events")]
-public class EventsController(ProjectSessions sessions) : ControllerBase
+public class EventsController(IProjectService projects, ProjectSessions sessions) : ControllerBase
 {
     /// <summary>Open a stream that stays connected and reports changes to the project on disk. Each change arrives as a "workspace" event carrying the new revision. When nothing changes, a heartbeat comment arrives every 15 seconds.</summary>
     [HttpGet]
     [Produces("text/event-stream")]
     public async Task Stream(string project)
     {
-        var events = (await sessions.OpenAsync(ProjectBranch.Main(project))).Events;
+        var events = (await sessions.OpenAsync((await projects.GetAsync(project)).Branch)).Events;
         var response = HttpContext.Response;
         var aborted = HttpContext.RequestAborted;
         response.ContentType = "text/event-stream";

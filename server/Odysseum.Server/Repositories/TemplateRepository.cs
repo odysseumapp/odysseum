@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Odysseum.Server.Services.Documents;
+using Odysseum.Server.Services.Views;
 using Odysseum.Server.Repositories;
 
 namespace Odysseum.Server.Repositories;
@@ -27,7 +28,14 @@ public sealed class TemplateFolder
 {
     public string Path { get; set; } = "";
     public string? PinnedView { get; set; }
-    public List<string> ItemOrder { get; set; } = [];
+    /// <summary>The names of the folder's subfolders and documents (file names), in order.</summary>
+    public List<string> Children { get; set; } = [];
+    /// <summary>Settings by view name. A setting that names a folder holds the folder's path here, not its ID.</summary>
+    public Dictionary<string, JsonElement>? Views { get; set; }
+    /// <summary>The order as earlier releases stored it, with <c>folder:</c> and <c>document:</c> keys. Read into
+    /// <see cref="Children"/>; never written.</summary>
+    public List<string>? ItemOrder { get; set; }
+    /// <summary>The grid's column folder path as earlier releases stored it. Read into <see cref="Views"/>; never written.</summary>
     public string? GridFolder { get; set; }
 }
 
@@ -62,7 +70,7 @@ public sealed partial class TemplateRepository(string root) : ITemplateRepositor
         Name = DefaultName,
         Folders =
         [
-            new() { Path = "", ItemOrder = [.. DefaultFolders.Names.Select(name => "folder:" + name)] },
+            new() { Path = "", Children = [.. DefaultFolders.Names] },
             new() { Path = "Manuscript" },
             new() { Path = "Manuscript/Chapter 01" },
             .. DefaultFolders.Names.Skip(1).Select(name => new TemplateFolder { Path = name }),
@@ -166,8 +174,25 @@ public sealed partial class TemplateRepository(string root) : ITemplateRepositor
         {
             if (folder?.Path is null || (folder.Path != "" && !FileManager.IsSafePath(folder.Path)) || !paths.Add(folder.Path))
                 throw Invalid($"The template has a folder it cannot create: '{folder?.Path}'.");
-            if (folder.PinnedView is not (null or "write" or "board" or "outline" or "grid")) throw Invalid("The template pins a view that does not exist.");
-            folder.ItemOrder = [.. (folder.ItemOrder ?? []).Where(key => !string.IsNullOrWhiteSpace(key)).Distinct()];
+            if (folder.PinnedView is not null && !ViewNames.IsValid(folder.PinnedView)) throw Invalid("The template pins a view whose name is not allowed.");
+            if (folder.ItemOrder is not null)
+            {
+                if (folder.Children is not { Count: > 0 })
+                    folder.Children = [.. folder.ItemOrder.Select(key => key.StartsWith("folder:", StringComparison.Ordinal) ? key["folder:".Length..]
+                        : key.StartsWith("document:", StringComparison.Ordinal) ? key["document:".Length..] : key)];
+                folder.ItemOrder = null;
+            }
+            folder.Children = [.. (folder.Children ?? []).Where(name => !string.IsNullOrWhiteSpace(name)).Distinct()];
+            if (folder.GridFolder is not null)
+            {
+                folder.Views ??= [];
+                if (!folder.Views.ContainsKey("grid"))
+                    folder.Views["grid"] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["columnFolder"] = folder.GridFolder });
+                folder.GridFolder = null;
+            }
+            if (folder.Views?.Any(view => !ViewNames.IsValid(view.Key) || view.Value.ValueKind != JsonValueKind.Object) ?? false)
+                throw Invalid("The template has view settings it cannot use.");
+            if (folder.Views is { Count: 0 }) folder.Views = null;
         }
         foreach (var document in template.Documents)
         {

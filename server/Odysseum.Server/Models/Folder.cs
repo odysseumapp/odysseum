@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Odysseum.Abstractions.Documents;
 using Odysseum.Abstractions.Folders;
 using Odysseum.Abstractions.Items;
@@ -6,22 +7,24 @@ namespace Odysseum.Server.Models;
 
 public sealed class Folder : Item, IFolder
 {
-    public Folder(string id, string name, FolderView? pinnedView = null, string? gridFolderId = null,
+    private static readonly IReadOnlyDictionary<string, JsonElement> NoViews = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+
+    public Folder(string id, string name, string? pinnedView = null, IReadOnlyDictionary<string, JsonElement>? views = null,
         IReadOnlyList<Item>? children = null, Document? ownDocument = null)
-        : this(id, name, null, -1, name, pinnedView, gridFolderId, children ?? [], ownDocument) { }
+        : this(id, name, null, -1, name, pinnedView, views ?? NoViews, children ?? [], ownDocument) { }
 
     private Folder(string id, string name, string? parentId, int orderInParent, string path,
-        FolderView? pinnedView, string? gridFolderId, IReadOnlyList<Item> children, Document? ownDocument)
+        string? pinnedView, IReadOnlyDictionary<string, JsonElement> views, IReadOnlyList<Item> children, Document? ownDocument)
         : base(id, name, parentId, orderInParent, path)
     {
         PinnedView = pinnedView;
-        GridFolderId = gridFolderId;
+        Views = views;
         Children = children;
         OwnDocument = ownDocument;
     }
 
-    public FolderView? PinnedView { get; }
-    public string? GridFolderId { get; }
+    public string? PinnedView { get; }
+    public IReadOnlyDictionary<string, JsonElement> Views { get; }
     /// <summary>Subfolders and documents in order. The folder's own hidden document is never listed here.</summary>
     public IReadOnlyList<Item> Children { get; }
     public Document? OwnDocument { get; }
@@ -33,17 +36,17 @@ public sealed class Folder : Item, IFolder
     IDocument? IFolder.OwnDocument => OwnDocument;
 
     internal Folder Placed(string? parentId, int orderInParent, string path, IReadOnlyList<Item> children, Document? ownDocument) =>
-        new(Id, Name, parentId, orderInParent, path, PinnedView, GridFolderId, children, ownDocument);
+        new(Id, Name, parentId, orderInParent, path, PinnedView, Views, children, ownDocument);
 
     internal Folder WithChildren(IReadOnlyList<Item> children) =>
-        new(Id, Name, ParentId, OrderInParent, Path, PinnedView, GridFolderId, children, OwnDocument);
+        new(Id, Name, ParentId, OrderInParent, Path, PinnedView, Views, children, OwnDocument);
 
     internal Folder WithOwnDocument(Document? ownDocument) =>
-        new(Id, Name, ParentId, OrderInParent, Path, PinnedView, GridFolderId, Children, ownDocument);
+        new(Id, Name, ParentId, OrderInParent, Path, PinnedView, Views, Children, ownDocument);
 
-    internal Folder WithLayout(FolderView? pinnedView, string? gridFolderId) =>
-        new(Id, Name, ParentId, OrderInParent, Path, pinnedView, gridFolderId, Children, OwnDocument);
+    internal Folder WithLayout(string? pinnedView, IReadOnlyDictionary<string, JsonElement> views) =>
+        new(Id, Name, ParentId, OrderInParent, Path, pinnedView, views, Children, OwnDocument);
 
     internal Folder WithName(string name) =>
-        new(Id, name, ParentId, OrderInParent, Path, PinnedView, GridFolderId, Children, OwnDocument);
+        new(Id, name, ParentId, OrderInParent, Path, PinnedView, Views, Children, OwnDocument);
 }

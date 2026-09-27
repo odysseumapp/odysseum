@@ -9,6 +9,8 @@ public interface IProjectRepository
 {
     /// <summary>Lists the projects without changing them.</summary>
     Task<IReadOnlyList<ProjectInfo>> ListAsync();
+    /// <summary>The name of the project with that ID, or null when no project has it.</summary>
+    Task<string?> FindNameAsync(string id);
     Task<bool> ExistsAsync(ProjectBranch branch);
     /// <summary>Makes an empty project. Its name comes from the title; a suffix keeps it unique.</summary>
     Task<ProjectInfo> CreateAsync(string title);

@@ -14,7 +14,8 @@ Plugins see services and models; they never see repositories.
 
 ## Words
 
-- A **project name** is the project's folder name in the workspace, for example `my-novel`. It is the name in URLs.
+- A **project name** is the project's folder name in the workspace, for example `my-novel`.
+- A **project ID** is the UUID in the project's `project.json`. URLs and the API use it; the project name works too.
 - A **project branch** (`ProjectBranch`) is a project name together with a branch name. Every storage call takes one.
   Only the `main` branch exists today; `CreateBranchAsync` and `MergeAsync` report that they are not supported.
 - An **item** is a folder or a document. Its parent and its position come from the tree, never from a stored number.
@@ -23,10 +24,10 @@ Plugins see services and models; they never see repositories.
 
 | Component | Responsibility |
 | --- | --- |
-| `Repositories/IProjectRepository` | Loads and saves projects: `ListAsync`, `ExistsAsync`, `CreateAsync(title)`, `OpenAsync(branch)`, `LoadAsync(branch)`, `LoadBodyAsync(branch, id)`, `SaveAsync(branch, changes, revision)`. No paths, streams or storage types cross it. |
+| `Repositories/IProjectRepository` | Loads and saves projects: `ListAsync`, `FindNameAsync(id)`, `ExistsAsync`, `CreateAsync(title)`, `OpenAsync(branch)`, `LoadAsync(branch)`, `LoadBodyAsync(branch, id)`, `SaveAsync(branch, changes, revision)`. No paths, streams or storage types cross it. |
 | `Repositories/IProjectHistory` | Saved versions: `SaveVersionAsync`, `ListVersionsAsync(branch, path?)`, `RestoreAsync(branch, id, path?)`, `ReadAsync`, and the not-yet-supported `CreateBranchAsync` and `MergeAsync`. |
 | `Repositories/IProjectWatcher` | Raises `Changed(branch)` when another program changes a watched project. The server's own writes are not reported. |
-| `Repositories/Disk/DiskProjectRepository` | Projects as folders: scans the Markdown files, reads and writes `project.json` and every `folder.json`, keeps every folder's own hidden document, and turns one `Changes` into file writes, moves, folder creation and removal, and one manifest transaction. |
+| `Repositories/Disk/DiskProjectRepository` | Projects as folders: scans the Markdown files, reads and writes `project.json`, `links.json` and every `folder.json`, keeps a table in memory from project ID to project name, keeps every folder's own hidden document, and turns one `Changes` into file writes, moves, folder creation and removal, and one manifest transaction. |
 | `Repositories/Disk/ManifestFiles`, `ManifestTransaction` | Read, validate and migrate the manifests; compute the project revision; write several manifests as one journaled batch that recovers on reopen. |
 | `Repositories/Disk/OwnWrites`, `Files/FileManager` | `FileManager` is the only class that touches a project's disk: validates paths, refuses links, bounds reads to 4 MB, replaces files atomically, acquires the instance lock. It records every path it changes, and the state it left it in, in `OwnWrites`. |
 | `Repositories/Disk/FileProjectWatcher` | `IProjectWatcher` over `FileSystemWatcher`: one watch per open project, a 200 ms debounce, a poll every `ScanSeconds` as a fallback, and a check against `OwnWrites` so the server's own writes are skipped. |
@@ -43,6 +44,7 @@ Plugins see services and models; they never see repositories.
 | `Services/HistoryService` | `IHistoryService`: named versions, per-document version lists, reads and restores; saves an automatic version after a project has been quiet for `VersionSeconds`. |
 | `Services/Projects/ProjectEvents`, `ProjectNames`, `DefaultFolders`, `ProjectBranchComparer` | The SSE channel; the project name rules; the folders every project starts with; project names compared as the file system compares them. |
 | `Services/Templates/ProjectTemplateService` | Captures a project as a template and applies one to a new project in a single save through the editors. |
+| `Services/Views/ViewCatalog`, `DefaultViews`, `ViewNames` | The built-in views module. The server core stores view names and settings without reading them; `ViewNames` holds the only rules (the form of a name, settings are a JSON object of at most 64 KB). `DefaultViews` lists the web UI's views and which settings hold a folder ID (`grid.columnFolder`); `ViewCatalog` checks those settings, clears them when the folder is removed, and turns them into paths in templates. A plugin will add views the same way. |
 | `Services/Documents/MarkdownDocumentCodec`, `DocumentRules` | Encoding, frontmatter, word counts; document extensions, folder classification and naming rules. |
 | `API/Views/ProjectViews`, `FolderPaths` | The API edge: builds the response records, computes each document's `order` as its position in the walk, and resolves request paths to folders. |
 | `API/Middleware/ApiExceptionMiddleware` | Maps `WorkspaceError` to an HTTP status: Invalid 400, Forbidden 403, NotFound 404, Conflict 409, TooLarge 413, Corrupt 422, Unavailable 503. |
@@ -102,9 +104,12 @@ notification is caught late instead of never.
 
 ## Listing, versions and templates
 
-Project listing uses the manifests read-only: it does not persist migrations or open sessions, and unreadable or invalid
-metadata falls back to the folder name until opening reports the error. `IProjectService.GetAsync(string)` accepts either
-the folder name or the project's UUID.
+Project listing reads only each project's `project.json` and does not persist migrations; unreadable or invalid
+metadata falls back to the folder name until opening reports the error. A project folder that was never opened has no
+`project.json` and so no ID; `ProjectSessions.ListAsync` opens it once, which writes it. `IProjectService.GetAsync(string)`
+accepts the project's UUID or its folder name. The repository finds a UUID in its table from project ID to project name,
+checks the entry against that project's `project.json`, and lists the projects again when the entry is missing or wrong,
+so a folder renamed on disk is still found.
 
 Versions are whole-project states kept as commits on one branch of a git repository at `<project>/.git`, made with
 LibGit2Sharp. Opening a project with documents saves a version, a new project's first version is its template,
@@ -116,11 +121,13 @@ is the list of versions that changed its file (`GET .../documents/{id}/versions`
 being replaced first. The instance lock and transaction scratch are excluded through `.git/info/exclude`; the repository
 sets `core.autocrlf` off so files round-trip byte for byte.
 
-A template captures a project's goals, its folders with their layouts and arrangement (as `folder:Name` and
-`document:File.md` keys), and its documents by path and title in walk order. Applying one creates the folders and
+A template captures a project's goals, its folders with their layouts and children (by name), and its documents by path
+and title in walk order. View settings that hold a folder ID hold the folder's path in a template. Applying one creates the folders and
 documents through the editors and saves settings, titles, layouts and order together.
 
-Links are one undirected relation between any two documents; a load reads them from either side. Markdown and manifest
+Links are one undirected relation between two documents, stored once in `links.json`. In memory each `Document` lists
+its links and notes; `DocumentEditor.SetDetails` changes both ends, and a save brings `links.json` in line with the saved
+documents. Markdown and manifest
 replacement are still separate filesystem operations, and arbitrary external editors do not participate in the session
 lock. See [the project format](project-format.md) for the files on disk.
 
@@ -133,3 +140,7 @@ lock. See [the project format](project-format.md) for the files on disk.
 | `PUT folders/layout` with `itemOrder` | `PUT folders/layout` without it; `PUT folders/move` `{ id, targetFolder, index, revision }` |
 | `PUT /api/projects/{project}/order` | removed; use `folders/move` |
 | `GET documents/{id}/snapshots[/{snapshot}]` | `GET documents/{id}/versions[/{version}]`, `POST documents/{id}/versions/{version}/restore` |
+| `{project}` in routes: the folder name only (the events route) or name or UUID | the project UUID, or the folder name; every route, the events route too |
+| `FolderSummary.pinnedView` one of `write`, `board`, `outline`, `grid`; `gridFolder` | `pinnedView` any view name; `views` settings by view name (`views.grid.columnFolder`) |
+| `PUT folders/layout` `{ path, pinnedView, gridFolder, revision }` | `{ path, pinnedView, views, revision }`; each view in `views` gets those settings, `null` removes them, others keep theirs |
+| Template folder `{ path, pinnedView, itemOrder, gridFolder }` | `{ path, pinnedView, children, views }`; `children` are names |

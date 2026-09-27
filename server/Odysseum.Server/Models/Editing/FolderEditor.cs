@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Odysseum.Abstractions.Exceptions;
 using Odysseum.Abstractions.Folders;
 using Odysseum.Server.Repositories.Files;
+using Odysseum.Server.Services.Views;
 using ProjectSettings = Odysseum.Server.Settings.ProjectSettings;
 
 namespace Odysseum.Server.Models.Editing;
@@ -51,13 +53,21 @@ public sealed class FolderEditor
         _draft.Attach(itemId, targetFolderId, index);
     }
 
+    /// <summary>Sets the pinned view and changes the settings of the views named in the layout. View names and settings
+    /// are not checked against any list of views.</summary>
     public void SetLayout(string folderId, FolderLayout layout)
     {
         var folder = _draft.Folder(folderId);
-        if (layout.PinnedView is { } view && !Enum.IsDefined(view)) throw new WorkspaceException(WorkspaceError.Invalid, "Invalid folder layout.");
-        if (layout.GridFolderId is not null && !_draft.HasFolder(layout.GridFolderId))
-            throw new WorkspaceException(WorkspaceError.Invalid, "The grid's column folder no longer exists.");
-        _draft.Put(folder.WithLayout(layout.PinnedView, layout.GridFolderId));
+        if (layout.PinnedView is not null) ViewNames.Check(layout.PinnedView);
+        var views = new Dictionary<string, JsonElement>(folder.Views, StringComparer.Ordinal);
+        foreach (var (name, settings) in layout.Views ?? new Dictionary<string, JsonElement>())
+        {
+            ViewNames.Check(name);
+            if (ViewNames.Removes(settings)) views.Remove(name);
+            else views[name] = settings.Clone();
+        }
+        ViewNames.CheckSettings(views);
+        _draft.Put(folder.WithLayout(layout.PinnedView, views));
     }
 
     /// <summary>Removes a folder that has no children. Its own hidden document goes with it.</summary>

@@ -11,7 +11,7 @@ namespace Odysseum.Server.API.Controllers;
 [Route("api/projects/{project}/folders")]
 public class FoldersController(IProjectService projects, IFolderService folders, ProjectViews views) : ControllerBase
 {
-    /// <summary>Create an empty folder. All folders support the same views.</summary>
+    /// <summary>Create an empty folder.</summary>
     [HttpPost]
     public async Task<IResult> Create(string project, [FromBody] CreateFolderRequest request)
     {
@@ -32,19 +32,14 @@ public class FoldersController(IProjectService projects, IFolderService folders,
         return ApiResults.Success(views.View(ProjectViews.Model(await projects.GetAsync(current.Branch))));
     }
 
-    /// <summary>Save a folder's pinned view and which folder supplies its grid's columns.</summary>
+    /// <summary>Save a folder's pinned view and change the settings of some of its views.</summary>
     [HttpPut("layout")]
     public async Task<IResult> Layout(string project, [FromBody] FolderLayoutRequest request)
     {
-        if (request.Path is null || request.PinnedView is not (null or "write" or "board" or "outline" or "grid"))
-            throw new WorkspaceException(WorkspaceError.Invalid, "Invalid folder layout.");
+        if (request.Path is null) throw new WorkspaceException(WorkspaceError.Invalid, "Invalid folder layout.");
         var current = await projects.GetAsync(project);
         var folder = FolderPaths.Find(current, request.Path);
-        var layout = new FolderLayout
-        {
-            PinnedView = request.PinnedView is null ? null : Enum.Parse<FolderView>(request.PinnedView, ignoreCase: true),
-            GridFolderId = request.GridFolder,
-        };
+        var layout = new FolderLayout { PinnedView = request.PinnedView, Views = request.Views };
         await folders.SetLayoutAsync(current.Branch, folder.Id, layout, request.Revision);
         return ApiResults.Success(views.View(ProjectViews.Model(await projects.GetAsync(current.Branch))));
     }

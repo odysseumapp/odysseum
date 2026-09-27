@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Odysseum.Abstractions.Documents;
 using Odysseum.Abstractions.Exceptions;
@@ -30,7 +31,7 @@ var checks = new List<(string Name, Func<Check, Task> Run)>
         await c.Documents.CreateAsync(c.Branch, (await Ensure(c, "Threads")).Id, "Race", "Thread notes");
         project = await c.Project();
         var threads = FolderAt(project, "Threads");
-        race = await c.Folders.SetLayoutAsync(c.Branch, FolderAt(project, "Topics/Race").Id, new FolderLayout { PinnedView = FolderView.Grid, GridFolderId = threads.Id }, project.Revision);
+        race = await c.Folders.SetLayoutAsync(c.Branch, FolderAt(project, "Topics/Race").Id, Layout("grid", threads.Id), project.Revision);
         project = await c.Project();
         await c.Folders.MoveAsync(c.Branch, doc.Id, race.Id, 0, project.Revision);
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(c.Root, "Topics/Race/.odysseum/folder.json")))!;
@@ -38,7 +39,38 @@ var checks = new List<(string Name, Func<Check, Task> Run)>
         Require(manifest["itemOrder"]![0]!.GetValue<string>() == doc.Id, "Child order was not stored in the owning folder.");
         Directory.Move(Path.Combine(c.Root, "Topics/Race"), Path.Combine(c.Root, "Topics/Class"));
         var moved = FolderAt(await c.Project(), "Topics/Class");
-        Require(moved.Id == race.Id && moved.PinnedView == FolderView.Grid && moved.GridFolderId == threads.Id, "Folder layout or identity was lost on move.");
+        Require(moved.Id == race.Id && moved.PinnedView == "grid" && ColumnFolder(moved) == threads.Id, "Folder layout or identity was lost on move.");
+    }),
+    ("Folders keep any view name and settings, and settings that name a removed folder are cleared", async c =>
+    {
+        var project = await c.Project();
+        var root = await c.Folders.SetLayoutAsync(c.Branch, project.Root.Id,
+            new FolderLayout { PinnedView = "tree", Views = new Dictionary<string, JsonElement> { ["tree"] = Json("""{"depth":3}""") } }, project.Revision);
+        Require(root.PinnedView == "tree" && root.Views["tree"].GetProperty("depth").GetInt32() == 3, "A view the server does not know was not stored.");
+        var gone = await Ensure(c, "Gone");
+        project = await c.Project();
+        root = await c.Folders.SetLayoutAsync(c.Branch, project.Root.Id, Layout("tree", gone.Id), project.Revision);
+        Require(root.Views["tree"].GetProperty("depth").GetInt32() == 3 && ColumnFolder(root) == gone.Id, "A view not named in the change lost its settings.");
+        var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(c.Root, ".odysseum", "project.json")))!;
+        Require(manifest["views"]!["tree"]!["depth"]!.GetValue<int>() == 3 && manifest["gridFolder"] is null, "View settings were not stored in project.json.");
+        project = await c.Project();
+        await Expect(WorkspaceError.Invalid, () => c.Folders.SetLayoutAsync(c.Branch, project.Root.Id,
+            new FolderLayout { Views = new Dictionary<string, JsonElement> { ["tree"] = Json("5") } }, project.Revision));
+        await c.Folders.RemoveAsync(c.Branch, gone.Id, project.Revision);
+        project = await c.Project();
+        Require(ColumnFolder(project.Root) is null && project.Root.Views.ContainsKey("tree") && !project.Root.Views.ContainsKey("grid"),
+            "Removing a folder did not clear the settings that named it.");
+        await Ensure(c, "One");
+        var two = await Ensure(c, "Two");
+        var path = Path.Combine(c.Root, "One", ".odysseum", "folder.json");
+        var legacy = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        legacy["gridFolder"] = two.Id;
+        await File.WriteAllTextAsync(path, legacy.ToJsonString());
+        project = await c.Project();
+        Require(ColumnFolder(FolderAt(project, "One")) == two.Id, "An earlier release's gridFolder was not read into the grid's settings.");
+        var written = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        Require(written["gridFolder"] is null && written["views"]!["grid"]!["columnFolder"]!.GetValue<string>() == two.Id,
+            "An earlier release's gridFolder was not written back as view settings.");
     }),
     ("Folder removal refuses content and archives empty folder metadata", async c =>
     {
@@ -66,18 +98,18 @@ var checks = new List<(string Name, Func<Check, Task> Run)>
         var one = FolderAt(project, "One");
         var two = FolderAt(project, "Two");
         await Expect(WorkspaceError.NotFound, () => c.Folders.MoveAsync(c.Branch, other.Id, Guid.NewGuid().ToString(), 0, project.Revision));
-        await Expect(WorkspaceError.Invalid, () => c.Folders.SetLayoutAsync(c.Branch, one.Id, new FolderLayout { PinnedView = FolderView.Board, GridFolderId = Guid.NewGuid().ToString() }, project.Revision));
-        await Expect(WorkspaceError.Invalid, () => c.Folders.SetLayoutAsync(c.Branch, one.Id, new FolderLayout { PinnedView = FolderView.Board, GridFolderId = first.Id }, project.Revision));
-        await Expect(WorkspaceError.Invalid, () => c.Folders.SetLayoutAsync(c.Branch, one.Id, new FolderLayout { PinnedView = (FolderView)99 }, project.Revision));
-        var root = await c.Folders.SetLayoutAsync(c.Branch, project.Root.Id, new FolderLayout { PinnedView = FolderView.Outline, GridFolderId = two.Id }, project.Revision);
+        await Expect(WorkspaceError.Invalid, () => c.Folders.SetLayoutAsync(c.Branch, one.Id, Layout("board", Guid.NewGuid().ToString()), project.Revision));
+        await Expect(WorkspaceError.Invalid, () => c.Folders.SetLayoutAsync(c.Branch, one.Id, Layout("board", first.Id), project.Revision));
+        await Expect(WorkspaceError.Invalid, () => c.Folders.SetLayoutAsync(c.Branch, one.Id, Layout("Not a view!"), project.Revision));
+        var root = await c.Folders.SetLayoutAsync(c.Branch, project.Root.Id, Layout("outline", two.Id), project.Revision);
         project = await c.Project();
         await c.Folders.MoveAsync(c.Branch, two.Id, root.Id, 0, project.Revision);
         project = await c.Project();
         var stale = project.Revision;
         await c.Folders.CreateAsync(c.Branch, project.Root.Id, "Three");
-        await Expect(WorkspaceError.Conflict, () => c.Folders.SetLayoutAsync(c.Branch, project.Root.Id, new FolderLayout { PinnedView = FolderView.Board }, stale));
+        await Expect(WorkspaceError.Conflict, () => c.Folders.SetLayoutAsync(c.Branch, project.Root.Id, Layout("board"), stale));
         project = await c.Project();
-        Require(project.Root.GridFolderId == two.Id, "Grid column folder was lost.");
+        Require(ColumnFolder(project.Root) == two.Id, "Grid column folder was lost.");
         Require(project.Root.Folders.Select(f => f.Id).SequenceEqual([two.Id, one.Id, FolderAt(project, "Three").Id]), "Root folder order was lost.");
         await Expect(WorkspaceError.Conflict, () => c.Folders.RemoveAsync(c.Branch, FolderAt(project, "One").Id, project.Revision));
     }),
@@ -355,16 +387,12 @@ var checks = new List<(string Name, Func<Check, Task> Run)>
         var notes = project.Document(scene.Id)!.LinkNotes;
         Require(notes.Count == 1 && notes[thread.Id] == "Mara first doubts the map", "The note was not stored trimmed, or a note without a link was kept.");
         Require(project.Document(thread.Id)!.LinkNotes[scene.Id] == "Mara first doubts the map", "The other end should read the same note.");
-        var threadManifest = Path.Combine(c.Root, "Threads", ".odysseum", "folder.json");
-        Require(JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!["documents"]![thread.Id]!["linkNotes"]![scene.Id]!.GetValue<string>() == "Mara first doubts the map", "The note was not persisted on the other side.");
+        var stored = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(c.Root, ".odysseum", "links.json")))!["links"]!.AsArray();
+        Require(stored.Count == 1 && stored[0]!["note"]!.GetValue<string>() == "Mara first doubts the map", "The link and its note were not stored once in links.json.");
+        Require(!(await File.ReadAllTextAsync(Path.Combine(c.Root, "Threads", ".odysseum", "folder.json"))).Contains("\"links"), "folder.json should no longer hold links.");
         project = await Update(c, thread, Details("Race", "", "", DocumentStatus.Draft, 1000, null, new() { [scene.Id] = "Rewritten" }), project.Revision);
         project = await Update(c, scene, Details("Arrival", "Synopsis", "", DocumentStatus.Draft, 1000), project.Revision);
         Require(project.Document(scene.Id)!.LinkNotes[thread.Id] == "Rewritten", "A note edited from the other end did not change here, or an unrelated save lost it.");
-        var manifest = JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!;
-        manifest["documents"]![thread.Id]!["linkNotes"] = new JsonObject();
-        await File.WriteAllTextAsync(threadManifest, manifest.ToJsonString());
-        project = await c.Project();
-        Require(project.Document(thread.Id)!.LinkNotes[scene.Id] == "Rewritten", "A one-sided note should read from the other end.");
         await Expect(WorkspaceError.Invalid, () => c.Documents.UpdateAsync(c.Branch, scene.Id, Details("Arrival", "", "", DocumentStatus.Draft, 1000, null, new() { [thread.Id] = new string('x', 2001) }), project.Revision));
         project = await Update(c, scene, Details("Arrival", "", "", DocumentStatus.Draft, 1000, null, new()), project.Revision);
         Require(project.Documents.All(d => d.LinkNotes.Count == 0), "An empty note set should clear the note on both sides.");
@@ -386,8 +414,9 @@ var checks = new List<(string Name, Func<Check, Task> Run)>
         var current = project.Document(scene.Id)!;
         Require(current.Links.SequenceEqual(new[] { first.Id, second.Id }) && Position(project, scene.Id) == positionBefore, "Linking changed manuscript order or lost a link.");
         Require(project.Document(first.Id)!.Links.SequenceEqual([scene.Id]), "The thread should list the scene back.");
-        var threadManifest = Path.Combine(c.Root, "Threads", ".odysseum", "folder.json");
-        Require(JsonNode.Parse(await File.ReadAllTextAsync(threadManifest))!["documents"]![first.Id]!["links"]![0]!.GetValue<string>() == scene.Id, "The reverse side was not persisted.");
+        var linksFile = Path.Combine(c.Root, ".odysseum", "links.json");
+        var stored = JsonNode.Parse(await File.ReadAllTextAsync(linksFile))!["links"]!.AsArray();
+        Require(stored.Count == 2 && stored[0]!["itemA"]!.GetValue<string>() == scene.Id && stored[0]!["itemB"]!.GetValue<string>() == first.Id, "Each link should be stored once in links.json.");
         project = await Update(c, second, Details("Meet Cute", "", "", DocumentStatus.Draft, 1000, [scene.Id, first.Id]), project.Revision);
         Require(project.Document(first.Id)!.Links.OrderBy(x => x).SequenceEqual(new[] { scene.Id, second.Id }.OrderBy(x => x)), "Thread-to-thread link was not mirrored.");
         project = await Update(c, first, Details("Race", "", "", DocumentStatus.Draft, 1000, []), project.Revision);
@@ -407,19 +436,21 @@ var checks = new List<(string Name, Func<Check, Task> Run)>
         current = project.Document(scene.Id)!;
         Require(current.Links.OrderBy(x => x).SequenceEqual(new[] { second.Id, mara.Id, first.Id }.OrderBy(x => x)), "Legacy character and thread lists were not read as links.");
         Require(project.Document(mara.Id)!.Links.SequenceEqual([scene.Id]), "A one-sided legacy link should read back from the other side.");
-        Require(FolderAt(project, "Manuscript").PinnedView == FolderView.Grid, "Legacy thread pin did not become the grid.");
+        Require(FolderAt(project, "Manuscript").PinnedView == "grid", "Legacy thread pin did not become the grid.");
         project = await Update(c, scene, Details("Arrival", "Updated again", "", DocumentStatus.Draft, 1000), project.Revision);
         var written = JsonNode.Parse(await File.ReadAllTextAsync(manuscript))!;
-        Require(written["documents"]![scene.Id]!["characters"] is null && written["documents"]![scene.Id]!["links"]!.AsArray().Count == 3 && written["threads"] is null && written["threadAxis"] is null,
-            "Legacy keys were not folded into links or dropped on write.");
+        stored = JsonNode.Parse(await File.ReadAllTextAsync(linksFile))!["links"]!.AsArray();
+        Require(written["documents"]![scene.Id]!["characters"] is null && written["documents"]![scene.Id]!["links"] is null && written["threads"] is null && written["threadAxis"] is null
+            && stored.Count(link => link!["itemA"]!.GetValue<string>() == scene.Id || link!["itemB"]!.GetValue<string>() == scene.Id) == 3,
+            "Legacy keys were not moved to links.json or dropped on write.");
         var export = await c.Views.ExportAsync(project);
         Require(!export.Contains("Thread notes only") && export.Contains("Scene prose"), "Thread notes were included in manuscript export.");
         var characters = FolderAt(project, "Characters").Id;
-        var layout = await c.Folders.SetLayoutAsync(c.Branch, FolderAt(project, "Manuscript").Id, new FolderLayout { GridFolderId = characters }, project.Revision);
-        Require(layout.GridFolderId == characters, "Grid column folder was not saved.");
+        var layout = await c.Folders.SetLayoutAsync(c.Branch, FolderAt(project, "Manuscript").Id, Layout(null, characters), project.Revision);
+        Require(ColumnFolder(layout) == characters, "Grid column folder was not saved.");
         project = await c.Project();
-        layout = await c.Folders.SetLayoutAsync(c.Branch, layout.Id, new FolderLayout(), project.Revision);
-        Require(layout.GridFolderId is null, "Grid column folder was not cleared.");
+        layout = await c.Folders.SetLayoutAsync(c.Branch, layout.Id, new FolderLayout { Views = new Dictionary<string, JsonElement> { ["grid"] = Json("null") } }, project.Revision);
+        Require(ColumnFolder(layout) is null && !layout.Views.ContainsKey("grid"), "A null did not remove the grid's settings.");
     }),
     ("Every folder gets a hidden document named after it, hidden from listings that expect emptiness and export", async c =>
     {
@@ -751,7 +782,7 @@ var libraryChecks = new List<(string Name, Func<string, Workspace, Task> Run)>
             new() { [mara.Id] = "First sight" }), project.Revision);
         project = await w.ProjectAsync(sourceName);
         var characters = FolderAt(project, "Characters");
-        var chapter2 = await w.Folders.SetLayoutAsync(branch, FolderAt(project, "Manuscript/Chapter 02").Id, new FolderLayout { PinnedView = FolderView.Board, GridFolderId = characters.Id }, project.Revision);
+        var chapter2 = await w.Folders.SetLayoutAsync(branch, FolderAt(project, "Manuscript/Chapter 02").Id, Layout("board", characters.Id), project.Revision);
         project = await w.ProjectAsync(sourceName);
         await w.Folders.MoveAsync(branch, scene.Id, chapter2.Id, 0, project.Revision);
 
@@ -760,6 +791,10 @@ var libraryChecks = new List<(string Name, Func<string, Workspace, Task> Run)>
             "The template should list documents in order and leave out folders' own documents.");
         var json = File.ReadAllText(Path.Combine(root, ".templates", "Novel.json"));
         Require(!json.Contains(scene.Id) && !json.Contains("Once.") && !json.Contains("It begins."), "A project template carries neither ids nor what documents hold.");
+        var chapterTemplate = saved.Folders.Single(folder => folder.Path == "Manuscript/Chapter 02");
+        Require(saved.Folders.Single(folder => folder.Path == "").Children.SequenceEqual(DefaultFolders.Names) && chapterTemplate.Children.SequenceEqual(["Opening.md"])
+            && chapterTemplate.Views!["grid"].GetProperty("columnFolder").GetString() == "Characters" && !json.Contains("itemOrder") && !json.Contains("gridFolder"),
+            "A template should list children by name and keep folder settings as paths.");
 
         var view = await w.ProjectAsync((await w.Sessions.CreateAsync("Copy", null, "Novel")).Name);
         var opening = view.Documents.Single(d => d.Path == "Manuscript/Chapter 02/Opening.md");
@@ -769,8 +804,8 @@ var libraryChecks = new List<(string Name, Func<string, Workspace, Task> Run)>
         Require(opening.Title == "The Opening" && opening.Synopsis == "" && opening.WordGoal == 1000 && opening.Status == DocumentStatus.Draft
             && opening.Links.Count == 0 && (await w.Documents.OpenAsync(view.Branch, opening.Id)).Body == "", "Documents made from a template should start empty under their title.");
         var chapter = FolderAt(view, "Manuscript/Chapter 02");
-        Require(chapter.PinnedView == FolderView.Board && chapter.Children.Select(child => child.Id).SequenceEqual([opening.Id])
-            && chapter.GridFolderId == FolderAt(view, "Characters").Id && chapter.GridFolderId != characters.Id, "Folder layouts were not rebuilt.");
+        Require(chapter.PinnedView == "board" && chapter.Children.Select(child => child.Id).SequenceEqual([opening.Id])
+            && ColumnFolder(chapter) == FolderAt(view, "Characters").Id && ColumnFolder(chapter) != characters.Id, "Folder layouts were not rebuilt.");
         Require(view.Root.Folders.Select(f => f.Name).SequenceEqual(DefaultFolders.Names), "The root order was lost.");
 
         await Expect(WorkspaceError.NotFound, () => w.Sessions.CreateAsync("Orphan", null, "Missing"));
@@ -778,6 +813,12 @@ var libraryChecks = new List<(string Name, Func<string, Workspace, Task> Run)>
         await File.WriteAllTextAsync(Path.Combine(root, ".templates", "Bad.json"), "{\"documents\":[{\"path\":\"../escape.md\"}]}");
         Require(templates.List().Select(t => t.Name).SequenceEqual(["Default", "Novel"]), "An unsafe template should be skipped.");
         ExpectSync(WorkspaceError.Invalid, () => templates.Save(new() { Name = "Unsafe", Documents = [new() { Path = ".odysseum/project.json" }] }));
+        await File.WriteAllTextAsync(Path.Combine(root, ".templates", "Old.json"),
+            """{"folders":[{"path":"","itemOrder":["folder:Notes","folder:Manuscript"]},{"path":"Notes","gridFolder":"Manuscript"}],"documents":[]}""");
+        var old = templates.Get("Old");
+        Require(old.Folders[0].Children.SequenceEqual(["Notes", "Manuscript"]) && old.Folders[1].Views!["grid"].GetProperty("columnFolder").GetString() == "Manuscript",
+            "A template file from an earlier release did not load.");
+        templates.Delete("Old");
         templates.Delete("Novel");
         ExpectSync(WorkspaceError.NotFound, () => templates.Get("Novel"));
         templates.Delete("Default");
@@ -792,6 +833,20 @@ var libraryChecks = new List<(string Name, Func<string, Workspace, Task> Run)>
         var view = await w.ProjectAsync("Dropped in");
         Require(view.Title == "Dropped in", "The folder name should become the working title.");
         Require(File.Exists(Path.Combine(root, "Dropped in", ".odysseum", "project.json")), "Opening should create metadata.");
+    }),
+    ("Finds projects by ID, also after a rename on disk, and the list gives a dropped-in folder an ID", async (root, w) =>
+    {
+        var created = await w.Sessions.CreateAsync("Named");
+        Require(Guid.TryParse(created.Id, out _) && (await w.Projects.GetAsync(created.Id)).Name == created.Name, "The project was not found by its ID.");
+        await w.Sessions.CloseAsync(ProjectBranch.Main(created.Name));
+        Directory.Move(Path.Combine(root, created.Name), Path.Combine(root, "Renamed"));
+        Require((await w.Projects.GetAsync(created.Id)).Name == "Renamed", "The project was not found by its ID after its folder was renamed.");
+        Directory.CreateDirectory(Path.Combine(root, "Dropped in"));
+        await File.WriteAllTextAsync(Path.Combine(root, "Dropped in", "Scene.md"), "Text");
+        var listed = (await w.Sessions.ListAsync()).Single(info => info.Name == "Dropped in");
+        Require(Guid.TryParse(listed.Id, out _) && File.Exists(Path.Combine(root, "Dropped in", ".odysseum", "project.json")), "The list did not give a dropped-in folder an ID.");
+        Require((await w.Projects.GetAsync(listed.Id)).Name == "Dropped in", "The dropped-in project was not found by the ID the list gave it.");
+        await Expect(WorkspaceError.NotFound, () => w.Projects.GetAsync(Guid.NewGuid().ToString()));
     }),
     ("Rejects unsafe project names and reports missing projects", async (_, w) =>
     {
@@ -891,6 +946,14 @@ static int Position(Project project, string id) =>
     project.Walk().Select((document, index) => (document, index)).Single(pair => pair.document.Id == id).index;
 static DocumentDetails Details(string title, string synopsis, string notes, DocumentStatus status, int wordGoal, IReadOnlyList<string>? links = null, Dictionary<string, string>? linkNotes = null) =>
     new() { Title = title, Synopsis = synopsis, Notes = notes, Status = status, WordGoal = wordGoal, Links = links, LinkNotes = linkNotes };
+static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
+static FolderLayout Layout(string? pinnedView, string? columnFolder = null) => new()
+{
+    PinnedView = pinnedView,
+    Views = columnFolder is null ? null : new Dictionary<string, JsonElement> { ["grid"] = JsonSerializer.SerializeToElement(new { columnFolder }) },
+};
+static string? ColumnFolder(IFolder folder) =>
+    folder.Views.TryGetValue("grid", out var grid) && grid.TryGetProperty("columnFolder", out var id) ? id.GetString() : null;
 static void Require(bool condition, string message)
 {
     if (!condition) throw new Exception(message);

@@ -37,6 +37,6 @@ public class TemplatesController(ITemplateRepository templates, IProjectService 
 
     private static TemplateResponse Describe(ProjectTemplate template) => new(template.Name,
         new(template.Settings.WordGoal, template.Settings.DefaultSceneWordGoal),
-        [.. template.Folders.Select(folder => new TemplateFolderResponse(folder.Path, folder.PinnedView, folder.ItemOrder, folder.GridFolder))],
+        [.. template.Folders.Select(folder => new TemplateFolderResponse(folder.Path, folder.PinnedView, folder.Children, folder.Views))],
         [.. template.Documents.Select(document => new TemplateDocumentResponse(document.Path, document.Title))]);
 }

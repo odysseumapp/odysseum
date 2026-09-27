@@ -9,7 +9,10 @@ public class FolderManifest
     public int Version { get; set; } = 1;
     public string? PinnedView { get; set; }
     public string[] ItemOrder { get; set; } = [];
-    public string? GridFolder { get; set; }
+    /// <summary>Settings by view name. Omitted when no view has settings.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, JsonElement>? Views { get; set; }
+    /// <summary>The grid's column folder as earlier releases stored it. Read once into <see cref="Views"/>; never written.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? GridFolder { get; set; }
     public Dictionary<string, DocumentMetadata> Documents { get; set; } = [];
     public Dictionary<string, FolderEntry> Folders { get; set; } = [];
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -17,7 +20,7 @@ public class FolderManifest
     internal FolderManifest CloneFolder() => new()
     {
         Id = Id, Version = Version,
-        PinnedView = PinnedView, ItemOrder = [.. ItemOrder], GridFolder = GridFolder,
+        PinnedView = PinnedView, ItemOrder = [.. ItemOrder], Views = Views is null ? null : new(Views), GridFolder = GridFolder,
         Documents = Documents.ToDictionary(p => p.Key, p => p.Value.Clone()),
         Folders = Folders.ToDictionary(p => p.Key, p => p.Value.Clone()),
         Extra = Extra is null ? null : new(Extra),

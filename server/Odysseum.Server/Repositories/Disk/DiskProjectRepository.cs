@@ -23,6 +23,9 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
     private readonly FileManager _workspace = new(workspaceRoot);
     private readonly ConcurrentDictionary<string, DiskProject> _projects =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    /// <summary>Project ID to project name, from the last listing and the loads since. <c>project.json</c> is the true
+    /// record; <see cref="FindNameAsync"/> checks each entry against it and lists again when it is wrong or missing.</summary>
+    private readonly ConcurrentDictionary<string, string> _ids = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _createGate = new(1, 1);
 
     public string Root => _workspace.Root;
@@ -58,6 +61,15 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
         var projects = new List<ProjectInfo>();
         foreach (var name in Names()) projects.Add(await DescribeAsync(name));
         return projects.OrderBy(x => x.Title, StringComparer.CurrentCultureIgnoreCase).ThenBy(x => x.Name, StringComparer.Ordinal).ToArray();
+    }
+
+    public async Task<string?> FindNameAsync(string id)
+    {
+        if (_ids.TryGetValue(id, out var name) && await IdOfAsync(name) is { } stored && string.Equals(stored, id, StringComparison.OrdinalIgnoreCase))
+            return name;
+        _ids.Clear();
+        await ListAsync();
+        return _ids.GetValueOrDefault(id);
     }
 
     public Task<bool> ExistsAsync(ProjectBranch branch) =>
@@ -154,8 +166,9 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
             if (folder.IsRoot) manifest = candidate;
             else if (!candidate.FolderManifests.TryGetValue(folder.Path, out manifest!))
                 manifest = candidate.FolderManifests[folder.Path] = new FolderManifest { Id = folder.Id };
-            manifest.PinnedView = folder.PinnedView?.ToString().ToLowerInvariant();
-            manifest.GridFolder = folder.GridFolderId;
+            manifest.PinnedView = folder.PinnedView;
+            manifest.Views = folder.Views.Count == 0 ? null : new(folder.Views, StringComparer.Ordinal);
+            manifest.GridFolder = null;
             manifest.ItemOrder = folder.Children.Select(child => child.Id).ToArray();
         }
         foreach (var document in changes.Documents)
@@ -194,9 +207,8 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
             metadata.Notes = document.Notes;
             metadata.Status = document.Status;
             metadata.WordGoal = document.WordGoal;
-            metadata.Links = [.. document.Links];
-            metadata.LinkNotes = new Dictionary<string, string>(document.LinkNotes, StringComparer.Ordinal);
         }
+        SaveLinks(candidate.Links, changes.Documents);
         await project.Manifests.WriteAsync(candidate, persistedRevision);
         return await LoadAsync(project);
     }
@@ -260,6 +272,7 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
             scanned[id] = new(id, own, Hash(bytes), Modified(files, own), 0);
         }
         var revision = await project.Manifests.WriteAsync(candidate, persistedRevision);
+        _ids[candidate.Id] = project.Name;
         project.Paths = scanned.ToDictionary(pair => pair.Key, pair => pair.Value.Path, StringComparer.Ordinal);
         var root = BuildTree(project.Name, candidate, scanned);
         return new ProjectData(candidate.Id, candidate.Settings.Clone(), revision, root, warnings.Count > 0 ? string.Join(" ", warnings) : null);
@@ -267,27 +280,25 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
 
     private static Folder BuildTree(string name, ProjectManifest manifest, Dictionary<string, ScannedFile> scanned)
     {
-        var present = scanned.Keys.ToHashSet(StringComparer.Ordinal);
-        var reverse = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var (source, metadata) in manifest.Documents)
+        // Links to documents whose files are gone stay in links.json, so a restored file gets its links back.
+        var links = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var notes = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+        foreach (var link in manifest.Links.Links)
         {
-            if (!present.Contains(source)) continue;
-            foreach (var target in metadata.Links)
-                if (present.Contains(target)) (reverse.TryGetValue(target, out var list) ? list : reverse[target] = []).Add(source);
+            if (!scanned.ContainsKey(link.ItemA) || !scanned.ContainsKey(link.ItemB)) continue;
+            foreach (var (from, to) in new[] { (link.ItemA, link.ItemB), (link.ItemB, link.ItemA) })
+            {
+                (links.TryGetValue(from, out var list) ? list : links[from] = []).Add(to);
+                if (link.Note.Length > 0) (notes.TryGetValue(from, out var map) ? map : notes[from] = new(StringComparer.Ordinal))[to] = link.Note;
+            }
         }
         var documents = new Dictionary<string, Document>(StringComparer.Ordinal);
         foreach (var file in scanned.Values)
         {
             var metadata = manifest.Documents[file.Id];
-            var links = metadata.Links.Where(present.Contains).Concat(reverse.GetValueOrDefault(file.Id) ?? []).Distinct(StringComparer.Ordinal).ToArray();
-            var notes = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var other in links)
-            {
-                if ((metadata.LinkNotes.TryGetValue(other, out var note) || manifest.Documents[other].LinkNotes.TryGetValue(file.Id, out note)) && note.Length > 0)
-                    notes[other] = note;
-            }
             documents[file.Id] = new Document(file.Id, Path.GetFileName(file.Path), metadata.Title, metadata.Synopsis, metadata.Notes, metadata.Status,
-                metadata.WordGoal, links, notes, file.Revision, file.Modified, file.WordCount);
+                metadata.WordGoal, links.GetValueOrDefault(file.Id)?.ToArray() ?? [], notes.GetValueOrDefault(file.Id) ?? new(StringComparer.Ordinal),
+                file.Revision, file.Modified, file.WordCount);
         }
         var byFolder = scanned.Values.GroupBy(file => Item.ParentPath(file.Path), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
@@ -311,20 +322,28 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
             children.AddRange(subfolders.Values.Where(f => !seen.Contains(f.Id))
                 .OrderBy(f => path == "" ? DefaultFolders.Rank(f.Name) : 0).ThenBy(f => f.Name, StringComparer.Ordinal));
             children.AddRange(docs.Values.Where(d => !seen.Contains(d.Id)).OrderBy(d => d.Name, StringComparer.Ordinal));
-            return new Folder(local.Id, folderName, ParseView(local.PinnedView), local.GridFolder, children, own is null ? null : documents[own.Id]);
+            return new Folder(local.Id, folderName, local.PinnedView, local.Views, children, own is null ? null : documents[own.Id]);
         }
 
         return Build("", manifest, name);
     }
 
-    private static FolderView? ParseView(string? view) => view switch
+    /// <summary>Brings links.json in line with the saved documents. The editor saves both ends of every link it changes,
+    /// so the links of a saved document are complete: a link it no longer lists is removed, a new one is added at the end,
+    /// and a kept one stays in place with the saved note.</summary>
+    private static void SaveLinks(LinkManifest manifest, IReadOnlyList<Document> saved)
     {
-        "write" => FolderView.Write,
-        "board" => FolderView.Board,
-        "outline" => FolderView.Outline,
-        "grid" => FolderView.Grid,
-        _ => null,
-    };
+        foreach (var document in saved)
+        {
+            manifest.Links.RemoveAll(link => link.Joins(document.Id) && !document.Links.Contains(link.Other(document.Id), StringComparer.Ordinal));
+            foreach (var other in document.Links)
+            {
+                var note = document.LinkNotes.GetValueOrDefault(other) ?? "";
+                if (manifest.Links.FirstOrDefault(link => link.Joins(document.Id, other)) is { } existing) existing.Note = note;
+                else manifest.Links.Add(new LinkEntry { ItemA = document.Id, ItemB = other, Note = note });
+            }
+        }
+    }
 
     private static Dictionary<string, string> FolderPaths(ProjectManifest manifest)
     {
@@ -372,6 +391,7 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
         return _projects.GetOrAdd(name, key => new DiskProject(key, new FileManager(Path.Combine(Root, key), ownWrites)));
     }
 
+    /// <summary>The ID and title from <c>project.json</c> alone. A project that was never opened has no ID yet.</summary>
     private async Task<ProjectInfo> DescribeAsync(string name)
     {
         var title = name;
@@ -379,8 +399,7 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
         var files = new FileManager(Path.Combine(Root, name));
         try
         {
-            var (manifest, _) = await new ManifestFiles(files).ReadAsync();
-            if (manifest is not null)
+            if (await new ManifestFiles(files).ReadRootAsync() is { } manifest)
             {
                 title = manifest.Settings.Title;
                 id = manifest.Id;
@@ -393,7 +412,15 @@ public sealed class DiskProjectRepository(string workspaceRoot, OwnWrites? ownWr
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WorkspaceException or JsonException) { }
+        if (id.Length > 0) _ids[id] = name;
         return new(name, title, id, new DateTimeOffset(DateTime.SpecifyKind(_workspace.LastModified(name), DateTimeKind.Utc)));
+    }
+
+    private async Task<string?> IdOfAsync(string name)
+    {
+        if (!_workspace.FolderExists(name)) return null;
+        try { return (await new ManifestFiles(new FileManager(Path.Combine(Root, name))).ReadRootAsync())?.Id; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WorkspaceException) { return null; }
     }
 
     private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;

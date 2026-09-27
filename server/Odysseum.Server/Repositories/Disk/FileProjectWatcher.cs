@@ -56,7 +56,7 @@ public sealed class FileProjectWatcher(string workspaceRoot, OwnWrites ownWrites
         {
             var relative = Path.GetRelativePath(_root, fullPath).Replace('\\', '/');
             if (relative.Split('/').Any(part => part.StartsWith('.'))
-                && relative != ".odysseum/project.json" && !relative.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)) return;
+                && relative is not (".odysseum/project.json" or ".odysseum/links.json") && !relative.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)) return;
             if (_owner._ownWrites.Contains(fullPath)) return;
             _changes.Writer.TryWrite(true);
         }

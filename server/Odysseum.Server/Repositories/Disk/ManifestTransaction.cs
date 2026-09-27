@@ -101,7 +101,7 @@ internal sealed class ManifestTransaction(IFileManager files)
     private static void Validate(Entry entry)
     {
         if (entry is null || entry.Path is null || entry.After is null || entry.After.Length != 64 || !entry.After.All(Uri.IsHexDigit)
-            || entry.Path != ".odysseum/project.json" && (!entry.Path.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)
+            || entry.Path is not (".odysseum/project.json" or ".odysseum/links.json") && (!entry.Path.EndsWith("/.odysseum/folder.json", StringComparison.Ordinal)
                 || entry.Path.Split('/')[..^2].Any(part => part.StartsWith('.')))
             || entry.Backup is not null && (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(entry.Backup), "N", out var id)
                 || entry.Backup != $".odysseum/manifest-transaction/{id:N}.bak"))

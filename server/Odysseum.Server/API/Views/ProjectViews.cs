@@ -58,7 +58,7 @@ public sealed class ProjectViews(IDocumentService documents)
     }
 
     public static FolderSummary Folder(Folder folder) => new(folder.Id, folder.Path, folder.Name, folder.IsRoot ? null : Item.ParentPath(folder.Path),
-        folder.PinnedView?.ToString().ToLowerInvariant(), folder.Children.Select(child => child.Id).ToArray(), folder.GridFolderId);
+        folder.PinnedView, folder.Children.Select(child => child.Id).ToArray(), folder.Views);
 
     public static DocumentSummary Summary(Document document, int order) => new(document.Id, document.Path, document.Title,
         Item.ParentPath(document.Path), document.Synopsis, document.Notes, (Enums.DocumentStatus)document.Status, document.WordGoal, order,
