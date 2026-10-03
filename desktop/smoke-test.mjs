@@ -59,6 +59,14 @@ try {
   console.log('Web UI is served')
   if (!existsSync(path.join(workspace, 'Sample manuscript'))) throw new Error('The demo project was not seeded into the workspace.')
   console.log('Demo project seeded')
+  const plugins = (await (await fetch(`${origin}/api/plugins`)).json()).data.items
+  const views = plugins.find(plugin => plugin.id === 'views')
+  if (views?.status !== 'enabled' || views.clientEntry !== '/plugins/views/index.js')
+    throw new Error(`The views plugin is not listed as enabled with its client entry: ${JSON.stringify(plugins)}`)
+  console.log('Views plugin is listed')
+  const entry = await fetch(`${origin}${views.clientEntry}`)
+  if (!entry.ok || !entry.headers.get('content-type')?.includes('javascript')) throw new Error('The views plugin client entry is not served.')
+  console.log('Views plugin client entry is served')
 } catch (error) {
   app.kill('SIGKILL')
   throw error

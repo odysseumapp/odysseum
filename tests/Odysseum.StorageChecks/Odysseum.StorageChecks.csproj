@@ -6,5 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../server/Odysseum.Server/Odysseum.Server.csproj" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../server/Odysseum.Server/Odysseum.Server.csproj" />
+    <!-- Built first, into the plugins folder next to the server's build output; the checks load it from there. -->
+    <ProjectReference Include="../../plugins/Odysseum.Plugins.Views/Odysseum.Plugins.Views.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ServerOutput</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)../../server/Odysseum.Server/bin/$(Configuration)/net10.0</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

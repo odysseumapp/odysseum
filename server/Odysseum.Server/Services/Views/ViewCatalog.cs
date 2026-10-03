@@ -1,24 +1,28 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Odysseum.Abstractions.Exceptions;
+using Odysseum.Abstractions.Views;
 
 namespace Odysseum.Server.Services.Views;
 
-/// <summary>The known views. It handles the settings that hold folder IDs; the server core stores all other settings
-/// without reading them. A view that is not known here is still stored.</summary>
+/// <summary>The known views: the core's <see cref="WriteView"/>, and the views that plugins add. It handles the
+/// settings that hold folder IDs; the server core stores all other settings without reading them. Settings of a view
+/// that is not known here are still stored.</summary>
 public sealed class ViewCatalog
 {
-    public static ViewCatalog Default { get; } = new(DefaultViews.All);
+    /// <summary>The editor. It is always known, also when no plugin is loaded.</summary>
+    public const string WriteView = "write";
 
-    private readonly Dictionary<string, IViewDefinition> _views;
+    private readonly Dictionary<string, IViewDefinition> _views = new(StringComparer.Ordinal) { [WriteView] = new ViewDefinition(WriteView) };
 
-    public ViewCatalog(IEnumerable<IViewDefinition> views)
+    /// <summary>The core view and the given views. A view with a name that is not allowed or that is already known is
+    /// logged and left out.</summary>
+    public ViewCatalog(IEnumerable<IViewDefinition> views, ILogger? logger = null)
     {
-        _views = new(StringComparer.Ordinal);
         foreach (var view in views)
         {
-            ViewNames.Check(view.Name);
-            _views[view.Name] = view;
+            if (!ViewNames.IsValid(view.Name)) logger?.LogError("The view name '{View}' is not allowed; the view is skipped.", view.Name);
+            else if (!_views.TryAdd(view.Name, view)) logger?.LogError("Two views are called '{View}'; the second one is skipped.", view.Name);
         }
     }
 

@@ -1,0 +1,7 @@
+{
+  "id": "views",
+  "name": "Default views",
+  "version": "1.0.0",
+  "assembly": "Odysseum.Plugins.Views.dll",
+  "clientEntry": "index.js"
+}

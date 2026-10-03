@@ -39,6 +39,7 @@ try {
     if (Test-Path -LiteralPath $sidecar) { Remove-Item -LiteralPath $sidecar -Recurse -Force }
     New-Item -ItemType Directory -Path $sidecar | Out-Null
     Copy-Item (Join-Path $publishDirectory 'Odysseum.Server.exe') $sidecar
+    & (Join-Path $PSScriptRoot 'build-plugins.ps1') -Configuration Release -PluginsDir (Join-Path $sidecar 'plugins')
 
     Push-Location $desktopRoot
     try {

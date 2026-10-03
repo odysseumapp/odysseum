@@ -5,7 +5,7 @@ using Odysseum.Abstractions.Exceptions;
 namespace Odysseum.Server.Services.Views;
 
 /// <summary>The only rules the server has for views: the form of a view name, and that settings are a JSON object of
-/// limited size. Which views exist is up to the clients and the view modules.</summary>
+/// limited size. Which views exist is up to the plugins and their clients.</summary>
 public static partial class ViewNames
 {
     public const int MaxSettingsBytes = 64 * 1024;

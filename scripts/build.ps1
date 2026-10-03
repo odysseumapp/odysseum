@@ -26,6 +26,7 @@ try {
     Write-Host 'Building API...'
     dotnet build (Join-Path $serverRoot 'Odysseum.Server.csproj') --nologo
     if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }
+    & (Join-Path $PSScriptRoot 'build-plugins.ps1')
 
     Write-Host 'Installing UI release into the API...'
     Push-Location $serverRoot

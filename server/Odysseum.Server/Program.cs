@@ -9,6 +9,7 @@ using Odysseum.Server.Settings;
 using Odysseum.Abstractions.History;
 using Odysseum.Abstractions.Projects;
 using Odysseum.Server.API.SignalR;
+using Odysseum.Server.Plugins;
 using Odysseum.Server.Repositories;
 using Odysseum.Server.Repositories.Disk;
 using Odysseum.Server.Repositories.Git;
@@ -68,7 +69,11 @@ builder.Services.AddSingleton<OwnWrites>();
 builder.Services.AddSingleton<IProjectWatcher>(provider => new FileProjectWatcher(settings.Workspace, provider.GetRequiredService<OwnWrites>(),
     settings.ScanSeconds, provider.GetRequiredService<ILogger<FileProjectWatcher>>()));
 builder.Services.AddSingleton<IProjectHistory>(_ => new GitProjectHistory(settings.Workspace));
-builder.Services.AddSingleton(ViewCatalog.Default);
+
+// Plugins: each loads in its own load context. The views come from the core ("write") and from the plugins.
+var plugins = new PluginRepository(new PluginLoader(startupLoggers.CreateLogger<PluginLoader>()).Load(settings.Plugins!, settings.DisabledPlugins));
+builder.Services.AddSingleton<IPluginRepository>(plugins);
+builder.Services.AddSingleton(new ViewCatalog(plugins.GetAll().SelectMany(plugin => plugin.Views), startupLoggers.CreateLogger<ViewCatalog>()));
 
 // Storage: one storage context under the workspace repository. Only it knows about the files.
 builder.Services.AddSingleton(provider => new DiskStorageContext(settings.Workspace, provider.GetRequiredService<IProjectWatcher>(),
@@ -153,6 +158,7 @@ await app.Services.GetRequiredService<HistoryService>().StartAsync();
 app.UseMiddleware<ResponseHeadersMiddleware>();
 app.UseMiddleware<ApiExceptionMiddleware>();
 app.UseWebUi();
+app.UsePluginFiles();
 app.UseRouting();
 
 app.UseAuthentication();

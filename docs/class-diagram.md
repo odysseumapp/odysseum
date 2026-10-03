@@ -215,28 +215,70 @@ Other storage: IProjectHistory (GitProjectHistory), ITemplateRepository (Templat
 IThemeRepository (ThemeRepository).
 ```
 
-## 5. Views module and templates
+## 5. Plugins, views and templates
+
+The core knows one view, `write`. Other views come from plugins. `Odysseum.Plugins.Views` adds `board`, `outline`
+and `grid`; it loads through the same path as a third-party plugin, and the server does not reference it.
+
+A plugin is a folder in the plugins folder with a `plugin.json` manifest:
 
 ```
-+----------------------------------+        +----------------------------------------------+
-| <<interface>> IViewDefinition    |        | ViewCatalog                                  |
-|----------------------------------|        |----------------------------------------------|
-| Name : string                    |<-------| Default : ViewCatalog       (static)         |
-| FolderSettings : string[]        |  many  | Views : IViewDefinition[]                    |
-+----------------------------------+        |----------------------------------------------|
-                ^                           | CheckFolders(folderExists, views)            |
-                :                           | WithoutFolder(views, folderId) : changes     |
-+----------------------------------+        | MapFolders(views, map) : views               |
-| <<record>> ViewDefinition        |        +----------------------------------------------+
-+----------------------------------+              used by ProjectService, ProjectTemplates
-                ^
-                | builds                    +----------------------------------------------+
-+----------------------------------+        | <<static>> ViewNames                         |
-| <<static>> DefaultViews          |        |----------------------------------------------|
-|----------------------------------|        | IsValid(name), Check(name)                   |
-| All : write, board, outline,     |        | Removes(settings)  (JSON null)               |
-|   grid (columnFolder)            |        | CheckSettings(views)   (objects, <= 64 KB)   |
-+----------------------------------+        +----------------------------------------------+
+{ "id": "views", "name": "Default views", "version": "1.0.0",
+  "assembly": "Odysseum.Plugins.Views.dll", "clientEntry": "index.js" }
+```
+
+```
+Abstractions (the plugin contract):
+
++----------------------------------+   +----------------------------------+   +----------------------------------+
+| <<interface>> IPlugin            |   | <<interface>> IPluginRegistry    |   | <<interface>> IViewDefinition    |
+|----------------------------------|   |----------------------------------|   |----------------------------------|
+| Register(registry)               |   | AddView(view)                    |   | Name : string                    |
++----------------------------------+   +----------------------------------+   | FolderSettings : string[]        |
+                ^                                      ^                      +----------------------------------+
+                :                                      :                                     ^
++----------------------------------+   +----------------------------------+                  :
+| ViewsPlugin   (plugins/          |   | <<internal>> PluginRegistry      |  +----------------------------------+
+|   Odysseum.Plugins.Views)        |   |   one per plugin; collects views |  | <<record>> ViewDefinition        |
+| board, outline, grid             |   +----------------------------------+  +----------------------------------+
+|   (grid: columnFolder)           |
++----------------------------------+
+
+Server:
+
++----------------------------------------------+      +----------------------------------------------+
+| PluginLoader               ..|> IPluginLoader|----->| PluginManifest            plugin.json        |
+|----------------------------------------------|      |----------------------------------------------|
+| Load(folder, disabledPlugins)                |      | Id, Name, Version, Assembly, ClientEntry?    |
+|   : InstalledPlugin[]                        |      | Read(folder)   (checks it; else the folder   |
+|   reads each manifest, then loads the        |      |                 is skipped)                  |
+|   enabled plugins                            |      +----------------------------------------------+
++----------------------------------------------+      +----------------------------------------------+
+                      |                          ---->| <<internal>> PluginLoadContext               |
+                      |                               |   one AssemblyLoadContext per plugin;        |
+                      v                               |   Odysseum.Abstractions comes from the server|
++----------------------------------------------+      +----------------------------------------------+
+| PluginRepository       ..|> IPluginRepository|      +----------------------------------------------+
+|----------------------------------------------|      | <<record>> InstalledPlugin                   |
+| GetAll() : InstalledPlugin[]                 |----->|----------------------------------------------|
+|   (also disabled and failed plugins)         |      | Manifest, Folder, Status, Error?             |
++----------------------------------------------+      | Views : IViewDefinition[]  (empty when off)  |
+    used by PluginsController (GET /api/plugins)      | Id, WwwRoot, ClientEntryUrl (null when off)  |
+    and PluginHosting (/plugins/{id}/)                +----------------------------------------------+
+                                                        Status: Enabled, Disabled or Failed (PluginStatus).
+                                                        Error is set only for Failed.
+
++----------------------------------------------+      +----------------------------------------------+
+| ViewCatalog                                  |      | <<static>> ViewNames                         |
+|----------------------------------------------|      |----------------------------------------------|
+| WriteView = "write"           (const)        |      | IsValid(name), Check(name)                   |
+| Views : IViewDefinition[]  (write + plugins) |      | Removes(settings)  (JSON null)               |
+|----------------------------------------------|      | CheckSettings(views)   (objects, <= 64 KB)   |
+| CheckFolders(folderExists, views)            |      +----------------------------------------------+
+| WithoutFolder(views, folderId) : changes     |
+| MapFolders(views, map) : views               |
++----------------------------------------------+
+  used by ProjectService, ProjectTemplates. A second view with the same name is logged and skipped.
 
 +----------------------------------------------+      +----------------------------------------------+
 | ProjectTemplate                              |      | <<interface>> ITemplateRepository            |
@@ -263,6 +305,7 @@ interfaces.
 | LinksController       |--> IProjectService
 | VersionsController    |--> IHistoryService, IProjectService
 | TemplatesController   |--> ITemplateRepository, IProjectService
+| PluginsController     |--> IPluginRepository
 | ThemesController      |--> IThemeRepository
 | ServerSettings-,      |--> ISettingsProvider
 | SessionController     |

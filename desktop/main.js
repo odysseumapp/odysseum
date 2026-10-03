@@ -56,7 +56,8 @@ function startServer(port) {
       ODYSSEUM_PARENT_PID: String(process.pid),
       ODYSSEUM_SETTINGS: settings,
       ODYSSEUM_KEYS: path.join(data, 'keys'),
-      ODYSSEUM_WEBUI: path.join(data, `webui-${app.getVersion()}`)
+      ODYSSEUM_WEBUI: path.join(data, `webui-${app.getVersion()}`),
+      ODYSSEUM_PLUGINS: path.join(root, 'plugins')
     }
   })
   server.on('error', fail)
