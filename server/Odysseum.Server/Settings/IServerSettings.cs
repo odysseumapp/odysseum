@@ -16,6 +16,12 @@ public interface IServerSettings
 
     string? Templates { get; set; }
 
+    /// <summary>The folder with one subfolder per plugin. The default is <c>plugins</c> next to the server.</summary>
+    string? Plugins { get; set; }
+
+    /// <summary>Ids (from each plugin.json) of the plugins that are not loaded.</summary>
+    List<string> DisabledPlugins { get; set; }
+
     bool AllowDeletingDefaultFolders { get; set; }
 
     int ScanSeconds { get; set; }

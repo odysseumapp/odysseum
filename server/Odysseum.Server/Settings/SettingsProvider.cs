@@ -60,6 +60,8 @@ public class SettingsProvider : ISettingsProvider
         _logger.LogInformation("Workspace: {Workspace}", settings.Workspace);
         _logger.LogInformation("Themes: {Themes}", settings.Themes);
         _logger.LogInformation("Project templates: {Templates}", settings.Templates);
+        _logger.LogInformation("Plugins: {Plugins}; disabled: {Disabled}", settings.Plugins,
+            settings.DisabledPlugins.Count == 0 ? "none" : string.Join(", ", settings.DisabledPlugins));
         _logger.LogInformation("Demo seeding: {Demo}; scan interval: {Seconds}s; version after {VersionSeconds}s quiet; keys: {Keys}; password: {Password}; deleting default folders: {DefaultFolders}",
             settings.Demo, settings.ScanSeconds, settings.VersionSeconds, settings.Keys ?? "(default)", settings.PasswordRequired ? "configured" : "not set", settings.AllowDeletingDefaultFolders ? "allowed" : "blocked");
     }
@@ -88,6 +90,10 @@ public class SettingsProvider : ISettingsProvider
             ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_settingsPath))!, "themes"));
         settings.Templates = Path.GetFullPath(_configuration["ODYSSEUM_TEMPLATES"] ?? settings.Templates
             ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_settingsPath))!, "templates"));
+        settings.Plugins = Path.GetFullPath(_configuration["ODYSSEUM_PLUGINS"] ?? settings.Plugins ?? Path.Combine(AppContext.BaseDirectory, "plugins"));
+        if (_configuration["ODYSSEUM_DISABLED_PLUGINS"] is { } disabled)
+            settings.DisabledPlugins = [.. disabled.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+        settings.DisabledPlugins ??= [];
         settings.ScanSeconds = _configuration.GetValue("ODYSSEUM_SCAN_SECONDS", settings.ScanSeconds);
         settings.VersionSeconds = _configuration.GetValue("ODYSSEUM_VERSION_SECONDS", settings.VersionSeconds);
         settings.AllowDeletingDefaultFolders = _configuration.GetValue("ODYSSEUM_ALLOW_DELETING_DEFAULT_FOLDERS", settings.AllowDeletingDefaultFolders);

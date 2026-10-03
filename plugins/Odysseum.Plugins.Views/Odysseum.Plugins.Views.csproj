@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A plugin builds like any third-party plugin: it references only Odysseum.Abstractions, which the server shares. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Version>1.0.0</Version>
+    <!-- After a build the plugin is copied to <OdysseumPluginsDir>/<AssemblyName>/. The default is the plugins folder
+         next to the server's build output; the build scripts give another folder for a publish. -->
+    <OdysseumPluginsDir Condition="'$(OdysseumPluginsDir)' == ''">$(MSBuildThisFileDirectory)../../server/Odysseum.Server/bin/$(Configuration)/net10.0/plugins/</OdysseumPluginsDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../server/Odysseum.Abstractions/Odysseum.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="wwwroot/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="CopyToPluginsFolder" AfterTargets="Build">
+    <ItemGroup>
+      <PluginFiles Include="$(OutDir)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PluginFiles)" DestinationFiles="@(PluginFiles->'$(OdysseumPluginsDir)$(AssemblyName)/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

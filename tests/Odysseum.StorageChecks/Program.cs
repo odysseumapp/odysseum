@@ -1,3 +1,9 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Runtime.Loader;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Odysseum.Abstractions.Changes;
@@ -7,10 +13,12 @@ using Odysseum.Abstractions.Folders;
 using Odysseum.Abstractions.Links;
 using Odysseum.Abstractions.Projects;
 using Odysseum.Server.Models;
+using Odysseum.Server.Plugins;
 using Odysseum.Server.Repositories;
 using Odysseum.Server.Repositories.Disk;
 using Odysseum.Server.Repositories.Git;
 using Odysseum.Server.Services;
+using Odysseum.Server.Services.Views;
 using Odysseum.Server.Settings;
 using ProjectSettings = Odysseum.Abstractions.Projects.ProjectSettings;
 
@@ -432,6 +440,14 @@ var checks = new List<(string Name, Func<Check, Task> Run)>
         await Expect(WorkspaceError.Invalid, () => c.Projects.RenameDocumentAsync(own.Id, "Other", own.ETag));
         Require(File.Exists(Path.Combine(c.Root, "Notes", "Ideas", ".Ideas.md")), "The folder's own document was renamed.");
     }),
+    ("With the views plugin loaded, a grid columnFolder must name a folder of the project", async c =>
+    {
+        var notes = await c.FolderAt("Notes");
+        var threads = await c.FolderAt("Threads");
+        await Expect(WorkspaceError.Invalid, () => c.Projects.UpdateFolderLayoutAsync(notes.Id, Layout("grid", Guid.NewGuid().ToString()), notes.ETag));
+        notes = await c.Projects.UpdateFolderLayoutAsync(notes.Id, Layout("grid", threads.Id), notes.ETag);
+        Require(ColumnFolder(notes) == threads.Id, "A columnFolder that names a folder of the project was not saved.");
+    }),
     ("Names that are not allowed are refused", async c =>
     {
         var notes = await c.FolderAt("Notes");
@@ -448,6 +464,109 @@ var checks = new List<(string Name, Func<Check, Task> Run)>
 
 var libraryChecks = new List<(string Name, Func<string, Task> Run)>
 {
+    ("The views plugin loads from its manifest in its own load context, and board, outline and grid are known", root =>
+    {
+        var plugin = TestPlugins.Loaded.SingleOrDefault(plugin => plugin.Id == "views")
+            ?? throw new Exception($"The views plugin did not load from {TestPlugins.Folder}.");
+        Require(plugin is { Status: PluginStatus.Enabled, Error: null, Manifest: { Name: "Default views", Version: "1.0.0", Assembly: "Odysseum.Plugins.Views.dll" } },
+            "The views plugin is not enabled, or its manifest was not read.");
+        Require(plugin.Views.Select(view => view.Name).SequenceEqual(["board", "outline", "grid"]), "The views plugin has the wrong views.");
+        Require(TestPlugins.Views.Views.Select(view => view.Name).Order().SequenceEqual(["board", "grid", "outline", "write"]),
+            "The known views are not write and the plugin's views.");
+        Require(TestPlugins.Views.Views.Single(view => view.Name == "grid").FolderSettings.SequenceEqual(["columnFolder"]),
+            "The grid view has no columnFolder folder setting.");
+        Require(plugin.ClientEntryUrl == "/plugins/views/index.js", "The client entry is wrong.");
+        Require(typeof(ProjectService).Assembly.GetReferencedAssemblies().All(name => name.Name != "Odysseum.Plugins.Views")
+            && AssemblyLoadContext.Default.Assemblies.All(assembly => assembly.GetName().Name != "Odysseum.Plugins.Views"),
+            "The server references the views plugin, or the plugin is in the server's load context.");
+        Require(!File.Exists(Path.Combine(plugin.Folder, "Odysseum.Abstractions.dll")), "The plugin ships its own copy of Odysseum.Abstractions.");
+        return Task.CompletedTask;
+    }),
+    ("A plugin folder without a valid manifest is skipped, a second plugin with the same id too, and a broken plugin fails", root =>
+    {
+        var source = TestPlugins.Loaded.Single(plugin => plugin.Id == "views").Folder;
+        void Copy(string name, string? manifest)
+        {
+            CopyFolder(source, Path.Combine(root, name));
+            if (manifest is null) File.Delete(Path.Combine(root, name, "plugin.json"));
+            else File.WriteAllText(Path.Combine(root, name, "plugin.json"), manifest);
+        }
+        const string Valid = """{ "id": "views", "name": "Default views", "version": "1.0.0", "assembly": "Odysseum.Plugins.Views.dll", "clientEntry": "index.js" }""";
+        Copy("a-valid", Valid);
+        Copy("b-no-manifest", null);
+        Copy("c-not-json", "{ not json");
+        Copy("d-no-assembly", Valid.Replace("Odysseum.Plugins.Views.dll", "Missing.dll").Replace("\"views\"", "\"other\""));
+        Copy("e-escaping-entry", Valid.Replace("index.js", "../plugin.json").Replace("\"views\"", "\"escape\""));
+        Copy("f-bad-id", Valid.Replace("\"views\"", "\"Bad Id\""));
+        Copy("g-same-id", Valid);
+        MakeBrokenPlugin(Path.Combine(root, "h-broken"), "broken");
+        var loaded = new PluginLoader().Load(root, []);
+        Require(loaded.Count == 2 && loaded[0] is { Id: "views", Status: PluginStatus.Enabled } && Path.GetFileName(loaded[0].Folder) == "a-valid",
+            "A folder without a valid manifest, or a second plugin with the same id, was not skipped.");
+        Require(loaded[1] is { Id: "broken", Status: PluginStatus.Failed, Views.Count: 0, ClientEntryUrl: null }
+            && loaded[1].Error == "The plugin's assembly could not be loaded.",
+            "A plugin whose assembly cannot load is not listed as failed with an error.");
+        return Task.CompletedTask;
+    }),
+    ("With the views plugin disabled, only write is known, and grid settings stay unchanged", async root =>
+    {
+        var installed = new PluginLoader().Load(TestPlugins.Folder, ["views"]);
+        Require(installed.Single(plugin => plugin.Id == "views") is { Status: PluginStatus.Disabled, Error: null, Views.Count: 0, ClientEntryUrl: null },
+            "The disabled plugin is not listed as disabled, or it has views or a client entry.");
+        var views = new ViewCatalog(installed.SelectMany(plugin => plugin.Views));
+        Require(views.Views.Select(view => view.Name).SequenceEqual(["write"]), "A view other than write is known without the plugin.");
+        IProject project;
+        string notesId, columnsId, saved;
+        await using (var w = await Workspace.StartAsync(root))
+        {
+            project = await w.Projects.CreateProjectAsync("Disabled");
+            var notes = (await w.Projects.GetAllAsync<IFolder>(project.Id)).Single(folder => folder.Name == "Notes");
+            var columns = await w.Projects.CreateFolderAsync(notes.Id, "Columns");
+            notes = await w.Projects.GetAsync<IFolder>(notes.Id);
+            notes = await w.Projects.UpdateFolderLayoutAsync(notes.Id, Layout("grid", columns.Id), notes.ETag);
+            (notesId, columnsId, saved) = (notes.Id, columns.Id, notes.Views["grid"].GetRawText());
+        }
+        await using (var w = await Workspace.StartAsync(root, views: views))
+        {
+            var notes = await w.Projects.GetAsync<IFolder>(notesId);
+            Require(SameJson(notes.Views["grid"], saved), "The grid settings changed when the project was read without the plugin.");
+            notes = await w.Projects.UpdateFolderLayoutAsync(notesId, new FolderLayout { PinnedView = "write" }, notes.ETag);
+            await w.Projects.DeleteFolderAsync(columnsId, (await w.Projects.GetAsync<IFolder>(columnsId)).ETag);
+            notes = await w.Projects.GetAsync<IFolder>(notesId);
+            Require(notes.PinnedView == "write" && SameJson(notes.Views["grid"], saved),
+                "The grid settings changed after a layout change and a folder delete without the plugin.");
+            var onDisk = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, project.Name, "Notes", ".odysseum", "folder.json")))!["views"]!["grid"]!;
+            Require(onDisk["columnFolder"]!.GetValue<string>() == columnsId, "The grid settings on the disk changed without the plugin.");
+        }
+    }),
+    ("GET /api/plugins gives each plugin's status: enabled, disabled or failed with an error", async root =>
+    {
+        await WithServerAsync(Path.Combine(root, "enabled"), [], async http =>
+        {
+            var plugin = await PluginFromApiAsync(http);
+            Require(plugin["name"]!.GetValue<string>() == "Default views" && plugin["version"]!.GetValue<string>() == "1.0.0"
+                && plugin["status"]!.GetValue<string>() == "enabled" && plugin["clientEntry"]!.GetValue<string>() == "/plugins/views/index.js",
+                "GET /api/plugins gives the wrong name, version, status or client entry.");
+            Require(!plugin.AsObject().ContainsKey("error"), "An enabled plugin has an error field.");
+            var module = await http.GetAsync("/plugins/views/index.js");
+            Require(module.IsSuccessStatusCode && module.Content.Headers.ContentType?.MediaType?.Contains("javascript") == true,
+                "The client entry is not served as JavaScript.");
+        });
+        var plugins = Path.Combine(root, "plugins");
+        CopyFolder(TestPlugins.Loaded.Single(plugin => plugin.Id == "views").Folder, Path.Combine(plugins, "views"));
+        MakeBrokenPlugin(Path.Combine(plugins, "broken"), "broken");
+        await WithServerAsync(Path.Combine(root, "disabled"), new() { ["ODYSSEUM_PLUGINS"] = plugins, ["ODYSSEUM_DISABLED_PLUGINS"] = "views" }, async http =>
+        {
+            var disabled = await PluginFromApiAsync(http);
+            Require(disabled["status"]!.GetValue<string>() == "disabled" && !disabled.AsObject().ContainsKey("error") && disabled["clientEntry"] is null,
+                "A disabled plugin is not listed as disabled, or has an error or a client entry.");
+            Require((await http.GetAsync("/plugins/views/index.js")).StatusCode == HttpStatusCode.NotFound, "A disabled plugin's files are served.");
+            var failed = await PluginFromApiAsync(http, "broken");
+            Require(failed["status"]!.GetValue<string>() == "failed"
+                && failed["error"]?.GetValue<string>() == "The plugin's assembly could not be loaded.",
+                "A plugin that cannot load is not listed as failed with an error.");
+        });
+    }),
     ("The watcher reports changes from other programs, but not the server's own writes", async root =>
     {
         await using var w = await Workspace.StartAsync(root, watch: true);
@@ -502,6 +621,61 @@ static void CopyFolder(string source, string target)
     foreach (var file in Directory.EnumerateFiles(source)) File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
     foreach (var folder in Directory.EnumerateDirectories(source)) CopyFolder(folder, Path.Combine(target, Path.GetFileName(folder)));
 }
+// Starts the built server as its own process on a free port, with a scratch folder for everything it keeps, runs the
+// test, and stops the server.
+static async Task WithServerAsync(string root, Dictionary<string, string> environment, Func<HttpClient, Task> test)
+{
+    var probe = new TcpListener(IPAddress.Loopback, 0);
+    probe.Start();
+    var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+    probe.Stop();
+    Directory.CreateDirectory(root);
+    var start = new ProcessStartInfo("dotnet") { WorkingDirectory = root, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+    start.ArgumentList.Add(Path.Combine(TestPlugins.ServerOutput, "Odysseum.Server.dll"));
+    start.Environment["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}";
+    start.Environment["ODYSSEUM_SETTINGS"] = Path.Combine(root, "server-settings.json");
+    start.Environment["ODYSSEUM_WORKSPACE"] = Path.Combine(root, "workspace");
+    start.Environment["ODYSSEUM_WEBUI"] = Path.Combine(root, "webui");
+    start.Environment["ODYSSEUM_THEMES"] = Path.Combine(root, "themes");
+    start.Environment["ODYSSEUM_TEMPLATES"] = Path.Combine(root, "templates");
+    start.Environment["ODYSSEUM_KEYS"] = Path.Combine(root, "keys");
+    start.Environment["ODYSSEUM_DEMO"] = "false";
+    start.Environment["ODYSSEUM_PLUGINS"] = TestPlugins.Folder;
+    foreach (var (name, value) in environment) start.Environment[name] = value;
+    var log = new StringBuilder();
+    using var server = Process.Start(start)!;
+    server.OutputDataReceived += (_, e) => { lock (log) log.AppendLine(e.Data); };
+    server.ErrorDataReceived += (_, e) => { lock (log) log.AppendLine(e.Data); };
+    server.BeginOutputReadLine();
+    server.BeginErrorReadLine();
+    try
+    {
+        using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+        for (var deadline = DateTime.UtcNow.AddSeconds(60); ; await Task.Delay(200))
+        {
+            try { if ((await http.GetAsync("/health")).IsSuccessStatusCode) break; }
+            catch (HttpRequestException) { }
+            if (server.HasExited || DateTime.UtcNow > deadline) lock (log) throw new Exception("The server did not start:\n" + log);
+        }
+        await test(http);
+    }
+    finally
+    {
+        server.Kill(entireProcessTree: true);
+        await server.WaitForExitAsync();
+    }
+}
+static async Task<JsonNode> PluginFromApiAsync(HttpClient http, string id = "views") =>
+    JsonNode.Parse(await http.GetStringAsync("/api/plugins"))!["data"]!["items"]!.AsArray()
+        .SingleOrDefault(item => item!["id"]!.GetValue<string>() == id) ?? throw new Exception($"GET /api/plugins does not list the {id} plugin.");
+// A plugin with a valid manifest whose assembly is not a .NET assembly, so loading it fails.
+static void MakeBrokenPlugin(string folder, string id)
+{
+    Directory.CreateDirectory(folder);
+    File.WriteAllText(Path.Combine(folder, "plugin.json"), $$"""{ "id": "{{id}}", "name": "Broken", "version": "1.0.0", "assembly": "Broken.dll" }""");
+    File.WriteAllText(Path.Combine(folder, "Broken.dll"), "This is not an assembly.");
+}
+static bool SameJson(JsonElement element, string json) => JsonNode.DeepEquals(JsonNode.Parse(element.GetRawText()), JsonNode.Parse(json));
 static void Require(bool condition, string message)
 {
     if (!condition) throw new Exception(message);
@@ -516,7 +690,7 @@ static async Task Expect(WorkspaceError error, Func<Task> action)
 /// <summary>The server's storage, repositories and services on one workspace folder, without the web part.</summary>
 sealed class Workspace : IAsyncDisposable
 {
-    private Workspace(string root, ISettingsProvider? settings, bool watch)
+    private Workspace(string root, ISettingsProvider? settings, bool watch, ViewCatalog views)
     {
         OwnWrites = new OwnWrites();
         Watcher = watch ? new FileProjectWatcher(root, OwnWrites, 300) : new NullProjectWatcher();
@@ -524,14 +698,15 @@ sealed class Workspace : IAsyncDisposable
         Storage = new DiskStorageContext(root, Watcher, OwnWrites);
         Repository = new WorkspaceRepository(Storage);
         TemplateFiles = new TemplateRepository(Path.Combine(root, "..", Path.GetFileName(root) + "-templates"));
-        Projects = new ProjectService(Repository, Storage, TemplateFiles, settings);
+        Projects = new ProjectService(Repository, Storage, TemplateFiles, settings, views);
         HistoryService = new HistoryService(Repository, History, Storage, 60);
     }
 
-    /// <summary>Makes the workspace and reads its projects.</summary>
-    public static async Task<Workspace> StartAsync(string root, ISettingsProvider? settings = null, bool watch = false)
+    /// <summary>Makes the workspace and reads its projects. Without <paramref name="views"/>, the views come from the
+    /// plugins that <see cref="TestPlugins"/> loaded.</summary>
+    public static async Task<Workspace> StartAsync(string root, ISettingsProvider? settings = null, bool watch = false, ViewCatalog? views = null)
     {
-        var workspace = new Workspace(root, settings, watch);
+        var workspace = new Workspace(root, settings, watch, views ?? TestPlugins.Views);
         await workspace.Storage.LoadAllProjectsAsync();
         return workspace;
     }
@@ -552,6 +727,16 @@ sealed class Workspace : IAsyncDisposable
         await Watcher.DisposeAsync();
         History.Dispose();
     }
+}
+
+/// <summary>The plugins in the plugins folder next to the server's build output, loaded once, as the server loads them.</summary>
+static class TestPlugins
+{
+    public static string ServerOutput { get; } = Path.GetFullPath(typeof(TestPlugins).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+        .Single(attribute => attribute.Key == "ServerOutput").Value!);
+    public static string Folder { get; } = Path.Combine(ServerOutput, "plugins");
+    public static IReadOnlyList<InstalledPlugin> Loaded { get; } = new PluginLoader().Load(Folder, []);
+    public static ViewCatalog Views { get; } = new(Loaded.SelectMany(plugin => plugin.Views));
 }
 
 sealed class NullProjectWatcher : IProjectWatcher

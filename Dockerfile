@@ -5,8 +5,11 @@ COPY global.json webui.zip* ./
 COPY server/Odysseum.Server/Odysseum.Server.csproj server/Odysseum.Server/
 RUN dotnet restore server/Odysseum.Server/Odysseum.Server.csproj
 COPY server/ server/
+COPY plugins/ plugins/
 RUN dotnet publish server/Odysseum.Server/Odysseum.Server.csproj -c Release --no-restore -o /output \
     && if [ -f webui.zip ]; then cp webui.zip /output/; fi
+# Each plugin goes to /output/plugins/<Name>/, the plugins folder next to the server.
+RUN for project in plugins/*/*.csproj; do dotnet build "$project" -c Release -p:OdysseumPluginsDir=/output/plugins/ || exit 1; done
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app

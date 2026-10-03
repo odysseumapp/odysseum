@@ -40,7 +40,7 @@ public sealed class ProjectService : IProjectService
         _projectLock = projectLock;
         _templateRepository = templateRepository;
         _settings = settings;
-        _views = views ?? ViewCatalog.Default;
+        _views = views ?? new ViewCatalog([]);
         _templates = new ProjectTemplates(this, workspace, _views);
         workspace.Changed += (_, e) => Changed?.Invoke(this, e);
     }

@@ -17,6 +17,8 @@ public class ServerSettings : IServerSettings
     public string? WebUi { get; set; }
     public string? Themes { get; set; }
     public string? Templates { get; set; }
+    public string? Plugins { get; set; }
+    public List<string> DisabledPlugins { get; set; } = [];
 
     public bool AllowDeletingDefaultFolders { get; set; }
 
