@@ -60,114 +60,46 @@ public sealed partial class DiskStorageContext
         });
     }
 
-    public Task<StorageChanges> AddFolderPlaceAsync(FolderPlace place)
+    public Task<StorageChanges> AddFolderAsync(Folder folder)
     {
-        var open = Get(place.ProjectId);
+        var open = Get(folder.ProjectId);
         return RunLockedAsync(open.Id, async () =>
         {
             var files = open.Files;
-            if (place.Path.Length == 0) throw new WorkspaceException(WorkspaceError.Invalid, "The project folder already exists.");
             var places = await ReadPlacesAsync(open);
-            if (places.Folders.Paths.ContainsKey(place.FolderId)) throw new WorkspaceException(WorkspaceError.Conflict, "That folder already has a place.");
-            var parent = await ReadFolderStateAsync(open, places, ProjectPaths.ParentOf(place.Path));
-            var name = ProjectPaths.NameOf(place.Path);
-            if (parent.Subfolders.Any(subfolder => string.Equals(subfolder.Name, name, StringComparison.OrdinalIgnoreCase))
-                || files.FolderExists(place.Path) || files.Exists(place.Path))
+            if (folder.Id == open.Id || places.Folders.Paths.ContainsKey(folder.Id)) throw new WorkspaceException(WorkspaceError.Conflict, "That folder already exists.");
+            var parentPath = FolderPathOf(open, places, folder.ParentFolderId ?? throw new WorkspaceException(WorkspaceError.Invalid, "A new folder needs a parent folder."));
+            var parent = await ReadFolderStateAsync(open, places, parentPath);
+            var path = ProjectPaths.Join(parentPath, folder.Name);
+            if (parent.Subfolders.Any(subfolder => string.Equals(subfolder.Name, folder.Name, StringComparison.OrdinalIgnoreCase))
+                || files.FolderExists(path) || files.Exists(path))
                 throw new WorkspaceException(WorkspaceError.Conflict, "A folder or file in that folder already has that name.");
-            files.CreateFolder(place.Path);
-            places.Folders.Paths[place.FolderId] = place.Path;
-            await SaveFilesAsync(files, places.FoldersToSave());
-            var changes = new StorageChanges(open.Id);
-            changes.FolderPlaces.Add(FolderPlaceModel(open.Id, place.FolderId, place.Path));
-            changes.Folders.Add(FolderModel(open, await ReadFolderStateAsync(open, places, parent.Path)));
-            return Publish(changes);
-        });
-    }
-
-    public Task<StorageChanges> UpdateFolderPlaceAsync(FolderPlace place, string expectedETag)
-    {
-        var open = Get(place.ProjectId);
-        return RunLockedAsync(open.Id, async () =>
-        {
-            var files = open.Files;
-            var places = await ReadPlacesAsync(open);
-            var oldPath = FolderPathOf(open, places, place.FolderId);
-            if (oldPath.Length == 0) throw new WorkspaceException(WorkspaceError.Invalid, "The project folder itself cannot be moved.");
-            ETags.Check(FolderPlaceModel(open.Id, place.FolderId, oldPath).ETag, expectedETag);
-            var changes = new StorageChanges(open.Id);
-            if (place.Path == oldPath)
-            {
-                changes.FolderPlaces.Add(FolderPlaceModel(open.Id, place.FolderId, oldPath));
-                return Publish(changes);
-            }
-            if (place.Path.Length == 0 || ProjectPaths.IsInside(place.Path, oldPath))
-                throw new WorkspaceException(WorkspaceError.Invalid, "A folder cannot move into itself.");
-            var target = await ReadFolderStateAsync(open, places, ProjectPaths.ParentOf(place.Path));
-            var name = ProjectPaths.NameOf(place.Path);
-            if (target.Subfolders.Any(subfolder => subfolder.Id != place.FolderId && string.Equals(subfolder.Name, name, StringComparison.OrdinalIgnoreCase))
-                || files.Exists(place.Path) || (files.FolderExists(place.Path) && !string.Equals(place.Path, oldPath, StringComparison.OrdinalIgnoreCase)))
-                throw new WorkspaceException(WorkspaceError.Conflict, "The target folder already has a folder or file with that name.");
-            files.MoveFolder(oldPath, place.Path);
-            foreach (var (id, path) in places.Folders.Paths.ToArray())
-                if (path == oldPath || path.StartsWith(oldPath + "/", StringComparison.Ordinal)) places.Folders.Paths[id] = place.Path + path[oldPath.Length..];
-            foreach (var (id, path) in places.Documents.Paths.ToArray())
-                if (path.StartsWith(oldPath + "/", StringComparison.Ordinal)) places.Documents.Paths[id] = place.Path + path[oldPath.Length..];
-            await SaveFilesAsync(files, places.FoldersToSave(), places.DocumentsToSave());
-            // The paths of everything inside the folder changed, and the kind of its documents can change too.
-            return Publish(await ScanAsync(open));
-        });
-    }
-
-    public Task<StorageChanges> DeleteFolderPlaceAsync(FolderPlace place, string expectedETag)
-    {
-        var open = Get(place.ProjectId);
-        return RunLockedAsync(open.Id, async () =>
-        {
-            var files = open.Files;
-            var places = await ReadPlacesAsync(open);
-            var path = FolderPathOf(open, places, place.FolderId);
-            if (path.Length == 0) throw new WorkspaceException(WorkspaceError.Invalid, "The project folder itself cannot be deleted.");
-            ETags.Check(FolderPlaceModel(open.Id, place.FolderId, path).ETag, expectedETag);
-            files.RemoveEmptyFolder(path);
-            places.Folders.Paths.Remove(place.FolderId);
-            var changes = new StorageChanges(open.Id);
-            changes.RemovedFolderPlaceIds.Add(place.FolderId);
-            foreach (var (id, documentPath) in places.Documents.Paths.ToArray())
-            {
-                if (!documentPath.StartsWith(path + "/", StringComparison.Ordinal)) continue;
-                places.Documents.Paths.Remove(id);
-                changes.RemovedDocumentPlaceIds.Add(id);
-                changes.RemovedDocumentIds.Add(id);
-            }
-            await SaveFilesAsync(files, places.FoldersToSave(), places.DocumentsToSave());
-            changes.Folders.Add(FolderModel(open, await ReadFolderStateAsync(open, places, ProjectPaths.ParentOf(path))));
-            return Publish(changes);
-        });
-    }
-
-    public Task<StorageChanges> AddFolderAsync(Folder folder, FolderPlace place)
-    {
-        var open = Get(place.ProjectId);
-        return RunLockedAsync(open.Id, async () =>
-        {
-            var places = await ReadPlacesAsync(open);
-            var path = FolderPathOf(open, places, folder.Id);
-            if (path.Length == 0 || open.Files.Exists(SettingsFiles.FolderFilePath(path), metadata: true))
-                throw new WorkspaceException(WorkspaceError.Conflict, "That folder already exists.");
+            files.CreateFolder(path);
+            var ownId = NewId();
+            var ownPath = DocumentRules.FolderDocumentPath(path);
+            var ownBytes = Encode("", "");
+            var ownEntry = NewEntry(ownPath, 0);
+            await files.WriteAsync(ownPath, ownBytes, overwrite: false);
             var file = new FolderFile
             {
                 Id = folder.Id, PinnedView = folder.PinnedView, Views = folder.Views.Count == 0 ? null : new(folder.Views, StringComparer.Ordinal),
+                Documents = { [ownId] = ownEntry },
             };
-            await SaveFilesAsync(open.Files, (SettingsFiles.FolderFilePath(path), file, null));
+            places.Folders.Paths[folder.Id] = path;
+            places.Documents.Paths[ownId] = ownPath;
+            parent = await ReadFolderStateAsync(open, places, parentPath);
+            await SaveFilesAsync(files, places.FoldersToSave(), places.DocumentsToSave(), (SettingsFiles.FolderFilePath(path), file, null), parent.ToSave());
             var changes = new StorageChanges(open.Id);
             changes.Folders.Add(FolderModel(open, await ReadFolderStateAsync(open, places, path)));
+            changes.Folders.Add(FolderModel(open, parent));
+            changes.Documents.Add(DocumentModel(open.Id, folder.Id, FromBytes(files, ownId, ownPath, ownEntry, ownBytes)));
             return Publish(changes);
         });
     }
 
-    public Task<StorageChanges> UpdateFolderAsync(Folder folder, FolderPlace place, string expectedETag)
+    public Task<StorageChanges> UpdateFolderAsync(Folder folder, string expectedETag)
     {
-        var open = Get(place.ProjectId);
+        var open = Get(folder.ProjectId);
         return RunLockedAsync(open.Id, async () =>
         {
             var places = await ReadPlacesAsync(open);
@@ -183,135 +115,130 @@ public sealed partial class DiskStorageContext
         });
     }
 
-    public Task<StorageChanges> DeleteFolderAsync(Folder folder, FolderPlace place, string expectedETag)
+    public Task<StorageChanges> MoveFolderAsync(Folder folder, string targetParentId, int index, string expectedETag)
     {
-        var open = Get(place.ProjectId);
+        var open = Get(folder.ProjectId);
         return RunLockedAsync(open.Id, async () =>
         {
+            var files = open.Files;
+            var places = await ReadPlacesAsync(open);
+            var state = await ReadFolderStateAsync(open, places, FolderPathOf(open, places, folder.Id));
+            if (state.Path.Length == 0) throw new WorkspaceException(WorkspaceError.Invalid, "The project folder itself cannot be moved.");
+            ETags.Check(FolderModel(open, state).ETag, expectedETag);
+            var oldPath = state.Path;
+            var targetPath = FolderPathOf(open, places, targetParentId);
+            if (targetParentId == state.ParentId)
+            {
+                var parent = await ReadFolderStateAsync(open, places, targetPath);
+                parent.File.ItemOrder = PutAt(parent.File.ItemOrder, folder.Id, index);
+                await SaveFilesAsync(files, parent.ToSave());
+                var reordered = new StorageChanges(open.Id);
+                reordered.Folders.Add(FolderModel(open, state));
+                reordered.Folders.Add(FolderModel(open, parent));
+                return Publish(reordered);
+            }
+            var path = ProjectPaths.Join(targetPath, ProjectPaths.NameOf(oldPath));
+            if (ProjectPaths.IsInside(path, oldPath)) throw new WorkspaceException(WorkspaceError.Invalid, "A folder cannot move into itself.");
+            var target = await ReadFolderStateAsync(open, places, targetPath);
+            var name = ProjectPaths.NameOf(path);
+            if (target.Subfolders.Any(subfolder => string.Equals(subfolder.Name, name, StringComparison.OrdinalIgnoreCase)) || files.Exists(path) || files.FolderExists(path))
+                throw new WorkspaceException(WorkspaceError.Conflict, "The target folder already has a folder or file with that name.");
+            files.MoveFolder(oldPath, path);
+            foreach (var (id, folderPath) in places.Folders.Paths.ToArray())
+                if (ProjectPaths.IsInside(folderPath, oldPath)) places.Folders.Paths[id] = path + folderPath[oldPath.Length..];
+            foreach (var (id, documentPath) in places.Documents.Paths.ToArray())
+                if (ProjectPaths.IsInside(documentPath, oldPath)) places.Documents.Paths[id] = path + documentPath[oldPath.Length..];
+            target = await ReadFolderStateAsync(open, places, targetPath);
+            target.File.ItemOrder = PutAt(target.File.ItemOrder, folder.Id, index);
+            await SaveFilesAsync(files, places.FoldersToSave(), places.DocumentsToSave(), target.ToSave());
+            // The paths of everything inside the folder changed, and the kind of its documents can change too.
+            var changes = await ScanAsync(open);
+            changes.MovedIds.Add(folder.Id);
+            return Publish(changes);
+        });
+    }
+
+    public Task<StorageChanges> DeleteFolderAsync(Folder folder, string expectedETag)
+    {
+        var open = Get(folder.ProjectId);
+        return RunLockedAsync(open.Id, async () =>
+        {
+            var files = open.Files;
             var places = await ReadPlacesAsync(open);
             var state = await ReadFolderStateAsync(open, places, FolderPathOf(open, places, folder.Id));
             if (state.Path.Length == 0) throw new WorkspaceException(WorkspaceError.Invalid, "The project folder itself cannot be deleted.");
             ETags.Check(FolderModel(open, state).ETag, expectedETag);
             if (state.Subfolders.Count > 0 || state.Documents.Count > 0)
                 throw new WorkspaceException(WorkspaceError.Conflict, "Only empty folders can be deleted. Move their files and subfolders first.");
-            open.Files.Delete(SettingsFiles.FolderFilePath(state.Path), metadata: true);
+            files.RemoveEmptyFolder(state.Path);
             var changes = new StorageChanges(open.Id);
+            places.Folders.Paths.Remove(folder.Id);
             changes.RemovedFolderIds.Add(folder.Id);
-            return Publish(changes);
-        });
-    }
-
-    public Task<StorageChanges> AddDocumentPlaceAsync(DocumentPlace place)
-    {
-        var open = Get(place.ProjectId);
-        return RunLockedAsync(open.Id, async () =>
-        {
-            var files = open.Files;
-            var places = await ReadPlacesAsync(open);
-            if (places.Documents.Paths.ContainsKey(place.DocumentId)) throw new WorkspaceException(WorkspaceError.Conflict, "That document already has a place.");
-            var folderPath = ProjectPaths.ParentOf(place.Path);
-            if (!(folderPath.Length > 0 && place.Path == DocumentRules.FolderDocumentPath(folderPath))) CheckFileName(ProjectPaths.NameOf(place.Path));
-            await ReadFolderStateAsync(open, places, folderPath);
-            if (IsTaken(open, places, place.Path, exceptId: null))
-                throw new WorkspaceException(WorkspaceError.Conflict, "A document in that folder already has that name.");
-            await files.WriteAsync(place.Path, Encode("", ""), overwrite: false);
-            places.Documents.Paths[place.DocumentId] = place.Path;
-            await SaveFilesAsync(files, places.DocumentsToSave());
-            var changes = new StorageChanges(open.Id);
-            changes.DocumentPlaces.Add(DocumentPlaceModel(open.Id, place.DocumentId, place.Path));
-            changes.Folders.Add(FolderModel(open, await ReadFolderStateAsync(open, places, folderPath)));
-            return Publish(changes);
-        });
-    }
-
-    public Task<StorageChanges> UpdateDocumentPlaceAsync(DocumentPlace place, string expectedETag)
-    {
-        var open = Get(place.ProjectId);
-        return RunLockedAsync(open.Id, async () =>
-        {
-            var files = open.Files;
-            var places = await ReadPlacesAsync(open);
-            var oldPath = places.Documents.Paths.GetValueOrDefault(place.DocumentId) ?? throw DocumentGone();
-            ETags.Check(DocumentPlaceModel(open.Id, place.DocumentId, oldPath).ETag, expectedETag);
-            var changes = new StorageChanges(open.Id);
-            if (place.Path == oldPath)
+            foreach (var (id, documentPath) in places.Documents.Paths.ToArray())
             {
-                changes.DocumentPlaces.Add(DocumentPlaceModel(open.Id, place.DocumentId, oldPath));
-                return Publish(changes);
+                if (!ProjectPaths.IsInside(documentPath, state.Path)) continue;
+                places.Documents.Paths.Remove(id);
+                changes.RemovedDocumentIds.Add(id);
             }
-            if (DocumentRules.IsFolderDocument(oldPath)) throw new WorkspaceException(WorkspaceError.Invalid, "A folder's own document stays with its folder and keeps its name.");
-            CheckFileName(ProjectPaths.NameOf(place.Path));
-            var source = await ReadFolderStateAsync(open, places, ProjectPaths.ParentOf(oldPath));
-            var target = ProjectPaths.ParentOf(place.Path) == source.Path ? source : await ReadFolderStateAsync(open, places, ProjectPaths.ParentOf(place.Path));
-            if (IsTaken(open, places, place.Path, exceptId: place.DocumentId))
-                throw new WorkspaceException(WorkspaceError.Conflict, "A document in that folder already has that name.");
-            var entry = source.File.Documents.GetValueOrDefault(place.DocumentId) ?? NewEntry(oldPath, 0);
-            files.Move(oldPath, place.Path);
-            places.Documents.Paths[place.DocumentId] = place.Path;
-            source.File.Documents.Remove(place.DocumentId);
-            target.File.Documents[place.DocumentId] = entry;
-            var saved = new List<(string Path, object Content, byte[]? Before)> { places.DocumentsToSave(), source.ToSave() };
-            if (!ReferenceEquals(target, source)) saved.Add(target.ToSave());
-            await SaveFilesAsync(files, [.. saved]);
-            changes.DocumentPlaces.Add(DocumentPlaceModel(open.Id, place.DocumentId, place.Path));
-            var targetState = await ReadFolderStateAsync(open, places, target.Path);
-            changes.Documents.Add(DocumentModel(open.Id, targetState.Id, await ReadDocumentFileAsync(files, place.DocumentId, place.Path, entry)));
-            changes.Folders.Add(FolderModel(open, targetState));
-            if (!ReferenceEquals(target, source)) changes.Folders.Add(FolderModel(open, await ReadFolderStateAsync(open, places, source.Path)));
+            var parent = await ReadFolderStateAsync(open, places, ProjectPaths.ParentOf(state.Path));
+            await SaveFilesAsync(files, places.FoldersToSave(), places.DocumentsToSave(), parent.ToSave());
+            changes.Folders.Add(FolderModel(open, parent));
+            await AddRemovedLinksAsync(open, changes);
             return Publish(changes);
         });
     }
 
-    public Task<StorageChanges> DeleteDocumentPlaceAsync(DocumentPlace place, string expectedETag)
+    public Task<StorageChanges> AddDocumentAsync(Document document, string text)
     {
-        var open = Get(place.ProjectId);
-        return RunLockedAsync(open.Id, async () =>
-        {
-            var places = await ReadPlacesAsync(open);
-            var path = places.Documents.Paths.GetValueOrDefault(place.DocumentId) ?? throw DocumentGone();
-            ETags.Check(DocumentPlaceModel(open.Id, place.DocumentId, path).ETag, expectedETag);
-            if (open.Files.Exists(path)) open.Files.Delete(path);
-            places.Documents.Paths.Remove(place.DocumentId);
-            await SaveFilesAsync(open.Files, places.DocumentsToSave());
-            var changes = new StorageChanges(open.Id);
-            changes.RemovedDocumentPlaceIds.Add(place.DocumentId);
-            changes.Folders.Add(FolderModel(open, await ReadFolderStateAsync(open, places, ProjectPaths.ParentOf(path))));
-            return Publish(changes);
-        });
-    }
-
-    public Task<StorageChanges> AddDocumentAsync(Document document, DocumentPlace place, string text)
-    {
-        var open = Get(place.ProjectId);
+        var open = Get(document.ProjectId);
         return RunLockedAsync(open.Id, async () =>
         {
             var files = open.Files;
             var places = await ReadPlacesAsync(open);
-            var path = places.Documents.Paths.GetValueOrDefault(document.Id) ?? throw DocumentGone();
-            var state = await ReadFolderStateAsync(open, places, ProjectPaths.ParentOf(path));
-            if (state.File.Documents.ContainsKey(document.Id)) throw new WorkspaceException(WorkspaceError.Conflict, "That document already exists.");
+            if (places.Documents.Paths.ContainsKey(document.Id)) throw new WorkspaceException(WorkspaceError.Conflict, "That document already exists.");
+            CheckFileName(document.Name);
+            var folderPath = FolderPathOf(open, places, document.FolderId);
+            await ReadFolderStateAsync(open, places, folderPath);
+            var path = ProjectPaths.Join(folderPath, document.Name);
+            if (IsTaken(open, places, path, exceptId: null))
+                throw new WorkspaceException(WorkspaceError.Conflict, "A document in that folder already has that name.");
+            var bytes = Encode("", text);
+            await files.WriteAsync(path, bytes, overwrite: false);
+            places.Documents.Paths[document.Id] = path;
+            var state = await ReadFolderStateAsync(open, places, folderPath);
             var entry = new DocumentEntry
             {
                 Title = document.Title, Synopsis = document.Synopsis, Notes = document.Notes, Status = document.Status, WordGoal = document.WordGoal,
             };
-            var bytes = Encode("", text);
-            await files.WriteAsync(path, bytes);
             state.File.Documents[document.Id] = entry;
-            await SaveFilesAsync(files, state.ToSave());
+            await SaveFilesAsync(files, places.DocumentsToSave(), state.ToSave());
             var changes = new StorageChanges(open.Id);
             changes.Documents.Add(DocumentModel(open.Id, state.Id, FromBytes(files, document.Id, path, entry, bytes)));
+            changes.Folders.Add(FolderModel(open, state));
             return Publish(changes);
         });
     }
 
-    public Task<StorageChanges> UpdateDocumentAsync(Document document, DocumentPlace place, string expectedETag)
+    public Task<StorageChanges> UpdateDocumentAsync(Document document, string expectedETag)
     {
-        var open = Get(place.ProjectId);
+        var open = Get(document.ProjectId);
         return RunLockedAsync(open.Id, async () =>
         {
+            var files = open.Files;
             var places = await ReadPlacesAsync(open);
             var (state, current) = await ReadDocumentAsync(open, places, document.Id);
             ETags.Check(DocumentModel(open.Id, state.Id, current).ETag, expectedETag);
+            var path = current.Path;
+            if (document.Name != ProjectPaths.NameOf(path))
+            {
+                if (DocumentRules.IsFolderDocument(path)) throw new WorkspaceException(WorkspaceError.Invalid, "A folder's own document keeps its name.");
+                CheckFileName(document.Name);
+                path = ProjectPaths.Join(state.Path, document.Name);
+                if (IsTaken(open, places, path, exceptId: document.Id))
+                    throw new WorkspaceException(WorkspaceError.Conflict, "A document in that folder already has that name.");
+                files.Move(current.Path, path);
+                places.Documents.Paths[document.Id] = path;
+            }
             var entry = current.Entry;
             entry.Title = document.Title;
             entry.Synopsis = document.Synopsis;
@@ -319,50 +246,96 @@ public sealed partial class DiskStorageContext
             entry.Status = document.Status;
             entry.WordGoal = document.WordGoal;
             state.File.Documents[document.Id] = entry;
-            await SaveFilesAsync(open.Files, state.ToSave());
+            await SaveFilesAsync(files, places.DocumentsToSave(), state.ToSave());
             var changes = new StorageChanges(open.Id);
-            changes.Documents.Add(DocumentModel(open.Id, state.Id, current with { Entry = entry }));
+            changes.Documents.Add(DocumentModel(open.Id, state.Id, current with { Path = path, Entry = entry }));
             return Publish(changes);
         });
     }
 
-    public Task<StorageChanges> DeleteDocumentAsync(Document document, DocumentPlace place, string expectedETag)
+    public Task<StorageChanges> MoveDocumentAsync(Document document, string targetFolderId, int index, string expectedETag)
     {
-        var open = Get(place.ProjectId);
+        var open = Get(document.ProjectId);
+        return RunLockedAsync(open.Id, async () =>
+        {
+            var files = open.Files;
+            var places = await ReadPlacesAsync(open);
+            var (source, current) = await ReadDocumentAsync(open, places, document.Id);
+            ETags.Check(DocumentModel(open.Id, source.Id, current).ETag, expectedETag);
+            if (DocumentRules.IsFolderDocument(current.Path)) throw new WorkspaceException(WorkspaceError.Invalid, "A folder's own document stays with its folder.");
+            var changes = new StorageChanges(open.Id);
+            if (targetFolderId == source.Id)
+            {
+                source.File.ItemOrder = PutAt(source.File.ItemOrder, document.Id, index);
+                await SaveFilesAsync(files, source.ToSave());
+                changes.Documents.Add(DocumentModel(open.Id, source.Id, current));
+                changes.Folders.Add(FolderModel(open, source));
+                return Publish(changes);
+            }
+            var targetPath = FolderPathOf(open, places, targetFolderId);
+            if (targetPath.Length > 0 && !files.FolderExists(targetPath)) throw FolderGone();
+            var path = ProjectPaths.Join(targetPath, ProjectPaths.NameOf(current.Path));
+            if (IsTaken(open, places, path, exceptId: document.Id))
+                throw new WorkspaceException(WorkspaceError.Conflict, "A document in that folder already has that name.");
+            files.Move(current.Path, path);
+            places.Documents.Paths[document.Id] = path;
+            source = await ReadFolderStateAsync(open, places, source.Path);
+            var target = await ReadFolderStateAsync(open, places, targetPath);
+            source.File.Documents.Remove(document.Id);
+            target.File.Documents[document.Id] = current.Entry;
+            target.File.ItemOrder = PutAt(target.File.ItemOrder, document.Id, index);
+            await SaveFilesAsync(files, places.DocumentsToSave(), source.ToSave(), target.ToSave());
+            changes.Documents.Add(DocumentModel(open.Id, target.Id, current with { Path = path }));
+            changes.Folders.Add(FolderModel(open, source));
+            changes.Folders.Add(FolderModel(open, target));
+            changes.MovedIds.Add(document.Id);
+            return Publish(changes);
+        });
+    }
+
+    public Task<StorageChanges> DeleteDocumentAsync(Document document, string expectedETag)
+    {
+        var open = Get(document.ProjectId);
         return RunLockedAsync(open.Id, async () =>
         {
             var places = await ReadPlacesAsync(open);
             var (state, current) = await ReadDocumentAsync(open, places, document.Id);
             ETags.Check(DocumentModel(open.Id, state.Id, current).ETag, expectedETag);
+            if (DocumentRules.IsFolderDocument(current.Path)) throw new WorkspaceException(WorkspaceError.Invalid, "A folder's own document goes only with its folder.");
+            open.Files.Delete(current.Path);
+            places.Documents.Paths.Remove(document.Id);
+            state = await ReadFolderStateAsync(open, places, state.Path);
             state.File.Documents.Remove(document.Id);
-            await SaveFilesAsync(open.Files, state.ToSave());
+            await SaveFilesAsync(open.Files, places.DocumentsToSave(), state.ToSave());
             var changes = new StorageChanges(open.Id);
             changes.RemovedDocumentIds.Add(document.Id);
+            changes.Folders.Add(FolderModel(open, state));
+            await AddRemovedLinksAsync(open, changes);
             return Publish(changes);
         });
     }
 
-    public async Task<string> ReadDocumentTextAsync(DocumentPlace place)
+    public async Task<string> ReadDocumentTextAsync(Document document)
     {
-        var open = Get(place.ProjectId);
-        try { return Split(Decode(await open.Files.ReadAsync(place.Path))).Body; }
+        var open = Get(document.ProjectId);
+        try { return Split(Decode(await open.Files.ReadAsync(document.Path))).Body; }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { throw DocumentGone(); }
     }
 
-    public Task<StorageChanges> WriteDocumentTextAsync(DocumentPlace place, string text, string expectedETag)
+    public Task<StorageChanges> WriteDocumentTextAsync(Document document, string text, string expectedETag)
     {
-        var open = Get(place.ProjectId);
+        var open = Get(document.ProjectId);
         return RunLockedAsync(open.Id, async () =>
         {
             var files = open.Files;
             var places = await ReadPlacesAsync(open);
-            var (state, current) = await ReadDocumentAsync(open, places, place.DocumentId);
+            var (state, current) = await ReadDocumentAsync(open, places, document.Id);
             ETags.Check(DocumentModel(open.Id, state.Id, current).ETag, expectedETag);
             var old = await files.ReadAsync(current.Path);
             var bytes = Encode(Split(Decode(old)).Prefix, text);
             if (!bytes.AsSpan().SequenceEqual(old)) await files.WriteAsync(current.Path, bytes);
             var changes = new StorageChanges(open.Id);
-            changes.Documents.Add(DocumentModel(open.Id, state.Id, FromBytes(files, place.DocumentId, current.Path, current.Entry, bytes)));
+            changes.Documents.Add(DocumentModel(open.Id, state.Id, FromBytes(files, document.Id, current.Path, current.Entry, bytes)));
             return Publish(changes);
         });
     }
@@ -427,8 +400,26 @@ public sealed partial class DiskStorageContext
     private static string FolderPathOf(OpenProject open, PlacesFiles places, string folderId) =>
         folderId == open.Id ? "" : places.Folders.Paths.GetValueOrDefault(folderId) ?? throw FolderGone();
 
-    /// <summary>Reads a folder's settings file and its children now. A child is a subfolder or document that has a place
-    /// and exists on the disk.</summary>
+    /// <summary>The order with the item at <paramref name="index"/>. The index is clamped.</summary>
+    private static List<string> PutAt(IEnumerable<string> order, string id, int index)
+    {
+        var result = order.Where(child => child != id).ToList();
+        result.Insert(Math.Clamp(index, 0, result.Count), id);
+        return result;
+    }
+
+    /// <summary>Adds the links to the removed documents. <c>links.json</c> keeps them, so that they come back when a
+    /// version brings the document back.</summary>
+    private static async Task AddRemovedLinksAsync(OpenProject open, StorageChanges changes)
+    {
+        var (file, _) = await SettingsFiles.ReadLinksFileAsync(open.Files);
+        var removed = changes.RemovedDocumentIds.ToHashSet(StringComparer.Ordinal);
+        changes.RemovedLinkIds.AddRange(file.Links
+            .Where(link => removed.Contains(link.FirstDocumentId) || removed.Contains(link.SecondDocumentId)).Select(link => link.Id));
+    }
+
+    /// <summary>Reads a folder's settings file and its children now. A child is a subfolder or document that is in
+    /// <c>folders.json</c> or <c>documents.json</c> and exists on the disk.</summary>
     private static async Task<FolderState> ReadFolderStateAsync(OpenProject open, PlacesFiles places, string path)
     {
         var files = open.Files;

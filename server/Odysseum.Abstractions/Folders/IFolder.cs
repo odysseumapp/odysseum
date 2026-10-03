@@ -1,11 +1,11 @@
 using System.Text.Json;
+using Odysseum.Abstractions.Items;
 
 namespace Odysseum.Abstractions.Folders;
 
-public interface IFolder
+/// <summary>A folder. Its ETag changes when the folder's name, place, children or layout change.</summary>
+public interface IFolder : IProjectItem
 {
-    string Id { get; }
-    string ProjectId { get; }
     string Name { get; }
     /// <summary>Null for the project's top folder.</summary>
     string? ParentFolderId { get; }
@@ -17,6 +17,4 @@ public interface IFolder
     string? PinnedView { get; }
     /// <summary>Settings by view name, each a JSON object. The server stores them without reading them.</summary>
     IReadOnlyDictionary<string, JsonElement> Views { get; }
-    /// <summary>Changes when the folder's name, place, children or layout change.</summary>
-    string ETag { get; }
 }

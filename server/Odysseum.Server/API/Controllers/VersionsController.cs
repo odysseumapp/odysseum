@@ -8,7 +8,7 @@ namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api")]
-public class VersionsController(IHistoryService history, IProjectService projects, IDocumentService documents) : ControllerBase
+public class VersionsController(IHistoryService history, IProjectService projects) : ControllerBase
 {
     /// <summary>The project's saved versions, newest first.</summary>
     [HttpGet("projects/{projectId}/versions")]
@@ -29,7 +29,7 @@ public class VersionsController(IHistoryService history, IProjectService project
     public async Task<IResult> RestoreProjectVersion(string projectId, string versionId)
     {
         await history.RestoreProjectVersionAsync(projectId, versionId);
-        var project = await projects.GetProjectByIdAsync(projectId);
+        var project = await projects.GetAsync<IProject>(projectId);
         return ApiResults.Success(ProjectDto.FromProject(project), project.ETag);
     }
 
@@ -48,7 +48,7 @@ public class VersionsController(IHistoryService history, IProjectService project
     public async Task<IResult> RestoreDocumentVersion(string documentId, string versionId)
     {
         await history.RestoreDocumentVersionAsync(documentId, versionId);
-        var document = await documents.GetDocumentByIdAsync(documentId);
+        var document = await projects.GetAsync<IDocument>(documentId);
         return ApiResults.Success(DocumentDto.FromDocument(document), document.ETag);
     }
 }

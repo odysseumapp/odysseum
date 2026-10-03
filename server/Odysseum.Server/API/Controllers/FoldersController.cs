@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Odysseum.Abstractions.Folders;
+using Odysseum.Abstractions.Projects;
 using Odysseum.Server.API.Filters;
 using Odysseum.Server.API.Models;
 
@@ -7,16 +8,16 @@ namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api")]
-public class FoldersController(IFolderService folders) : ControllerBase
+public class FoldersController(IProjectService projects) : ControllerBase
 {
     [HttpGet("projects/{projectId}/folders")]
     public async Task<IResult> GetFoldersByProjectId(string projectId) =>
-        ApiResults.SuccessCollection((await folders.GetFoldersByProjectIdAsync(projectId)).Select(FolderDto.FromFolder));
+        ApiResults.SuccessCollection((await projects.GetAllAsync<IFolder>(projectId)).Select(FolderDto.FromFolder));
 
     [HttpGet("folders/{folderId}")]
     public async Task<IResult> GetFolderById(string folderId)
     {
-        var folder = await folders.GetFolderByIdAsync(folderId);
+        var folder = await projects.GetAsync<IFolder>(folderId);
         return ApiResults.Success(FolderDto.FromFolder(folder), folder.ETag);
     }
 
@@ -24,7 +25,7 @@ public class FoldersController(IFolderService folders) : ControllerBase
     [HttpPost("folders")]
     public async Task<IResult> CreateFolder([FromBody] CreateFolderRequest request)
     {
-        var folder = await folders.CreateFolderAsync(request.ParentFolderId, request.Name);
+        var folder = await projects.CreateFolderAsync(request.ParentFolderId, request.Name);
         return ApiResults.Created(FolderDto.FromFolder(folder), $"/api/folders/{folder.Id}", folder.ETag);
     }
 
@@ -35,7 +36,7 @@ public class FoldersController(IFolderService folders) : ControllerBase
         [FromHeader(Name = "If-Match")] string? ifMatch)
     {
         var layout = new FolderLayout { PinnedView = request.PinnedView, Views = request.Views };
-        var folder = await folders.UpdateFolderLayoutAsync(folderId, layout, ETagHeader.Parse(ifMatch));
+        var folder = await projects.UpdateFolderLayoutAsync(folderId, layout, ETagHeader.Parse(ifMatch));
         return ApiResults.Success(FolderDto.FromFolder(folder), folder.ETag);
     }
 
@@ -45,7 +46,7 @@ public class FoldersController(IFolderService folders) : ControllerBase
     public async Task<IResult> MoveFolderToFolder(string folderId, [FromBody] MoveFolderRequest request,
         [FromHeader(Name = "If-Match")] string? ifMatch)
     {
-        var result = await folders.MoveFolderToFolderAsync(folderId, request.TargetFolderId, request.Index!.Value, ETagHeader.Parse(ifMatch));
+        var result = await projects.MoveFolderToFolderAsync(folderId, request.TargetFolderId, request.Index!.Value, ETagHeader.Parse(ifMatch));
         return ApiResults.Success(FolderMoveDto.FromMoveResult(result), result.Folder.ETag);
     }
 
@@ -54,7 +55,7 @@ public class FoldersController(IFolderService folders) : ControllerBase
     [RequireIfMatch]
     public async Task<IResult> DeleteFolder(string folderId, [FromHeader(Name = "If-Match")] string? ifMatch)
     {
-        await folders.DeleteFolderAsync(folderId, ETagHeader.Parse(ifMatch));
+        await projects.DeleteFolderAsync(folderId, ETagHeader.Parse(ifMatch));
         return ApiResults.Success(new DeletedItemDto(folderId));
     }
 }

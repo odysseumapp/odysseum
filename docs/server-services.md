@@ -1,146 +1,144 @@
 # Server services
 
-Names describe responsibilities. A `Repository` reads and writes one kind of persistent data, a `Service` is what
-callers use to act on projects, folders and documents, a `Codec` handles a document format, a `Watcher` reports changes
-made by other programs, `Events` distributes notifications, and a `Session` holds one open project. Storage sits behind
-three interfaces, so another storage (a database, for example) can replace the disk without a change to the services.
+Names describe responsibilities. A `Repository` keeps one kind of data, a `Service` holds the rules that callers use to
+act on projects, a `StorageContext` reads and writes the stored data, a `Codec` handles a document format, a `Watcher`
+reports changes made by other programs, and an `Emitter` sends changes to the browsers. Storage is behind one interface,
+`IStorageContext`, so another storage (a database, for example) can replace the disk without a change to the repository
+or the services.
 
-The layout follows Shoko Server: `Odysseum.Abstractions` holds the model interfaces (`IItem`, `IProject`, `IFolder`,
-`IDocument`), the service interfaces plugins call (`IProjectService`, `IFolderService`, `IDocumentService`,
-`IHistoryService`), `ProjectBranch`, `ProjectInfo`, `ProjectVersion`, the enums, event args, and `WorkspaceException`.
-`Odysseum.Server` holds the concrete models in `Models/`, the editors in `Models/Editing/`, the storage interfaces and
-their implementations in `Repositories/`, the sessions and services in `Services/` and the HTTP layer in `API/`.
-Plugins see services and models; they never see repositories.
+`Odysseum.Abstractions` is the plugin contract: the server implements it, and plugins use it. It holds the item
+interfaces (`IItem`, `IProjectItem`, `IProject`, `IFolder`, `IDocument`, `ILink`), the service interfaces
+(`IProjectService`, `IHistoryService`), the request and result types (`ProjectSettings`, `FolderLayout`,
+`DocumentDetails`, `FolderMoveResult`, `DocumentMoveResult`, `DocumentSearchResult`, `ProjectVersion`), the change types
+(`Change`, `ChangeKind`, `ItemType`, `ChangesEventArgs`), the enums and `WorkspaceException`. `Odysseum.Server` holds the
+records in `Models/`, the repository and the storage in `Repositories/`, the services in `Services/` and the HTTP layer
+in `API/`. Plugins see the service interfaces and the item interfaces; they never see the records or the repository, so
+they cannot make or change items except through the service.
 
 ## Words
 
 - A **project name** is the project's folder name in the workspace, for example `my-novel`.
-- A **project ID** is the UUID in the project's `project.json`. URLs and the API use it; the project name works too.
-- A **project branch** (`ProjectBranch`) is a project name together with a branch name. Every storage call takes one.
-  Only the `main` branch exists today; `CreateBranchAsync` and `MergeAsync` report that they are not supported.
-- An **item** is a folder or a document. Its parent and its position come from the tree, never from a stored number.
+- A **project ID** is the UUID in the project's `project.json`. The project's top folder has the same ID.
+- An **item** is a project, a folder, a document or a link. Each item has an `Id` and an `ETag`. Folders, documents and
+  links also have a `ProjectId`.
+- An **ETag** is a SHA-256 hash of the stored values of one item. Folder and document ETags include the path, so a move
+  or a rename changes them.
+- A **path** is relative to the project and uses `/`. The project's top folder has the empty path. Only the storage sets
+  paths.
+
+## Layers
+
+```
+  Controllers, ChangeEmitter, plugins
+                 |
+                 v
+  IProjectService (ProjectService)      IHistoryService (HistoryService)
+                 |                                 |
+                 +----------------+----------------+
+                                  v
+                 IWorkspaceRepository (WorkspaceRepository)   reads from memory
+                                  |
+                                  v
+                 IStorageContext (DiskStorageContext)         reads and writes the files
+```
 
 ## Components
 
 | Component | Responsibility |
 | --- | --- |
-| `Repositories/IProjectRepository` | Loads and saves projects: `ListAsync`, `FindNameAsync(id)`, `ExistsAsync`, `CreateAsync(title)`, `OpenAsync(branch)`, `LoadAsync(branch)`, `LoadBodyAsync(branch, id)`, `SaveAsync(branch, changes, revision)`. No paths, streams or storage types cross it. |
-| `Repositories/IProjectHistory` | Saved versions: `SaveVersionAsync`, `ListVersionsAsync(branch, path?)`, `RestoreAsync(branch, id, path?)`, `ReadAsync`, and the not-yet-supported `CreateBranchAsync` and `MergeAsync`. |
-| `Repositories/IProjectWatcher` | Raises `Changed(branch)` when another program changes a watched project. The server's own writes are not reported. |
-| `Repositories/Disk/DiskProjectRepository` | Projects as folders: scans the Markdown files, reads and writes `project.json`, `links.json` and every `folder.json`, keeps a table in memory from project ID to project name, keeps every folder's own hidden document, and turns one `Changes` into file writes, moves, folder creation and removal, and one manifest transaction. |
-| `Repositories/Disk/ManifestFiles`, `ManifestTransaction` | Read, validate and migrate the manifests; compute the project revision; write several manifests as one journaled batch that recovers on reopen. |
-| `Repositories/Disk/OwnWrites`, `Files/FileManager` | `FileManager` is the only class that touches a project's disk: validates paths, refuses links, bounds reads to 4 MB, replaces files atomically, acquires the instance lock. It records every path it changes, and the state it left it in, in `OwnWrites`. |
-| `Repositories/Disk/FileProjectWatcher` | `IProjectWatcher` over `FileSystemWatcher`: one watch per open project, a 200 ms debounce, a poll every `ScanSeconds` as a fallback, and a check against `OwnWrites` so the server's own writes are skipped. |
-| `Repositories/Git/GitProjectHistory` | `IProjectHistory` over LibGit2Sharp: one repository at `<project>/.git`, versions as commits, per-document history through the commit log of one path, per-document restore through a checkout of one path. |
-| `Models/Item`, `Folder`, `Document` | Immutable. `Item` has `Id`, `Name`, `ParentId`, `OrderInParent` and `Path`; `Folder` has `Children` in order and its `OwnDocument`; `Document` has its details, links, `Revision`, `Modified`, `WordCount` and a `Body` that is null until opened. |
-| `Models/Project`, `ProjectData` | `ProjectData` is what storage loads and saves: settings, the tree with document summaries, the revision. `Project` places the tree: it sets `ParentId`, `OrderInParent` and `Path` on a copy of every item. This is the only place those are set. `Project.Walk()` is the manuscript order. |
-| `Models/Changes` | What one save changes: settings, the touched folders and documents (placed copies), and removed folder IDs. Storage derives creation, move and body write from them. |
-| `Models/Editing/FolderEditor`, `DocumentEditor` | Edit a copy of a project and mark what changed. `FolderEditor.Move(item, folder, index)` is the only way to change the order. `DocumentEditor.SetDetails` mirrors links and link notes on the other documents. |
-| `Services/Projects/ProjectSession` | One open project branch. Holds `Current : Project` and runs every operation under one lock; an operation reloads the project first, so it works on what is stored now. `SaveAsync` makes the saved state current. Raises `Changed`, `DocumentsRemoved`, `FoldersRemoved` and publishes to `ProjectEvents` when the fingerprint changed. |
-| `Services/Projects/ProjectSessions` | The open sessions, one per project branch: `Get`, `OpenAsync`, `CloseAsync`, `ListAsync`, `CreateAsync` (from a template). Reloads a session when the watcher reports a change. Saves a version when a project with documents opens and when a project is created. |
-| `Services/ProjectService` | `IProjectService`: lists, opens by branch or by folder name or UUID, creates from a template, saves settings. |
-| `Services/FolderService` | `IFolderService`: creates, lays out, moves and removes folders and moves documents; guards the default folders. |
-| `Services/DocumentService` | `IDocumentService`: opens (loads the body), creates, saves prose, updates details and links, moves. |
-| `Services/HistoryService` | `IHistoryService`: named versions, per-document version lists, reads and restores; saves an automatic version after a project has been quiet for `VersionSeconds`. |
-| `Services/Projects/ProjectEvents`, `ProjectNames`, `DefaultFolders`, `ProjectBranchComparer` | The SSE channel; the project name rules; the folders every project starts with; project names compared as the file system compares them. |
-| `Services/Templates/ProjectTemplateService` | Captures a project as a template and applies one to a new project in a single save through the editors. |
-| `Services/Views/ViewCatalog`, `DefaultViews`, `ViewNames` | The built-in views module. The server core stores view names and settings without reading them; `ViewNames` holds the only rules (the form of a name, settings are a JSON object of at most 64 KB). `DefaultViews` lists the web UI's views and which settings hold a folder ID (`grid.columnFolder`); `ViewCatalog` checks those settings, clears them when the folder is removed, and turns them into paths in templates. A plugin will add views the same way. |
-| `Services/Documents/MarkdownDocumentCodec`, `DocumentRules` | Encoding, frontmatter, word counts; document extensions, folder classification and naming rules. |
-| `API/Views/ProjectViews`, `FolderPaths` | The API edge: builds the response records, computes each document's `order` as its position in the walk, and resolves request paths to folders. |
-| `API/Middleware/ApiExceptionMiddleware` | Maps `WorkspaceError` to an HTTP status: Invalid 400, Forbidden 403, NotFound 404, Conflict 409, TooLarge 413, Corrupt 422, Unavailable 503. |
-| `Bootstrap/DemoContent` | Seeds the sample project when enabled and the workspace is empty. |
+| `Services/ProjectService` | `IProjectService`: the reads, the rules for every write to projects, folders, documents and links, search, Markdown export, and saving a project as a template. It passes on the repository's `Changed` batches. |
+| `Services/ProjectTemplates` | Internal. Captures a project as a `ProjectTemplate`, and applies a template to a new project through `IProjectService`, so the same rules apply. |
+| `Services/TreeOrder` | Static. The tree order of documents, and the documents among a folder's children. |
+| `Services/HistoryService` | `IHistoryService`: named versions, version lists for a project or a document, reads and restores. It listens to the repository's `Changed` event and saves an automatic version after a project has had no changes for `VersionSeconds`. |
+| `Repositories/IWorkspaceRepository`, `WorkspaceRepository` | One repository for the whole workspace, because the project is the aggregate. Four dictionaries in memory (projects, folders, documents, links), filled from `IStorageContext.Changed`. Reads never go to the disk; document text is not kept. Named writes, each with the ETag the caller last saw. Raises one `Changed` batch for each write or read of a project that changed something. |
+| `Repositories/IStorageContext`, `Disk/DiskStorageContext` | Reads and writes the stored data of all projects. It keeps no copy of the data: each write reads what is stored now, checks the ETag, writes, and reports what changed as one `StorageChanges`. It also implements `IProjectLock`. |
+| `Repositories/StorageChanges` | What one write or one read of a project changed: the items, the removed IDs, `ReplacesProject` for a full read, and `MovedIds` for the items that a move put in another folder. |
+| `Repositories/Disk/SettingsFiles`, `Formats/*` | Read, check and write `project.json`, `folders.json`, `documents.json`, `links.json` and each `folder.json`. |
+| `Repositories/Disk/ManifestTransaction` | Writes several settings files as one journaled batch that recovers when the project opens again. |
+| `Repositories/Files/FileManager`, `Disk/OwnWrites` | `FileManager` is the only class that touches a project's disk: it checks paths, refuses links, limits reads, replaces files atomically and takes the instance lock. It records each path it changes in `OwnWrites`. |
+| `Repositories/Disk/FileProjectWatcher` | `IProjectWatcher` over `FileSystemWatcher`: one watch per open project, a poll every `ScanSeconds` as a fallback, and a check against `OwnWrites`, so the server's own writes are not reported. |
+| `Repositories/Git/GitProjectHistory` | `IProjectHistory` over LibGit2Sharp: one repository at `<project>/.git`, versions as commits. |
+| `Repositories/TemplateRepository`, `ThemeRepository` | Project templates and colour themes, one JSON file each. |
+| `Services/Views/ViewCatalog`, `DefaultViews`, `ViewNames` | The views module. The server stores view names and settings without reading them; `ViewNames` holds the rules for names and settings. `ViewCatalog` knows which settings hold a folder ID (`grid.columnFolder`): it checks them, clears them when the folder is deleted, and turns them into paths in templates. |
+| `Services/Documents/MarkdownDocumentCodec`, `DocumentRules` | Encoding, front matter and word counts; document extensions, kinds and naming rules. |
+| `Services/Projects/DefaultFolders`, `ProjectNames` | The folders every project starts with; the rules for project names. |
+| `API/SignalR/ChangeEmitter`, `ProjectHub` | Sends the `changed` messages to the browsers. |
+| `API/Middleware/ApiExceptionMiddleware` | Maps `WorkspaceError` to an HTTP status: Invalid 400, Forbidden 403, NotFound 404, Conflict 409, ETagMismatch 412, TooLarge 413, Corrupt 422, Unavailable 503. |
+| `Bootstrap/DemoContent` | Copies the sample project into the workspace when the demo setting is on. |
 
-## Sessions and the lock
+## Reads
 
-Services address a project by its `ProjectBranch` and its items by ID; they never see a path. `IProjectService.GetAsync`
-opens the session, reloads the project under the lock, and returns the current `Project`. A `Project` does not change:
-`Folder.Children`, `Document.Links` and the rest are set once when it is built, so reads need no lock.
+`IProjectService.GetAsync<T>(id)` takes `IProject`, `IFolder`, `IDocument` or `ILink`, and throws `NotFound` with a
+message for each type. `GetAllAsync<T>(projectId)` takes `IFolder`, `IDocument` or `ILink` and returns them in no fixed
+order. The type constraints (`T : IItem` and `T : IProjectItem`) stop a wrong type at compile time. Ordered reads have
+names: `GetDocumentsInOrderAsync(projectId)` gives the tree order, and `GetChildrenAsync(folderId)` gives the documents
+among the folder's children.
 
-Every write takes the branch, an ID and the revision the caller last saw. The service enters the session lock, reloads,
-checks the revision, edits a copy with a `FolderEditor` or `DocumentEditor`, and passes the editor's `Changes` to
-`ProjectSession.SaveAsync`, which hands them to `IProjectRepository.SaveAsync` together with the revision after the
-reload. The repository checks that revision again against what is stored, applies the changes, and returns the new
-state, which becomes `Current`. A stale caller is harmless: the ID is looked up again and the revision check rejects the
-write with a conflict.
+All reads come from the repository's memory, except `GetDocumentTextAsync`, search and export, which read the text from
+the disk.
 
-Which revision a write checks: saving prose and moving a document check the document's revision (the SHA-256 of the
-file); updating details and links, saving settings, folder layouts, folder removal and moves check the project's
-revision (the hash of every manifest and its path).
+## Writes and ETags
 
-`ProjectSession.RunAsync` is the one place operations serialize. History calls run under the same lock, so git work
-never overlaps a save. Every load is followed by the creation of any folder's missing own `.Name.md` document; this is
-the only write a read makes.
+Each write gives the ETag the caller last saw. The storage reads the stored item, compares the ETags, and refuses the
+write with `ETagMismatch` when they are different. A stale caller is harmless.
+
+The service checks the rules that need more than one item (for example, a folder moves only inside its own project, or a
+default folder stays). The storage checks the rules about the files (for example, names, an empty folder, or a folder
+that cannot move into itself). Each rule has one owner.
+
+Most writes are one storage write. `IProjectLock` keeps other changes out when one task makes more than one write:
+creating a project from a template, creating a document with a free file name, and deleting a folder and clearing view
+settings that name it.
 
 ## Ordering
 
-There is one ordering: `Folder.Children`, the subfolders and documents of a folder in order. On disk it is the
-`itemOrder` list of child IDs in each `folder.json`. `Project` sets `OrderInParent` on every item from its position in
-`Children`. Children missing from the stored list come after the listed ones: subfolders first (at the root in the
-default order, otherwise by name), then documents by file name. A folder's own hidden document is never a child.
-"All documents in order" is `Project.Walk()`: a folder's own document first, then its children in order, descending into
-subfolders.
+There is one ordering: `IFolder.ChildIds`, the subfolders and documents of a folder in order. On disk it is the
+`itemOrder` list in each `folder.json`. Children that are missing from the stored list come after the listed ones:
+subfolders first (in the top folder in the default order, otherwise by name), then documents by file name. A folder's own
+hidden document is never a child.
 
-The only way to change the order is `FolderService.MoveAsync(branch, itemId, targetFolderId, index, revision)`. It
-places the item at that index among the target folder's children, moving it between folders when the target is not its
-parent. Documents move with their file and metadata; folders move with their directory and keep their ID. Creating a
-document or folder appends it to its parent's children in the same save. The API exposes this as
-`PUT /api/projects/{project}/folders/move`; `FolderSummary.children` lists the IDs in order and `DocumentSummary.order`
-is the position in the walk.
+A new folder or document goes at the end of its parent's children, in the same write. A move puts the item at an index
+(clamped) among the target folder's children and saves the new order in the same write. A move inside the same folder
+only changes the order. Tree order is a folder's own document first, then its children in order, with each subfolder's
+documents in its place.
 
-## Events and the watcher
+## Changes and events
 
-`ProjectEvents` carries the SSE `workspace` event with its revision counter. `ProjectSession` publishes to it and raises
-`Changed`, `DocumentsRemoved` and `FoldersRemoved` whenever a reload or a save changes the project fingerprint.
-`ProjectSessions` forwards those from every open session, and the services forward them as the `IProjectService`,
-`IDocumentService` and `IFolderService` events plugins subscribe to, beside the create, save, move and update events the
-services raise themselves.
+Each write and each read of a project gives one `StorageChanges`. The repository puts the items in memory and makes one
+`Change(Kind, Type, ProjectId, Id, ETag)` for each item that is new, has a new ETag, or is gone. Items that did not
+change give no change, and a batch with no changes raises no event.
 
-`FileProjectWatcher` watches each open project folder. `FileManager` records every path it changes in `OwnWrites`,
-before the change and again after it with the state it left the path in. The watcher drops an event for a recorded path
-that is still in that state, so the server's own writes are not reported; an edit from outside changes the state and is
-reported even right after a save. A reported change makes `ProjectSessions` reload the session under its lock; a reload
-that finds the same fingerprint publishes nothing. The watcher also reports every `ScanSeconds`, so a missed
-notification is caught late instead of never.
+The kind comes from the write, not from the paths:
 
-## Listing, versions and templates
+- **Added**: the item was not in memory.
+- **Moved**: a move put the item in another folder.
+- **Updated**: the item has a new ETag. A rename is Updated, and so are the documents inside a moved folder.
+- **Removed**: the item is gone. Its ETag is null. Deleting a document also removes its links from memory; `links.json`
+  keeps them, so they come back when a version brings the document back.
 
-Project listing reads only each project's `project.json` and does not persist migrations; unreadable or invalid
-metadata falls back to the folder name until opening reports the error. A project folder that was never opened has no
-`project.json` and so no ID; `ProjectSessions.ListAsync` opens it once, which writes it. `IProjectService.GetAsync(string)`
-accepts the project's UUID or its folder name. The repository finds a UUID in its table from project ID to project name,
-checks the entry against that project's `project.json`, and lists the projects again when the entry is missing or wrong,
-so a folder renamed on disk is still found.
+`ProjectService.Changed` passes on each batch. `ChangeEmitter` sends a `changed` message
+`{ projectId, changes: [ { type, kind, id, etag } ] }` for each batch. The project changes go to all browsers, so a
+project list sees projects that are added, updated or removed. The other changes go to the browsers that opened the
+project through `ProjectHub.OpenProject`. These are thin notifications: the browser reads the items again.
 
-Versions are whole-project states kept as commits on one branch of a git repository at `<project>/.git`, made with
-LibGit2Sharp. Opening a project with documents saves a version, a new project's first version is its template,
-`HistoryService` saves one after the project has been quiet for `VersionSeconds` (`ODYSSEUM_VERSION_SECONDS`, 60 by
-default, 0 for none), and `POST /api/projects/{project}/versions` saves a named one. A restore first saves the state being
-replaced, writes the chosen version's files over the project, and records that as a new version. One document's history
-is the list of versions that changed its file (`GET .../documents/{id}/versions`); one version of it can be read
-(`GET .../versions/{version}`) or restored on its own (`POST .../versions/{version}/restore`), which also saves the state
-being replaced first. The instance lock and transaction scratch are excluded through `.git/info/exclude`; the repository
-sets `core.autocrlf` off so files round-trip byte for byte.
+## The watcher
 
-A template captures a project's goals, its folders with their layouts and children (by name), and its documents by path
-and title in walk order. View settings that hold a folder ID hold the folder's path in a template. Applying one creates the folders and
-documents through the editors and saves settings, titles, layouts and order together.
+`FileProjectWatcher` watches each open project folder. `FileManager` records each path it changes in `OwnWrites`, and
+the watcher ignores an event for a path that is still in the state the server left it in. A change from another program
+makes the storage read the project again; that read gives a `StorageChanges` with `ReplacesProject`, and the repository
+reports only what changed. The watcher also reports every `ScanSeconds`, so a missed notification is caught late
+instead of never.
 
-Links are one undirected relation between two documents, stored once in `links.json`. In memory each `Document` lists
-its links and notes; `DocumentEditor.SetDetails` changes both ends, and a save brings `links.json` in line with the saved
-documents. Markdown and manifest
-replacement are still separate filesystem operations, and arbitrary external editors do not participate in the session
-lock. See [the project format](project-format.md) for the files on disk.
+## Versions and templates
 
-## API changes in this design
+Versions are whole-project states, kept as commits in a git repository at `<project>/.git`. `HistoryService` saves an
+automatic version after a project has had no changes for `VersionSeconds` (`ODYSSEUM_VERSION_SECONDS`, 60 by default, 0
+for none), and once at startup for each project that changed while the server was stopped. A restore saves the current
+state first, writes the files of the version, and makes the repository read the project again. One document's history is
+the list of versions that changed its file.
 
-| Before | After |
-| --- | --- |
-| `GET /api/projects` item: the field that holds the project folder name | `name` |
-| `FolderSummary.itemOrder` (`folder:Name` keys and IDs) | `children` (IDs) |
-| `PUT folders/layout` with `itemOrder` | `PUT folders/layout` without it; `PUT folders/move` `{ id, targetFolder, index, revision }` |
-| `PUT /api/projects/{project}/order` | removed; use `folders/move` |
-| `GET documents/{id}/snapshots[/{snapshot}]` | `GET documents/{id}/versions[/{version}]`, `POST documents/{id}/versions/{version}/restore` |
-| `{project}` in routes: the folder name only (the events route) or name or UUID | the project UUID, or the folder name; every route, the events route too |
-| `FolderSummary.pinnedView` one of `write`, `board`, `outline`, `grid`; `gridFolder` | `pinnedView` any view name; `views` settings by view name (`views.grid.columnFolder`) |
-| `PUT folders/layout` `{ path, pinnedView, gridFolder, revision }` | `{ path, pinnedView, views, revision }`; each view in `views` gets those settings, `null` removes them, others keep theirs |
-| Template folder `{ path, pinnedView, itemOrder, gridFolder }` | `{ path, pinnedView, children, views }`; `children` are names |
+A template holds a project's word goals, its folders with their layouts and children (by name), and its documents by path
+and title. View settings that hold a folder ID hold the folder's path in a template. `IProjectService.SaveAsTemplateAsync`
+saves one, and `CreateProjectAsync` applies one through the same rules as any other write.
+
+See [the project format](project-format.md) for the files on disk.

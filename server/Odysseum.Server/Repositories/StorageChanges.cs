@@ -2,8 +2,7 @@ using Odysseum.Server.Models;
 
 namespace Odysseum.Server.Repositories;
 
-/// <summary>What one write or one read of a project changed. The storage sends it to every repository, and each
-/// repository takes the items of its own type.</summary>
+/// <summary>What one write or one read of a project changed.</summary>
 public sealed class StorageChanges(string projectId)
 {
     public string ProjectId { get; } = projectId;
@@ -13,12 +12,10 @@ public sealed class StorageChanges(string projectId)
     public List<Folder> Folders { get; } = [];
     public List<Document> Documents { get; } = [];
     public List<Link> Links { get; } = [];
-    public List<FolderPlace> FolderPlaces { get; } = [];
-    public List<DocumentPlace> DocumentPlaces { get; } = [];
     public List<string> RemovedProjectIds { get; } = [];
     public List<string> RemovedFolderIds { get; } = [];
     public List<string> RemovedDocumentIds { get; } = [];
-    public List<string> RemovedFolderPlaceIds { get; } = [];
-    public List<string> RemovedDocumentPlaceIds { get; } = [];
     public List<string> RemovedLinkIds { get; } = [];
+    /// <summary>The folders and documents that a move put in another folder. Only a move write fills it.</summary>
+    public HashSet<string> MovedIds { get; } = new(StringComparer.Ordinal);
 }

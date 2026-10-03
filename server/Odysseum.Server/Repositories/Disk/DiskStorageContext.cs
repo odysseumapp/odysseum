@@ -182,8 +182,8 @@ public sealed partial class DiskStorageContext : IStorageContext, IAsyncDisposab
     /// <list type="bullet">
     /// <item>A folder that another program moved keeps its ID: its <c>folder.json</c> has the ID, and its old path is gone.
     /// The documents in it keep their IDs too.</item>
-    /// <item>A copied folder, and a folder or file without a place, gets a new ID.</item>
-    /// <item>A place whose file or folder is gone is removed, and so are the details of a document that is gone.</item>
+    /// <item>A copied folder, and a folder or file that is not in <c>folders.json</c> or <c>documents.json</c>, gets a new ID.</item>
+    /// <item>A path whose file or folder is gone is removed, and so are the details of a document that is gone.</item>
     /// <item>A folder without its own hidden document gets one.</item>
     /// <item>Each folder's order lists exactly its children.</item>
     /// </list></summary>
@@ -313,13 +313,9 @@ public sealed partial class DiskStorageContext : IStorageContext, IAsyncDisposab
             var own = path.Length == 0 ? null : documents.Values.FirstOrDefault(document => document.Path == DocumentRules.FolderDocumentPath(path))?.Id;
             var parentId = path.Length == 0 ? null : folders[ProjectPaths.ParentOf(path)].Id;
             changes.Folders.Add(FolderModel(project, path, file, parentId, own));
-            changes.FolderPlaces.Add(FolderPlaceModel(project.Id, file.Id, path));
         }
         foreach (var document in documents.Values)
-        {
             changes.Documents.Add(DocumentModel(project.Id, folders[ProjectPaths.ParentOf(document.Path)].Id, document));
-            changes.DocumentPlaces.Add(DocumentPlaceModel(project.Id, document.Id, document.Path));
-        }
         foreach (var link in linksFile.Links.Where(link => documents.ContainsKey(link.FirstDocumentId) && documents.ContainsKey(link.SecondDocumentId)))
             changes.Links.Add(LinkModel(project.Id, link));
         return changes;
@@ -372,7 +368,7 @@ public sealed partial class DiskStorageContext : IStorageContext, IAsyncDisposab
         var views = new Dictionary<string, JsonElement>(file.Views ?? [], StringComparer.Ordinal);
         var viewsText = JsonSerializer.Serialize(views.OrderBy(view => view.Key, StringComparer.Ordinal).ToDictionary());
         var etag = ETags.FromValues(file.Id, path, file.PinnedView, viewsText, string.Join(',', file.ItemOrder));
-        return new Folder(file.Id, project.Id, path.Length == 0 ? project.Name : ProjectPaths.NameOf(path), parentFolderId,
+        return new Folder(file.Id, project.Id, path.Length == 0 ? project.Name : ProjectPaths.NameOf(path), path, parentFolderId,
             file.ItemOrder.ToArray(), ownDocumentId, file.PinnedView, views, etag);
     }
 
@@ -380,16 +376,10 @@ public sealed partial class DiskStorageContext : IStorageContext, IAsyncDisposab
     {
         var entry = file.Entry;
         var etag = ETags.FromValues(file.Id, file.Path, entry.Title, entry.Synopsis, entry.Notes, entry.Status, entry.WordGoal, file.FileHash);
-        return new Document(file.Id, projectId, folderId, ProjectPaths.NameOf(file.Path), DocumentRules.KindOf(file.Path),
+        return new Document(file.Id, projectId, folderId, ProjectPaths.NameOf(file.Path), file.Path, DocumentRules.KindOf(file.Path),
             DocumentRules.IsFolderDocument(file.Path), entry.Title, entry.Synopsis, entry.Notes, entry.Status, entry.WordGoal,
             file.WordCount, file.Modified, etag);
     }
-
-    private static FolderPlace FolderPlaceModel(string projectId, string folderId, string path) =>
-        new(folderId, projectId, path, ETags.FromValues(folderId, path));
-
-    private static DocumentPlace DocumentPlaceModel(string projectId, string documentId, string path) =>
-        new(documentId, projectId, path, ETags.FromValues(documentId, path));
 
     private static Link LinkModel(string projectId, LinkEntry entry) => new(entry.Id, projectId, entry.FirstDocumentId,
         entry.SecondDocumentId, entry.Note, ETags.FromValues(entry.Id, entry.FirstDocumentId, entry.SecondDocumentId, entry.Note));
