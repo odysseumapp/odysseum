@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Odysseum.Abstractions.Changes;
 using Odysseum.Abstractions.Exceptions;
 using Odysseum.Abstractions.History;
 using Odysseum.Server.Models;
@@ -10,44 +11,33 @@ namespace Odysseum.Server.Services;
 /// After a project has had no changes for <c>versionSeconds</c>, an automatic version is saved.</summary>
 public sealed class HistoryService : IHistoryService, IAsyncDisposable
 {
-    private readonly IProjectRepository _projects;
-    private readonly IDocumentPlaceRepository _documentPlaces;
+    private readonly IWorkspaceRepository _workspace;
     private readonly IProjectHistory _history;
     private readonly IProjectLock _projectLock;
     private readonly int _versionSeconds;
     private readonly ILogger<HistoryService>? _logger;
     private readonly ConcurrentDictionary<string, DateTime> _lastChange = new(StringComparer.Ordinal);
+    /// <summary>The folder names of the projects the history has opened, by project ID.</summary>
+    private readonly ConcurrentDictionary<string, string> _opened = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _stopping = new();
     private Task _loop = Task.CompletedTask;
 
-    public HistoryService(IProjectRepository projects, IFolderRepository folders, IDocumentRepository documents, ILinkRepository links,
-        IDocumentPlaceRepository documentPlaces, IProjectHistory history, IProjectLock projectLock, int versionSeconds, ILogger<HistoryService>? logger = null)
+    public HistoryService(IWorkspaceRepository workspace, IProjectHistory history, IProjectLock projectLock, int versionSeconds,
+        ILogger<HistoryService>? logger = null)
     {
-        _projects = projects;
-        _documentPlaces = documentPlaces;
+        _workspace = workspace;
         _history = history;
         _projectLock = projectLock;
         _versionSeconds = versionSeconds;
         _logger = logger;
-        projects.ItemAdded += (_, change) => MarkChanged(change.Item.Id);
-        projects.ItemUpdated += (_, change) => MarkChanged(change.Item.Id);
-        projects.ItemRemoved += (_, change) => Forget(change.Item);
-        folders.ItemAdded += (_, change) => MarkChanged(change.Item.ProjectId);
-        folders.ItemUpdated += (_, change) => MarkChanged(change.Item.ProjectId);
-        folders.ItemRemoved += (_, change) => MarkChanged(change.Item.ProjectId);
-        documents.ItemAdded += (_, change) => MarkChanged(change.Item.ProjectId);
-        documents.ItemUpdated += (_, change) => MarkChanged(change.Item.ProjectId);
-        documents.ItemRemoved += (_, change) => MarkChanged(change.Item.ProjectId);
-        links.ItemAdded += (_, change) => MarkChanged(change.Item.ProjectId);
-        links.ItemUpdated += (_, change) => MarkChanged(change.Item.ProjectId);
-        links.ItemRemoved += (_, change) => MarkChanged(change.Item.ProjectId);
+        workspace.Changed += OnChanged;
     }
 
     /// <summary>Saves an automatic version of each project that changed while the server was stopped, then starts saving
     /// automatic versions. Nothing is saved automatically when <c>versionSeconds</c> is 0.</summary>
     public async Task StartAsync()
     {
-        foreach (var project in await _projects.GetAllAsync()) await SaveAutomaticVersionAsync(project.Id);
+        foreach (var project in await _workspace.GetProjectsAsync()) await SaveAutomaticVersionAsync(project.Id);
         _lastChange.Clear();
         if (_versionSeconds > 0) _loop = Task.Run(() => RunAsync(_stopping.Token));
     }
@@ -69,16 +59,16 @@ public sealed class HistoryService : IHistoryService, IAsyncDisposable
 
     public async Task<IReadOnlyList<ProjectVersion>> GetVersionsByDocumentIdAsync(string documentId)
     {
-        var place = await _documentPlaces.GetPlaceByDocumentIdAsync(documentId);
-        var project = await FindProjectAsync(place.ProjectId);
-        return await _projectLock.RunLockedAsync(project.Id, () => _history.ListVersionsAsync(project.Name, place.Path));
+        var document = await FindDocumentAsync(documentId);
+        var project = await FindProjectAsync(document.ProjectId);
+        return await _projectLock.RunLockedAsync(project.Id, () => _history.ListVersionsAsync(project.Name, document.Path));
     }
 
     public async Task<string> GetDocumentTextFromVersionAsync(string documentId, string versionId)
     {
-        var place = await _documentPlaces.GetPlaceByDocumentIdAsync(documentId);
-        var project = await FindProjectAsync(place.ProjectId);
-        return await _projectLock.RunLockedAsync(project.Id, () => _history.ReadAsync(project.Name, versionId, place.Path));
+        var document = await FindDocumentAsync(documentId);
+        var project = await FindProjectAsync(document.ProjectId);
+        return await _projectLock.RunLockedAsync(project.Id, () => _history.ReadAsync(project.Name, versionId, document.Path));
     }
 
     public async Task RestoreProjectVersionAsync(string projectId, string versionId)
@@ -87,27 +77,34 @@ public sealed class HistoryService : IHistoryService, IAsyncDisposable
         await _projectLock.RunLockedAsync(projectId, async () =>
         {
             await _history.RestoreAsync(project.Name, versionId);
-            await _projects.ReloadProjectAsync(projectId);
+            await _workspace.ReloadProjectAsync(projectId);
         });
     }
 
     public async Task RestoreDocumentVersionAsync(string documentId, string versionId)
     {
-        var place = await _documentPlaces.GetPlaceByDocumentIdAsync(documentId);
-        var project = await FindProjectAsync(place.ProjectId);
+        var document = await FindDocumentAsync(documentId);
+        var project = await FindProjectAsync(document.ProjectId);
         await _projectLock.RunLockedAsync(project.Id, async () =>
         {
-            await _history.RestoreAsync(project.Name, versionId, place.Path);
-            await _projects.ReloadProjectAsync(project.Id);
+            await _history.RestoreAsync(project.Name, versionId, document.Path);
+            await _workspace.ReloadProjectAsync(project.Id);
         });
     }
 
-    private void MarkChanged(string projectId) => _lastChange[projectId] = DateTime.UtcNow;
-
-    private void Forget(Project project)
+    /// <summary>Marks the project as changed, or closes its history when the project is gone.</summary>
+    private void OnChanged(object? sender, ChangesEventArgs e)
     {
-        _lastChange.TryRemove(project.Id, out _);
-        _history.Close(project.Name);
+        foreach (var change in e.Changes)
+        {
+            if (change is not { Type: ItemType.Project, Kind: ChangeKind.Removed })
+            {
+                _lastChange[change.ProjectId] = DateTime.UtcNow;
+                continue;
+            }
+            _lastChange.TryRemove(change.ProjectId, out _);
+            if (_opened.TryRemove(change.ProjectId, out var name)) _history.Close(name);
+        }
     }
 
     private async Task SaveAutomaticVersionAsync(string projectId)
@@ -121,8 +118,16 @@ public sealed class HistoryService : IHistoryService, IAsyncDisposable
         { _logger?.LogWarning("Automatic version of project {Project} was deferred: {Message}", projectId, ex.Message); }
     }
 
-    private async Task<Project> FindProjectAsync(string projectId) => await _projects.GetByIdAsync(projectId)
-        ?? throw new WorkspaceException(WorkspaceError.NotFound, "No project has that ID.");
+    /// <summary>The project, which the history is about to open.</summary>
+    private async Task<Project> FindProjectAsync(string projectId)
+    {
+        var project = await _workspace.GetAsync<Project>(projectId) ?? throw new WorkspaceException(WorkspaceError.NotFound, "No project has that ID.");
+        _opened[project.Id] = project.Name;
+        return project;
+    }
+
+    private async Task<Document> FindDocumentAsync(string documentId) => await _workspace.GetAsync<Document>(documentId)
+        ?? throw new WorkspaceException(WorkspaceError.NotFound, "This document was removed or moved outside the workspace.");
 
     private async Task RunAsync(CancellationToken stoppingToken)
     {

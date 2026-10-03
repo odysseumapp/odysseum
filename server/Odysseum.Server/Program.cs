@@ -6,16 +6,12 @@ using Odysseum.Server.API.Models;
 using Odysseum.Server.Bootstrap;
 using Odysseum.Server.Services;
 using Odysseum.Server.Settings;
-using Odysseum.Abstractions.Documents;
-using Odysseum.Abstractions.Folders;
 using Odysseum.Abstractions.History;
 using Odysseum.Abstractions.Projects;
-using Odysseum.Abstractions.Links;
 using Odysseum.Server.API.SignalR;
 using Odysseum.Server.Repositories;
 using Odysseum.Server.Repositories.Disk;
 using Odysseum.Server.Repositories.Git;
-using Odysseum.Server.Services.Templates;
 using Odysseum.Server.Services.Views;
 using Odysseum.Server.Services.WebUi;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -74,45 +70,25 @@ builder.Services.AddSingleton<IProjectWatcher>(provider => new FileProjectWatche
 builder.Services.AddSingleton<IProjectHistory>(_ => new GitProjectHistory(settings.Workspace));
 builder.Services.AddSingleton(ViewCatalog.Default);
 
-// Storage: one storage context under all repositories. Only it knows about the files.
+// Storage: one storage context under the workspace repository. Only it knows about the files.
 builder.Services.AddSingleton(provider => new DiskStorageContext(settings.Workspace, provider.GetRequiredService<IProjectWatcher>(),
     provider.GetRequiredService<OwnWrites>(), provider.GetRequiredService<ILogger<DiskStorageContext>>()));
 builder.Services.AddSingleton<IStorageContext>(provider => provider.GetRequiredService<DiskStorageContext>());
 builder.Services.AddSingleton<IProjectLock>(provider => provider.GetRequiredService<DiskStorageContext>());
-builder.Services.AddSingleton<IProjectRepository, ProjectRepository>();
-builder.Services.AddSingleton<IFolderRepository, FolderRepository>();
-builder.Services.AddSingleton<IFolderPlaceRepository, FolderPlaceRepository>();
-builder.Services.AddSingleton<IDocumentRepository, DocumentRepository>();
-builder.Services.AddSingleton<IDocumentPlaceRepository, DocumentPlaceRepository>();
-builder.Services.AddSingleton<ILinkRepository, LinkRepository>();
+builder.Services.AddSingleton<IWorkspaceRepository, WorkspaceRepository>();
 
 // Services: the interfaces in Odysseum.Abstractions, which the controllers and plugins use.
-builder.Services.AddSingleton<IFolderService>(provider => new FolderService(provider.GetRequiredService<IFolderRepository>(),
-    provider.GetRequiredService<IFolderPlaceRepository>(), provider.GetRequiredService<IDocumentRepository>(),
-    provider.GetRequiredService<IDocumentPlaceRepository>(), provider.GetRequiredService<IProjectLock>(), settingsProvider,
-    provider.GetRequiredService<ViewCatalog>()));
-builder.Services.AddSingleton(provider => new ProjectTemplateService(provider.GetRequiredService<IFolderService>(),
-    provider.GetRequiredService<IDocumentService>(), provider.GetRequiredService<IFolderRepository>(),
-    provider.GetRequiredService<IDocumentRepository>(), provider.GetRequiredService<IFolderPlaceRepository>(),
-    provider.GetRequiredService<IDocumentPlaceRepository>(), provider.GetRequiredService<IProjectRepository>(), provider.GetRequiredService<ViewCatalog>()));
-builder.Services.AddSingleton<IProjectService>(provider => new ProjectService(provider.GetRequiredService<IProjectRepository>(),
-    provider.GetRequiredService<IProjectLock>(), provider.GetRequiredService<ProjectTemplateService>(), templates));
-builder.Services.AddSingleton<IDocumentService, DocumentService>();
-builder.Services.AddSingleton<ILinkService, LinkService>();
-builder.Services.AddSingleton(provider => new HistoryService(provider.GetRequiredService<IProjectRepository>(),
-    provider.GetRequiredService<IFolderRepository>(), provider.GetRequiredService<IDocumentRepository>(), provider.GetRequiredService<ILinkRepository>(),
-    provider.GetRequiredService<IDocumentPlaceRepository>(), provider.GetRequiredService<IProjectHistory>(), provider.GetRequiredService<IProjectLock>(),
-    settings.VersionSeconds, provider.GetRequiredService<ILogger<HistoryService>>()));
+builder.Services.AddSingleton<IProjectService>(provider => new ProjectService(provider.GetRequiredService<IWorkspaceRepository>(),
+    provider.GetRequiredService<IProjectLock>(), templates, settingsProvider, provider.GetRequiredService<ViewCatalog>()));
+builder.Services.AddSingleton(provider => new HistoryService(provider.GetRequiredService<IWorkspaceRepository>(),
+    provider.GetRequiredService<IProjectHistory>(), provider.GetRequiredService<IProjectLock>(), settings.VersionSeconds,
+    provider.GetRequiredService<ILogger<HistoryService>>()));
 builder.Services.AddSingleton<IHistoryService>(provider => provider.GetRequiredService<HistoryService>());
-builder.Services.AddSingleton<ManuscriptExportService>();
 
-// SignalR: each emitter sends the events of one service to the browsers.
+// SignalR: the emitter sends each batch of changes to the browsers.
 builder.Services.AddSignalR()
     .AddJsonProtocol(json => json.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
-builder.Services.AddSingleton<ProjectEventEmitter>();
-builder.Services.AddSingleton<FolderEventEmitter>();
-builder.Services.AddSingleton<DocumentEventEmitter>();
-builder.Services.AddSingleton<LinkEventEmitter>();
+builder.Services.AddSingleton<ChangeEmitter>();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
@@ -168,11 +144,8 @@ if (builder.Configuration.GetValue<int?>("ODYSSEUM_PARENT_PID") is { } parentId)
 
 DemoContent.Seed(settings);
 
-// The repositories, services and emitters must exist before the projects are read, so that they get every change.
-foreach (var type in new[] { typeof(IProjectRepository), typeof(IFolderRepository), typeof(IFolderPlaceRepository), typeof(IDocumentRepository),
-    typeof(IDocumentPlaceRepository), typeof(ILinkRepository), typeof(IProjectService), typeof(IFolderService), typeof(IDocumentService),
-    typeof(ILinkService), typeof(HistoryService), typeof(ProjectEventEmitter), typeof(FolderEventEmitter), typeof(DocumentEventEmitter),
-    typeof(LinkEventEmitter) })
+// The repository, the services and the emitter must exist before the projects are read, so that they get every change.
+foreach (var type in new[] { typeof(IWorkspaceRepository), typeof(IProjectService), typeof(HistoryService), typeof(ChangeEmitter) })
     app.Services.GetRequiredService(type);
 await app.Services.GetRequiredService<IStorageContext>().LoadAllProjectsAsync();
 await app.Services.GetRequiredService<HistoryService>().StartAsync();

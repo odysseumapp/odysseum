@@ -1,13 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Odysseum.Server.API.Models;
 using Odysseum.Server.Repositories;
-using Odysseum.Server.Services.Templates;
+using Odysseum.Abstractions.Projects;
 
 namespace Odysseum.Server.API.Controllers;
 
 [ApiController]
 [Route("api/templates")]
-public class TemplatesController(ITemplateRepository templates, ProjectTemplateService templateService) : ControllerBase
+public class TemplatesController(ITemplateRepository templates, IProjectService projects) : ControllerBase
 {
     /// <summary>Every project template a new project can start from. <c>Default</c> is always among them.</summary>
     [HttpGet]
@@ -20,8 +20,8 @@ public class TemplatesController(ITemplateRepository templates, ProjectTemplateS
     [HttpPut("{name}")]
     public async Task<IResult> SaveTemplate(string name, [FromBody] SaveTemplateRequest request)
     {
-        var template = await templateService.CaptureTemplateAsync(request.ProjectId, TemplateRepository.ValidName(name));
-        return ApiResults.Success(TemplateDto.FromTemplate(templates.Save(template)));
+        await projects.SaveAsTemplateAsync(request.ProjectId, name);
+        return ApiResults.Success(TemplateDto.FromTemplate(templates.Get(TemplateRepository.ValidName(name))));
     }
 
     /// <summary>Delete a project template. Deleting <c>Default</c> puts back the one Odysseum ships with.</summary>

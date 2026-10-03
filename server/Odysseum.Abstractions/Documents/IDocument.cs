@@ -1,10 +1,11 @@
+using Odysseum.Abstractions.Items;
+
 namespace Odysseum.Abstractions.Documents;
 
-/// <summary>A document's details. The text is read separately through <see cref="IDocumentService.GetDocumentTextByIdAsync"/>.</summary>
-public interface IDocument
+/// <summary>A document's details. The text is read separately through <see cref="Projects.IProjectService.GetDocumentTextAsync"/>.
+/// The ETag changes when the text, the details, the name or the place of the document change.</summary>
+public interface IDocument : IProjectItem
 {
-    string Id { get; }
-    string ProjectId { get; }
     string FolderId { get; }
     /// <summary>The file name with its extension.</summary>
     string Name { get; }
@@ -19,6 +20,4 @@ public interface IDocument
     int WordGoal { get; }
     int WordCount { get; }
     DateTimeOffset LastModified { get; }
-    /// <summary>Changes when the text, the details, the name or the place of the document change.</summary>
-    string ETag { get; }
 }
