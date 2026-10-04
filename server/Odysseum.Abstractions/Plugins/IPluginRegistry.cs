@@ -1,11 +1,6 @@
-using Odysseum.Abstractions.Views;
-
 namespace Odysseum.Abstractions.Plugins;
 
-/// <summary>What a plugin can add to the server. The server implements it; plugins only call it, so it can get new
-/// members without a change to existing plugins.</summary>
-public interface IPluginRegistry
-{
-    /// <summary>Adds a view. A view whose name another plugin or the server already uses is not added.</summary>
-    void AddView(IViewDefinition view);
-}
+/// <summary>What a plugin can set up in <see cref="IPlugin.Register"/>. The server implements it; plugins only call it,
+/// so it can get new members without a change to existing plugins. It has no members yet: views need no setup, because
+/// the server finds each <see cref="Views.IViewDefinition"/> class by itself.</summary>
+public interface IPluginRegistry;

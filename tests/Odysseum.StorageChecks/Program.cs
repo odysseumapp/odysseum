@@ -475,14 +475,16 @@ var libraryChecks = new List<(string Name, Func<string, Task> Run)>
             "The known views are not write and the plugin's views.");
         Require(TestPlugins.Views.Views.Single(view => view.Name == "grid").FolderSettings.SequenceEqual(["columnFolder"]),
             "The grid view has no columnFolder folder setting.");
-        Require(plugin.ClientEntryUrl == "/plugins/views/index.js", "The client entry is wrong.");
+        Require(plugin.Views.Select(view => (view.Label, view.ClientEntry, view.Icon)).SequenceEqual(
+            [("Corkboard", "board.js", "board.svg"), ("Outline", "outline.js", "outline.svg"), ("Grid", "grid.js", "grid.svg")]),
+            "The views plugin's views have the wrong labels, client entries or icons.");
         Require(typeof(ProjectService).Assembly.GetReferencedAssemblies().All(name => name.Name != "Odysseum.Plugins.Views")
             && AssemblyLoadContext.Default.Assemblies.All(assembly => assembly.GetName().Name != "Odysseum.Plugins.Views"),
             "The server references the views plugin, or the plugin is in the server's load context.");
         Require(!File.Exists(Path.Combine(plugin.Folder, "Odysseum.Abstractions.dll")), "The plugin ships its own copy of Odysseum.Abstractions.");
         return Task.CompletedTask;
     }),
-    ("A plugin folder without a valid manifest is skipped, a second plugin with the same id too, and a broken plugin fails", root =>
+    ("A plugin folder without a valid manifest is skipped, a second plugin with the same id too, and a broken plugin fails, also for a missing client entry", root =>
     {
         var source = TestPlugins.Loaded.Single(plugin => plugin.Id == "views").Folder;
         void Copy(string name, string? manifest)
@@ -491,28 +493,32 @@ var libraryChecks = new List<(string Name, Func<string, Task> Run)>
             if (manifest is null) File.Delete(Path.Combine(root, name, "plugin.json"));
             else File.WriteAllText(Path.Combine(root, name, "plugin.json"), manifest);
         }
-        const string Valid = """{ "id": "views", "name": "Default views", "version": "1.0.0", "assembly": "Odysseum.Plugins.Views.dll", "clientEntry": "index.js" }""";
+        const string Valid = """{ "id": "views", "name": "Default views", "version": "1.0.0", "assembly": "Odysseum.Plugins.Views.dll" }""";
         Copy("a-valid", Valid);
         Copy("b-no-manifest", null);
         Copy("c-not-json", "{ not json");
         Copy("d-no-assembly", Valid.Replace("Odysseum.Plugins.Views.dll", "Missing.dll").Replace("\"views\"", "\"other\""));
-        Copy("e-escaping-entry", Valid.Replace("index.js", "../plugin.json").Replace("\"views\"", "\"escape\""));
         Copy("f-bad-id", Valid.Replace("\"views\"", "\"Bad Id\""));
         Copy("g-same-id", Valid);
         MakeBrokenPlugin(Path.Combine(root, "h-broken"), "broken");
+        Copy("i-no-client-entry", Valid.Replace("\"views\"", "\"no-entry\""));
+        File.Delete(Path.Combine(root, "i-no-client-entry", "wwwroot", "grid.js"));
         var loaded = new PluginLoader().Load(root, []);
-        Require(loaded.Count == 2 && loaded[0] is { Id: "views", Status: PluginStatus.Enabled } && Path.GetFileName(loaded[0].Folder) == "a-valid",
+        Require(loaded.Count == 3 && loaded[0] is { Id: "views", Status: PluginStatus.Enabled } && Path.GetFileName(loaded[0].Folder) == "a-valid",
             "A folder without a valid manifest, or a second plugin with the same id, was not skipped.");
-        Require(loaded[1] is { Id: "broken", Status: PluginStatus.Failed, Views.Count: 0, ClientEntryUrl: null }
+        Require(loaded[1] is { Id: "broken", Status: PluginStatus.Failed, Views.Count: 0 }
             && loaded[1].Error == "The plugin's assembly could not be loaded.",
             "A plugin whose assembly cannot load is not listed as failed with an error.");
+        Require(loaded[2] is { Id: "no-entry", Status: PluginStatus.Failed, Views.Count: 0 }
+            && loaded[2].Error == "The client entry wwwroot/grid.js of the view 'grid' is missing.",
+            "A plugin whose view has no client entry file is not listed as failed with an error.");
         return Task.CompletedTask;
     }),
     ("With the views plugin disabled, only write is known, and grid settings stay unchanged", async root =>
     {
         var installed = new PluginLoader().Load(TestPlugins.Folder, ["views"]);
-        Require(installed.Single(plugin => plugin.Id == "views") is { Status: PluginStatus.Disabled, Error: null, Views.Count: 0, ClientEntryUrl: null },
-            "The disabled plugin is not listed as disabled, or it has views or a client entry.");
+        Require(installed.Single(plugin => plugin.Id == "views") is { Status: PluginStatus.Disabled, Error: null, Views.Count: 0 },
+            "The disabled plugin is not listed as disabled, or it has views.");
         var views = new ViewCatalog(installed.SelectMany(plugin => plugin.Views));
         Require(views.Views.Select(view => view.Name).SequenceEqual(["write"]), "A view other than write is known without the plugin.");
         IProject project;
@@ -545,10 +551,13 @@ var libraryChecks = new List<(string Name, Func<string, Task> Run)>
         {
             var plugin = await PluginFromApiAsync(http);
             Require(plugin["name"]!.GetValue<string>() == "Default views" && plugin["version"]!.GetValue<string>() == "1.0.0"
-                && plugin["status"]!.GetValue<string>() == "enabled" && plugin["clientEntry"]!.GetValue<string>() == "/plugins/views/index.js",
-                "GET /api/plugins gives the wrong name, version, status or client entry.");
+                && plugin["status"]!.GetValue<string>() == "enabled", "GET /api/plugins gives the wrong name, version or status.");
+            var grid = plugin["views"]!.AsArray().SingleOrDefault(view => view!["name"]!.GetValue<string>() == "grid");
+            Require(grid?["label"]?.GetValue<string>() == "Grid" && grid["clientEntry"]?.GetValue<string>() == "/plugins/views/grid.js"
+                && grid["icon"]?.GetValue<string>() == "/plugins/views/grid.svg",
+                "GET /api/plugins gives the wrong label, client entry or icon for the grid view.");
             Require(!plugin.AsObject().ContainsKey("error"), "An enabled plugin has an error field.");
-            var module = await http.GetAsync("/plugins/views/index.js");
+            var module = await http.GetAsync("/plugins/views/grid.js");
             Require(module.IsSuccessStatusCode && module.Content.Headers.ContentType?.MediaType?.Contains("javascript") == true,
                 "The client entry is not served as JavaScript.");
         });
@@ -558,9 +567,9 @@ var libraryChecks = new List<(string Name, Func<string, Task> Run)>
         await WithServerAsync(Path.Combine(root, "disabled"), new() { ["ODYSSEUM_PLUGINS"] = plugins, ["ODYSSEUM_DISABLED_PLUGINS"] = "views" }, async http =>
         {
             var disabled = await PluginFromApiAsync(http);
-            Require(disabled["status"]!.GetValue<string>() == "disabled" && !disabled.AsObject().ContainsKey("error") && disabled["clientEntry"] is null,
-                "A disabled plugin is not listed as disabled, or has an error or a client entry.");
-            Require((await http.GetAsync("/plugins/views/index.js")).StatusCode == HttpStatusCode.NotFound, "A disabled plugin's files are served.");
+            Require(disabled["status"]!.GetValue<string>() == "disabled" && !disabled.AsObject().ContainsKey("error") && disabled["views"]!.AsArray().Count == 0,
+                "A disabled plugin is not listed as disabled, or has an error or views.");
+            Require((await http.GetAsync("/plugins/views/grid.js")).StatusCode == HttpStatusCode.NotFound, "A disabled plugin's files are served.");
             var failed = await PluginFromApiAsync(http, "broken");
             Require(failed["status"]!.GetValue<string>() == "failed"
                 && failed["error"]?.GetValue<string>() == "The plugin's assembly could not be loaded.",
