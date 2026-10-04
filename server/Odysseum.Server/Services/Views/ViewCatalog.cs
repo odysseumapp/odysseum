@@ -13,7 +13,7 @@ public sealed class ViewCatalog
     /// <summary>The editor. It is always known, also when no plugin is loaded.</summary>
     public const string WriteView = "write";
 
-    private readonly Dictionary<string, IViewDefinition> _views = new(StringComparer.Ordinal) { [WriteView] = new ViewDefinition(WriteView) };
+    private readonly Dictionary<string, IViewDefinition> _views = new(StringComparer.Ordinal) { [WriteView] = new ViewDefinition(WriteView, "Write", null, null, []) };
 
     /// <summary>The core view and the given views. A view with a name that is not allowed or that is already known is
     /// logged and left out.</summary>

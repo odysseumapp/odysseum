@@ -220,12 +220,16 @@ IThemeRepository (ThemeRepository).
 The core knows one view, `write`. Other views come from plugins. `Odysseum.Plugins.Views` adds `board`, `outline`
 and `grid`; it loads through the same path as a third-party plugin, and the server does not reference it.
 
-A plugin is a folder in the plugins folder with a `plugin.json` manifest:
+A plugin is a folder in the plugins folder with a `plugin.json` manifest, its assembly, and its client files in
+`wwwroot`:
 
 ```
-{ "id": "views", "name": "Default views", "version": "1.0.0",
-  "assembly": "Odysseum.Plugins.Views.dll", "clientEntry": "index.js" }
+{ "id": "views", "name": "Default views", "version": "1.0.0", "assembly": "Odysseum.Plugins.Views.dll" }
 ```
+
+Only the C# code registers views. Each `AddView` gives a name, a label, a client entry and an icon in `wwwroot`. The
+web UI reads them from `GET /api/plugins`, shows the label and icon in the view selector, and imports the client entry
+when the view is first selected. The client entry's default export is the view's Vue component; it registers nothing.
 
 ```
 Abstractions (the plugin contract):
@@ -233,15 +237,18 @@ Abstractions (the plugin contract):
 +----------------------------------+   +----------------------------------+   +----------------------------------+
 | <<interface>> IPlugin            |   | <<interface>> IPluginRegistry    |   | <<interface>> IViewDefinition    |
 |----------------------------------|   |----------------------------------|   |----------------------------------|
-| Register(registry)               |   | AddView(view)                    |   | Name : string                    |
-+----------------------------------+   +----------------------------------+   | FolderSettings : string[]        |
-                ^                                      ^                      +----------------------------------+
-                :                                      :                                     ^
-+----------------------------------+   +----------------------------------+                  :
-| ViewsPlugin   (plugins/          |   | <<internal>> PluginRegistry      |  +----------------------------------+
-|   Odysseum.Plugins.Views)        |   |   one per plugin; collects views |  | <<record>> ViewDefinition        |
-| board, outline, grid             |   +----------------------------------+  +----------------------------------+
-|   (grid: columnFolder)           |
+| Register(registry)               |   | AddView(view)                    |   | Name, Label : string             |
++----------------------------------+   | AddView(name, label, clientEntry,|   | ClientEntry?, Icon? : string     |
+                ^                      |   icon?, folderSettings?)        |   | FolderSettings : string[]        |
+                :                      +----------------------------------+   +----------------------------------+
+                :                                      ^                                     ^
+                :                                      :                                     :
++----------------------------------+   +----------------------------------+  +----------------------------------+
+| ViewsPlugin   (plugins/          |   | <<internal>> PluginRegistry      |  | <<record>> ViewDefinition        |
+|   Odysseum.Plugins.Views)        |   |   one per plugin; collects views |  +----------------------------------+
+| board, outline, grid             |   +----------------------------------+
+|   (board.js, outline.js, grid.js;|
+|    grid: columnFolder)           |
 +----------------------------------+
 
 Server:
@@ -249,10 +256,10 @@ Server:
 +----------------------------------------------+      +----------------------------------------------+
 | PluginLoader               ..|> IPluginLoader|----->| PluginManifest            plugin.json        |
 |----------------------------------------------|      |----------------------------------------------|
-| Load(folder, disabledPlugins)                |      | Id, Name, Version, Assembly, ClientEntry?    |
+| Load(folder, disabledPlugins)                |      | Id, Name, Version, Assembly                  |
 |   : InstalledPlugin[]                        |      | Read(folder)   (checks it; else the folder   |
 |   reads each manifest, then loads the        |      |                 is skipped)                  |
-|   enabled plugins                            |      +----------------------------------------------+
+|   enabled plugins; checks each view's files  |      +----------------------------------------------+
 +----------------------------------------------+      +----------------------------------------------+
                       |                          ---->| <<internal>> PluginLoadContext               |
                       |                               |   one AssemblyLoadContext per plugin;        |
@@ -263,7 +270,7 @@ Server:
 | GetAll() : InstalledPlugin[]                 |----->|----------------------------------------------|
 |   (also disabled and failed plugins)         |      | Manifest, Folder, Status, Error?             |
 +----------------------------------------------+      | Views : IViewDefinition[]  (empty when off)  |
-    used by PluginsController (GET /api/plugins)      | Id, WwwRoot, ClientEntryUrl (null when off)  |
+    used by PluginsController (GET /api/plugins)      | Id, WwwRoot, ClientUrl(path)                 |
     and PluginHosting (/plugins/{id}/)                +----------------------------------------------+
                                                         Status: Enabled, Disabled or Failed (PluginStatus).
                                                         Error is set only for Failed.

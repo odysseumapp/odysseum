@@ -61,10 +61,11 @@ try {
   console.log('Demo project seeded')
   const plugins = (await (await fetch(`${origin}/api/plugins`)).json()).data.items
   const views = plugins.find(plugin => plugin.id === 'views')
-  if (views?.status !== 'enabled' || views.clientEntry !== '/plugins/views/index.js')
-    throw new Error(`The views plugin is not listed as enabled with its client entry: ${JSON.stringify(plugins)}`)
+  const board = views?.views?.find(view => view.name === 'board')
+  if (views?.status !== 'enabled' || board?.clientEntry !== '/plugins/views/board.js')
+    throw new Error(`The views plugin is not listed as enabled with the board's client entry: ${JSON.stringify(plugins)}`)
   console.log('Views plugin is listed')
-  const entry = await fetch(`${origin}${views.clientEntry}`)
+  const entry = await fetch(`${origin}${board.clientEntry}`)
   if (!entry.ok || !entry.headers.get('content-type')?.includes('javascript')) throw new Error('The views plugin client entry is not served.')
   console.log('Views plugin client entry is served')
 } catch (error) {
