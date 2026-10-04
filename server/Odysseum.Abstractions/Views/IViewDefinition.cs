@@ -1,9 +1,11 @@
 namespace Odysseum.Abstractions.Views;
 
-/// <summary>One view. The server uses <see cref="FolderSettings"/>: it checks those settings, clears them when the folder
-/// is deleted, and turns them into folder paths in project templates. It gives the other members to the web UI, which
-/// shows the view in its view selector and loads <see cref="ClientEntry"/> when the view is selected. Everything else
-/// about a view belongs to the component that draws it.</summary>
+/// <summary>One view. A plugin adds a view with a class that implements this interface and has a parameterless
+/// constructor: the server finds each such class in the plugin's assembly, in the order the code declares them, and
+/// makes one instance. The server uses <see cref="FolderSettings"/>: it checks those settings, clears them when the
+/// folder is deleted, and turns them into folder paths in project templates. It gives the other members to the web UI,
+/// which shows the view in its view selector and loads <see cref="ClientEntry"/> when the view is selected. Everything
+/// else about a view belongs to the component that draws it.</summary>
 public interface IViewDefinition
 {
     /// <summary>Lowercase letters, digits, '.', '-' and '_', starting with a letter or digit, at most 64 characters.</summary>
@@ -16,7 +18,7 @@ public interface IViewDefinition
     string? ClientEntry { get; }
     /// <summary>An SVG file relative to the plugin's <c>wwwroot</c> folder, or null for no icon. The web UI paints its
     /// shape in the text color, so the icon follows the theme.</summary>
-    string? Icon { get; }
+    string? Icon => null;
     /// <summary>Settings (top-level keys of the view's settings object) whose value is a folder ID.</summary>
-    IReadOnlyList<string> FolderSettings { get; }
+    IReadOnlyList<string> FolderSettings => [];
 }

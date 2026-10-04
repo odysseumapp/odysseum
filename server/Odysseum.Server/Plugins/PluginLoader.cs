@@ -5,7 +5,7 @@ using Odysseum.Server.Services.Views;
 namespace Odysseum.Server.Plugins;
 
 /// <summary>Reads each plugin folder's manifest, then loads the enabled plugins, each into its own
-/// <see cref="PluginLoadContext"/>, finds its <see cref="IPlugin"/> type by reflection, and lets it register. A plugin is
+/// <see cref="PluginLoadContext"/>, and finds what each one adds by its classes. A plugin is
 /// code from outside the server, so any error it causes is logged, the plugin gets <see cref="PluginStatus.Failed"/>,
 /// and the server starts without it.</summary>
 public sealed class PluginLoader(ILogger? logger = null) : IPluginLoader
@@ -57,8 +57,9 @@ public sealed class PluginLoader(ILogger? logger = null) : IPluginLoader
         return plugins;
     }
 
-    /// <summary>Loads the plugin's assembly and calls <see cref="IPlugin.Register"/>. Returns the views it added. Each
-    /// step that fails throws a <see cref="PluginLoadException"/> with a short message.</summary>
+    /// <summary>Loads the plugin's assembly, calls its <see cref="IPlugin.Register"/> if it has an <see cref="IPlugin"/>
+    /// class, and makes one instance of each <see cref="IViewDefinition"/> class, in the order the assembly lists them.
+    /// Returns the checked views. Each step that fails throws a <see cref="PluginLoadException"/> with a short message.</summary>
     private static IReadOnlyList<IViewDefinition> Register(string directory, PluginManifest manifest)
     {
         var assemblyPath = Path.Combine(directory, manifest.Assembly);
@@ -66,22 +67,36 @@ public sealed class PluginLoader(ILogger? logger = null) : IPluginLoader
         try
         {
             var assembly = new PluginLoadContext(assemblyPath).LoadFromAssemblyPath(assemblyPath);
-            types = assembly.GetTypes().Where(type => typeof(IPlugin).IsAssignableFrom(type) && type is { IsAbstract: false, IsInterface: false }).ToArray();
+            types = assembly.GetTypes().Where(type => type is { IsClass: true, IsAbstract: false }).ToArray();
         }
         catch (Exception ex) { throw new PluginLoadException("The plugin's assembly could not be loaded.", ex); }
-        if (types.Length != 1) throw new PluginLoadException($"The plugin's assembly must have exactly one IPlugin type; it has {types.Length}.");
-        IPlugin plugin;
-        try { plugin = (IPlugin)Activator.CreateInstance(types[0])!; }
-        catch (Exception ex) { throw new PluginLoadException("The plugin could not be created.", ex); }
-        var registry = new PluginRegistry();
-        try { plugin.Register(registry); }
-        catch (Exception ex) { throw new PluginLoadException($"Register failed: {ex.Message}", ex); }
-        return [.. registry.Views.Select(view => CheckView(directory, view))];
+
+        var setup = types.Where(typeof(IPlugin).IsAssignableFrom).ToArray();
+        if (setup.Length > 1) throw new PluginLoadException($"The plugin's assembly can have at most one IPlugin class; it has {setup.Length}.");
+        if (setup.Length == 1)
+        {
+            var plugin = Create<IPlugin>(setup[0]);
+            try { plugin.Register(new PluginRegistry()); }
+            catch (Exception ex) { throw new PluginLoadException($"Register failed: {ex.Message}", ex); }
+        }
+        return [.. types.Where(typeof(IViewDefinition).IsAssignableFrom).Select(type => CheckView(directory, Create<IViewDefinition>(type)))];
+    }
+
+    private static T Create<T>(Type type)
+    {
+        try { return (T)Activator.CreateInstance(type)!; }
+        catch (Exception ex) { throw new PluginLoadException($"The class {type.Name} could not be created; it needs a public parameterless constructor.", ex); }
     }
 
     /// <summary>The view with its client paths in the form the URLs use. Throws when the browser could not show it: a name
     /// that is not allowed, no label, or a client entry or icon that is not a file in the plugin's wwwroot.</summary>
     private static ViewDefinition CheckView(string directory, IViewDefinition view)
+    {
+        try { return CheckViewValues(directory, view); }
+        catch (Exception ex) when (ex is not PluginLoadException) { throw new PluginLoadException($"The view class {view.GetType().Name} failed: {ex.Message}", ex); }
+    }
+
+    private static ViewDefinition CheckViewValues(string directory, IViewDefinition view)
     {
         if (!ViewNames.IsValid(view.Name)) throw new PluginLoadException($"The view name '{view.Name}' is not allowed.");
         if (string.IsNullOrWhiteSpace(view.Label)) throw new PluginLoadException($"The view '{view.Name}' has no label.");
