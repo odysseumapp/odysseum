@@ -1,0 +1,21 @@
+/* The host loads this file next to the plugin's entry. It holds only the utilities the views use, without preflight, so
+   the host's base styles stay as they are. Every class has the `vw:` prefix (for example `vw:flex`, `vw:md:block`): the
+   host's Tailwind defines the same class names, and two sheets with the same names override each other in whichever
+   order they load. With the prefix the two never meet. */
+@import "tailwindcss/theme.css" layer(theme) prefix(vw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(vw);
+@source "./";
+
+/* The host's theme tokens (Nuxt UI), so that the views follow the colours and the dark mode the user chose. */
+@theme default inline {
+  --color-primary: var(--ui-primary);
+  --radius-sm: var(--ui-radius);
+  --radius-md: calc(var(--ui-radius) * 1.5);
+  --radius-lg: calc(var(--ui-radius) * 2);
+  --text-color-muted: var(--ui-text-muted);
+  --text-color-default: var(--ui-text);
+  --background-color-default: var(--ui-bg);
+  --background-color-muted: var(--ui-bg-muted);
+  --background-color-elevated: var(--ui-bg-elevated);
+  --border-color-default: var(--ui-border);
+}
