@@ -3,10 +3,10 @@ using System.Text.RegularExpressions;
 
 namespace Odysseum.Server.Plugins;
 
-/// <summary><c>plugin.json</c> in a plugin's folder. The loader reads it before it loads any code.
-/// <c>Id</c> names the plugin in <c>disabledPlugins</c> and in <c>/plugins/{id}/</c>. <c>Assembly</c> is the file name of
-/// the plugin's assembly in the folder. <c>ClientEntry</c> is the plugin's JavaScript module, relative to its
-/// <c>wwwroot</c> folder, or null.</summary>
+/// <summary><c>plugin.json</c> in a plugin's folder. The loader reads it before it loads any code, so that a disabled or
+/// broken plugin is still listed. <c>Id</c> names the plugin in <c>disabledPlugins</c> and in <c>/plugins/{id}/</c>.
+/// <c>Assembly</c> is the file name of the plugin's assembly in the folder. The client files are not named here: each
+/// view the plugin adds names its own.</summary>
 public sealed partial class PluginManifest
 {
     public const string FileName = "plugin.json";
@@ -17,7 +17,6 @@ public sealed partial class PluginManifest
     public string Name { get; set; } = "";
     public string Version { get; set; } = "";
     public string Assembly { get; set; } = "";
-    public string? ClientEntry { get; set; }
 
     /// <summary>Reads and checks the manifest in the folder. Throws <see cref="InvalidDataException"/> when it is missing
     /// or not valid.</summary>
@@ -39,15 +38,6 @@ public sealed partial class PluginManifest
             || !manifest.Assembly.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("the assembly must be the file name of a .dll in the plugin's folder.");
         if (!File.Exists(Path.Combine(folder, manifest.Assembly))) throw new InvalidDataException($"the assembly {manifest.Assembly} is missing.");
-        if (manifest.ClientEntry is not null)
-        {
-            manifest.ClientEntry = manifest.ClientEntry.Replace('\\', '/');
-            if (manifest.ClientEntry.Length == 0 || Path.IsPathRooted(manifest.ClientEntry)
-                || manifest.ClientEntry.Split('/').Any(segment => segment is "" or "." or ".."))
-                throw new InvalidDataException("the client entry must be a path inside the plugin's wwwroot folder.");
-            if (!File.Exists(Path.Combine(folder, "wwwroot", manifest.ClientEntry)))
-                throw new InvalidDataException($"the client entry wwwroot/{manifest.ClientEntry} is missing.");
-        }
         return manifest;
     }
 

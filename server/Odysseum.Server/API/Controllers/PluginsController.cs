@@ -8,7 +8,7 @@ namespace Odysseum.Server.API.Controllers;
 [Route("api/plugins")]
 public class PluginsController(IPluginRepository plugins) : ControllerBase
 {
-    /// <summary>Every installed plugin, also the disabled ones, with the URL of its client module.</summary>
+    /// <summary>Every installed plugin, also the disabled ones, with the views it adds and the URLs of their client files.</summary>
     [HttpGet]
     public IResult GetPlugins() => ApiResults.SuccessCollection(plugins.GetAll().Select(PluginDto.FromPlugin));
 }
