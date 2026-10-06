@@ -1,11 +1,26 @@
-# Odysseum
+<p align="center">
+  <img src="desktop/build/icon.png" width="96" alt="">
+</p>
 
-Self-hosted novel and book writing software.
+<h1 align="center">Odysseum</h1>
 
-## Development Note
-Odysseum is in early development and breaking changes will be shipped regularly.
+<p align="center">Self-hosted writing software for novels and books.</p>
 
-## Planned Features
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-315a4b" alt="License: AGPL v3"></a>
+  <img src="https://img.shields.io/badge/.NET-10-512bd4" alt=".NET 10">
+  <a href="https://github.com/odysseumapp/odysseum/actions/workflows/desktop.yml"><img src="https://github.com/odysseumapp/odysseum/actions/workflows/desktop.yml/badge.svg" alt="Desktop build"></a>
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
+  <img src="docs/images/screenshot-light.png" alt="The Odysseum editor with a sample manuscript open">
+</picture>
+
+> [!NOTE]
+> Odysseum is in early development and breaking changes will be shipped regularly.
+
+## Planned features
 
 - Multiple projects in one workspace
 - Corkboard and outline
@@ -18,25 +33,6 @@ Odysseum is in early development and breaking changes will be shipped regularly.
 
 There is a demo manuscript included when `ODYSSEUM_DEMO=true`.
 
-## AI Usage
-AI coding tools are used in the development of Odysseum. The developer is a programmer by trade and all code is reviewed before merging. Odysseum is a hobby project and will be worked on as spare time allows.
-
-## Workspace and project format
-
-```text
-workspace/                      ← ODYSSEUM_WORKSPACE
-  The Cartographer's Daughter/  ← one project per folder
-    Manuscript/
-      Chapter 01/
-        The letter arrives.md
-    Notes/
-      Characters.md
-    .writer/
-      project.json
-      history/<document-id>/<timestamp>-<hash>.md
-      instance.lock
-  Short stories/
-```
 ## Run with Docker
 
 ```sh
@@ -50,18 +46,15 @@ Open **http://localhost:5080**. The container uses two directories:
 | `/projects` | `./projects` | your projects |
 | `/data` | `./data` | `server-settings.json`, authentication keys |
 
-Set `ODYSSEUM_DEMO` to `false` to start with an empty workspace.
+Set `ODYSSEUM_DEMO` to `false` to start with an empty workspace. [docs/compose.example.yaml](docs/compose.example.yaml) runs the published image instead of building from source.
 
 To access Odysseum remotely, a reverse proxy is recommended. Configure `ODYSSEUM_PASSWORD` in a `.env` file.
 
 ## Run locally on Windows
 
-Requires the .NET 10 SDK, Node.js 20.19+ or 22.12+, and npm.
+Requires the .NET 10 SDK and a checkout of [odysseum-web](https://github.com/odysseumapp/odysseum-web) beside this one (or pass `-WebRoot`). The build script downloads a local Node.js if a suitable one is not installed.
 
 ```powershell
-cd web
-npm ci
-cd ..
 ./scripts/build.ps1
 ./scripts/start.ps1
 ```
@@ -71,6 +64,28 @@ Open **http://localhost:5080**. To open a different directory:
 ```powershell
 ./scripts/start.ps1 -Workspace 'D:\Writing\My Novel'
 ```
+
+## Workspace and project format
+
+Projects are plain folders of Markdown files. See [docs/project-format.md](docs/project-format.md) for the details.
+
+```text
+workspace/                      ← ODYSSEUM_WORKSPACE
+  The Cartographer's Daughter/  ← one project per folder
+    Manuscript/
+      Chapter 01/
+        The letter arrives.md
+        .odysseum/folder.json
+    Characters/
+      Mara Vale.md
+    .odysseum/
+      project.json
+      links.json
+      instance.lock
+    .git/                       ← versions and document history
+  Short stories/
+```
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -85,7 +100,17 @@ Open **http://localhost:5080**. To open a different directory:
 | `ODYSSEUM_TEMPLATES` | `templates` beside the settings file | Project templates, one JSON file per template |
 
 ## API
+
 Odysseum's API is described at **http://localhost:5080/scalar**.
 
+## AI usage
+
+AI coding tools are used in the development of Odysseum. The developer is a programmer by trade and all code is reviewed before merging. Odysseum is a hobby project and will be worked on as spare time allows.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
+
 [GNU AGPL v3](LICENSE)
