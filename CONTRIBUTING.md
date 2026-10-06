@@ -7,7 +7,12 @@ Thanks for your interest in Odysseum. It is a hobby project in early development
 - [odysseum](https://github.com/odysseumapp/odysseum): the .NET server, plugin abstractions, desktop app and docs. Open issues here.
 - [odysseum-web](https://github.com/odysseumapp/odysseum-web): the Nuxt frontend.
 
-Clone both side by side. The web tests look for the server checkout at `../odysseum`; set `ODYSSEUM_SERVER_ROOT` if yours is somewhere else.
+Clone both side by side as `odysseum-server` and `odysseum-web`. The build scripts and web tests look for each other there; otherwise pass `-WebRoot` to the build scripts or set `ODYSSEUM_SERVER_ROOT` for the web tests.
+
+```sh
+git clone https://github.com/odysseumapp/odysseum.git odysseum-server
+git clone https://github.com/odysseumapp/odysseum-web.git
+```
 
 ## Before you start
 
