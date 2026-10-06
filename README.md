@@ -33,6 +33,22 @@
 
 There is a demo manuscript included when `ODYSSEUM_DEMO=true`.
 
+## Views
+
+**Corkboard**: each scene as a card, with its synopsis, word count and links.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/corkboard-dark.png">
+  <img src="docs/images/corkboard-light.png" alt="The corkboard view showing scene cards for the sample manuscript">
+</picture>
+
+**Grid**: link any two folders, such as Characters against Threads, and leave a note where they meet.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/grid-dark.png">
+  <img src="docs/images/grid-light.png" alt="The grid view with characters as rows and threads as columns">
+</picture>
+
 ## Run with Docker
 
 ```sh
